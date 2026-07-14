@@ -1,0 +1,255 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  passwordHash  String
+  avatarUrl     String?
+  role          UserRole  @default(OWNER)
+  teamId        String?
+  team          Team?     @relation(fields: [teamId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+  isActive      Boolean   @default(true)
+  mfaEnabled    Boolean   @default(false)
+  mfaSecret     String?
+  posts         Post[]
+  auditLogs     AuditLog[]
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String
+  ownerId     String
+  members     Member[]
+  accounts    SocialAccount[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Member {
+  id        String     @id @default(cuid())
+  teamId    String
+  team      Team       @relation(fields: [teamId], references: [id])
+  userId    String
+  role      MemberRole @default(EDITOR)
+  joinedAt  DateTime   @default(now())
+}
+
+model SocialAccount {
+  id              String          @id @default(cuid())
+  teamId          String
+  team            Team            @relation(fields: [teamId], references: [id])
+  platform        Platform
+  accountId       String          // 平台唯一标识
+  accountName     String
+  accountHandle   String?
+  credentials     Json            // 平台 OAuth/cookie 加密存储
+  status          AccountStatus   @default(ACTIVE)
+  followerCount   Int?
+  followingCount  Int?
+  postCount       Int?
+  lastSyncedAt    DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  socialPosts     SocialPost[]
+  analytics       AnalyticsSnapshot[]
+
+  @@unique([platform, accountId])
+}
+
+model Content {
+  id            String         @id @default(cuid())
+  teamId        String
+  title         String
+  body          String?        // Markdown
+  contentType   ContentType
+  status        ContentStatus  @default(DRAFT)
+  scheduledAt   DateTime?
+  publishedAt   DateTime?
+  createdBy     String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  mediaAssets   MediaAsset[]
+  platformPosts PlatformPost[]
+  tags          ContentTag[]
+  workflow      Workflow[]
+}
+
+model MediaAsset {
+  id          String   @id @default(cuid())
+  contentId   String
+  content     Content  @relation(fields: [contentId], references: [id])
+  type        MediaType
+  url         String
+  thumbnailUrl String?
+  width       Int?
+  height      Int?
+  duration    Int?      // 视频时长（秒）
+  fileSize    Int       // 字节
+  createdAt   DateTime  @default(now())
+}
+
+model PlatformPost {
+  id              String        @id @default(cuid())
+  contentId       String
+  content         Content       @relation(fields: [contentId], references: [id])
+  platform        Platform
+  externalId      String?       // 平台侧内容 ID
+  externalUrl     String?
+  status          PublishStatus @default(PENDING)
+  publishedAt     DateTime?
+  retryCount      Int           @default(0)
+  lastError       String?
+  metrics         Json?         // 最新指标快照
+  createdAt       DateTime      @default(now())
+}
+
+model PublishJob {
+  id            String        @id @default(cuid())
+  contentId     String
+  status        JobStatus     @default(QUEUED)
+  scheduledAt   DateTime
+  startedAt     DateTime?
+  completedAt   DateTime?
+  error         String?
+  retryCount    Int           @default(0)
+  createdAt     DateTime      @default(now())
+}
+
+model AnalyticsSnapshot {
+  id              String          @id @default(cuid())
+  accountId       String
+  account         SocialAccount   @relatiom(fields: [accountId], references: [id])
+  snapshotDate    DateTime
+  followerCount   Int?
+  followingCount  Int?
+  postCount       Int?
+  impressions     Int?
+  engagements     Int?
+  likes           Int?
+  comments        Int?
+  shares          Int?
+  views           Int?
+  extra           Json?
+  createdAt       DateTime        @default(now())
+
+  @@unique([accountId, snapshotDate])
+}
+
+// Enums
+enum UserRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum MemberRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum Platform {
+  WECHAT_OFFICIAL
+  WECHAT_VIDEO
+  DOUYIN
+  XIAOHONGSHU
+  BILIBILI
+  WEIBO
+  TWITTER
+  YOUTUBE
+}
+
+enum AccountStatus {
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+  REVOKED
+}
+
+enum ContentType {
+  TEXT
+  IMAGE
+  VIDEO
+  CAROUSEL
+  THREAD
+  ARTICLE
+}
+
+enum ContentStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  ARCHIVED
+}
+
+enum PublishStatus {
+  PENDING
+  QUEUED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  CANCELLED
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  RETRYING
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  AUDIO
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  action      String
+  entityType  String
+  entityId    String?
+  metadata    Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+}
+
+model ContentTag {
+  id        String   @id @default(cuid())
+  contentId String
+  content   Content  @relation(fields: [contentId], references: [id])
+  name      String
+  createdAt DateTime  @default(now())
+}
+
+model Workflow {
+  id          String   @id @default(cuid())
+  contentId   String
+  content     Content  @relation(fields: [contentId], references: [id])
+  approverId  String
+  status      String   @default(PENDING) // PENDING / APPROVED / REJECTED
+  comment     String?
+  createdAt   DateTime @default(now())
+}
