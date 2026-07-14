@@ -9,7 +9,10 @@ import { ContentModule } from './modules/content/content.module';
 import { MediaModule } from './modules/media/media.module';
 import { PlatformSdkModule } from './modules/platform-sdk/platform-sdk.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { AuditModule } from './modules/audit/audit.module';
 import { TeamModule } from './modules/team/team.module';
+import { WorkflowModule } from './modules/workflow/workflow.module';
 import { UserModule } from './modules/user/user.module';
 
 @Module({
@@ -24,6 +27,9 @@ import { UserModule } from './modules/user/user.module';
     AccountModule,
     SchedulerModule,
     PlatformSdkModule,
+    AnalyticsModule,
+    WorkflowModule,
+    AuditModule,
   ],
   controllers: [AppController],
   providers: [AppService],
