@@ -86,12 +86,29 @@ model Content {
   platformPosts PlatformPost[]
   tags          ContentTag[]
   workflow      Workflow[]
+  versions      ContentVersion[]
+  version       Int            @default(1)
+}
+
+model ContentVersion {
+  id          String   @id @default(cuid())
+  contentId   String
+  content     Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  version     Int
+  title       String
+  body        String?
+  contentType ContentType
+  changedBy   String
+  changeNote  String?
+  createdAt   DateTime @default(now())
+
+  @@index([contentId])
 }
 
 model MediaAsset {
   id          String   @id @default(cuid())
-  contentId   String
-  content     Content  @relation(fields: [contentId], references: [id])
+  contentId   String?
+  content     Content?  @relation(fields: [contentId], references: [id])
   type        MediaType
   url         String
   thumbnailUrl String?
@@ -99,6 +116,8 @@ model MediaAsset {
   height      Int?
   duration    Int?      // 视频时长（秒）
   fileSize    Int       // 字节
+  mimeType    String    @default("application/octet-stream")
+  uploadedBy  String?
   createdAt   DateTime  @default(now())
 }
 
@@ -247,8 +266,8 @@ model ContentTag {
 
 model Workflow {
   id          String   @id @default(cuid())
-  contentId   String
-  content     Content  @relation(fields: [contentId], references: [id])
+  contentId   String?
+  content     Content?  @relation(fields: [contentId], references: [id])
   approverId  String
   status      String   @default("PENDING") // PENDING / APPROVED / REJECTED
   comment     String?

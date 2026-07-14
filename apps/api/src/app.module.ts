@@ -5,6 +5,8 @@ import { AppService } from './app.service';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { AccountModule } from './modules/account/account.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { ContentModule } from './modules/content/content.module';
+import { MediaModule } from './modules/media/media.module';
 import { TeamModule } from './modules/team/team.module';
 import { UserModule } from './modules/user/user.module';
 
@@ -13,6 +15,8 @@ import { UserModule } from './modules/user/user.module';
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     AuthModule,
+    ContentModule,
+    MediaModule,
     UserModule,
     TeamModule,
     AccountModule,
