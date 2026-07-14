@@ -24,7 +24,6 @@ model User {
   isActive      Boolean   @default(true)
   mfaEnabled    Boolean   @default(false)
   mfaSecret     String?
-  posts         Post[]
   auditLogs     AuditLog[]
 }
 
@@ -34,6 +33,7 @@ model Team {
   ownerId     String
   members     Member[]
   accounts    SocialAccount[]
+  users       User[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -45,6 +45,8 @@ model Member {
   userId    String
   role      MemberRole @default(EDITOR)
   joinedAt  DateTime   @default(now())
+
+  @@unique([teamId, userId])
 }
 
 model SocialAccount {
@@ -63,7 +65,6 @@ model SocialAccount {
   lastSyncedAt    DateTime?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
-  socialPosts     SocialPost[]
   analytics       AnalyticsSnapshot[]
 
   @@unique([platform, accountId])
@@ -131,7 +132,7 @@ model PublishJob {
 model AnalyticsSnapshot {
   id              String          @id @default(cuid())
   accountId       String
-  account         SocialAccount   @relatiom(fields: [accountId], references: [id])
+  account         SocialAccount   @relation(fields: [accountId], references: [id])
   snapshotDate    DateTime
   followerCount   Int?
   followingCount  Int?
@@ -249,7 +250,7 @@ model Workflow {
   contentId   String
   content     Content  @relation(fields: [contentId], references: [id])
   approverId  String
-  status      String   @default(PENDING) // PENDING / APPROVED / REJECTED
+  status      String   @default("PENDING") // PENDING / APPROVED / REJECTED
   comment     String?
   createdAt   DateTime @default(now())
 }
