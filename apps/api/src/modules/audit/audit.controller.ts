@@ -6,7 +6,7 @@ export class AuditController {
   constructor(private readonly audit: AuditService) {}
 
   @Post() log(@Body() dto: any) {
-    return this.audit.log(dto.action, dto.userId, dto.resourceType, dto.resourceId, dto.details);
+    return this.audit.log(dto);
   }
   @Get() findAll(
     @Query('skip', new ParseIntPipe({ optional: true })) skip?: number,

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, ParseIntPipe } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, ParseIntPipe, NotFoundException } from '@nestjs/common';
 import { WorkflowService } from './workflow.service';
 
 @Controller('workflow')
@@ -6,13 +6,13 @@ export class WorkflowController {
   constructor(private readonly workflow: WorkflowService) {}
 
   @Post('approval') createApproval(@Body() dto: any) {
-    return this.workflow.createApprovalFlow(dto.contentId, dto.approverId);
+    return this.workflow.createApprovalFlow(dto);
   }
   @Post(':id/approve') approve(@Param('id') id: string, @Body() dto: any) {
-    return this.workflow.approve(id, dto.approverId, dto.comment);
+    return this.workflow.approve(id, dto);
   }
   @Post(':id/reject') reject(@Param('id') id: string, @Body() dto: any) {
-    return this.workflow.reject(id, dto.approverId, dto.reason);
+    return this.workflow.reject(id, dto);
   }
   @Get() findAll(
     @Query('skip', new ParseIntPipe({ optional: true })) skip?: number,

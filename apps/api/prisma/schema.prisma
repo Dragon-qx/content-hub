@@ -244,6 +244,12 @@ enum MediaType {
   AUDIO
 }
 
+enum WorkflowStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model AuditLog {
   id          String   @id @default(cuid())
   userId      String
