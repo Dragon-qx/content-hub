@@ -1,7 +1,21 @@
 /**
  * 微信公众号平台适配器
- * 提供 access_token 获取、素材管理、草稿管理、发布等功能
+ * 提供 access_token 获取、素材管理、草稿管理、发布等功能。
+ *
+ * Extends BaseAdapter so it honours the PlatformAdapter contract (publish /
+ * fetchMetrics) and can also be seeded with a pre-existing token via
+ * setCredentials().
  */
+
+import { BaseAdapter } from '../adapter-base';
+import {
+  Comment,
+  DateRange,
+  MetricsResult,
+  Platform,
+  PublishRequest,
+  PublishResult,
+} from '../types';
 
 export interface WechatOfficialConfig {
   appid: string;
@@ -41,20 +55,39 @@ export interface WechatMaterialResult {
   item: WechatMaterialItem[];
 }
 
-export class WechatOfficialAdapter {
-  /** Platform identifier — required by the PlatformAdapter contract. */
-  platform = 'WECHAT_OFFICIAL' as const;
+export class WechatOfficialAdapter extends BaseAdapter {
+  platform = Platform.WECHAT_OFFICIAL;
   private accessToken: string | null = null;
-  private tokenExpireTime: number = 0;
+  private tokenExpireTime = 0;
 
-  constructor(private config: WechatOfficialConfig) {}
+  constructor(private config: WechatOfficialConfig) {
+    super();
+  }
+
+  getAuthUrl(state: string): string {
+    const redirect = encodeURIComponent('https://your-domain.com/callback/wechat-official');
+    return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${encodeURIComponent(this.config.appid)}&redirect_uri=${redirect}&response_type=code&scope=snsapi_base&state=${encodeURIComponent(state)}#wechat_redirect`;
+  }
+
+  /** WeChat Official uses the client_credential grant; this derives the token. */
+  async handleCallback(): Promise<{
+    accessToken: string;
+    expiresAt: Date;
+  }> {
+    const token = await this.getAccessToken();
+    return { accessToken: token, expiresAt: new Date(this.tokenExpireTime) };
+  }
 
   /**
    * 获取微信公众号 access_token
-   * 会缓存 token，过期前自动刷新
+   * 会缓存 token，过期前自动刷新。优先使用注入的已存 token。
    */
   async getAccessToken(): Promise<string> {
-    // 如果 token 还有效，直接返回缓存
+    const injected = this.getInjectedAccessToken();
+    if (injected) {
+      this.accessToken = injected;
+      return injected;
+    }
     if (this.accessToken && Date.now() < this.tokenExpireTime - 60000) {
       return this.accessToken;
     }
@@ -66,7 +99,12 @@ export class WechatOfficialAdapter {
       throw new Error(`WeChat token request failed: HTTP ${resp.status}`);
     }
 
-    const data = (await resp.json()) as { access_token?: string; expires_in?: number; errcode?: number; errmsg?: string };
+    const data = (await resp.json()) as {
+      access_token?: string;
+      expires_in?: number;
+      errcode?: number;
+      errmsg?: string;
+    };
 
     if (!data.access_token) {
       throw new Error(`WeChat API error: ${data.errcode} - ${data.errmsg}`);
@@ -78,12 +116,53 @@ export class WechatOfficialAdapter {
     return this.accessToken;
   }
 
+  /** 兼容 BaseAdapter 的 getToken 管道：delegate 到 client-credential 流程。 */
+  private async getToken(): Promise<string> {
+    return this.getAccessToken();
+  }
+
+  /**
+   * Publish a post: create a multimedia draft then submit it. TEXT content is
+   * wrapped into a single-article draft; richer media would be supplied via
+   * the draft articles in a real integration.
+   */
+  async publish(post: PublishRequest): Promise<PublishResult> {
+    const title = (post.extra as { title?: string } | undefined)?.title ?? 'Untitled';
+    const draft = await this.createDraft([
+      {
+        title,
+        content: post.content,
+        thumb_media_id: 'thumb', // media would be uploaded & attached here
+      },
+    ]);
+    const result = await this.publishDraft(draft.media_id);
+    return {
+      externalId: result.publish_id,
+      externalUrl: `https://mp.weixin.qq.com/${result.publish_id}`,
+      publishedAt: new Date(),
+    };
+  }
+
+  async fetchMetrics(): Promise<MetricsResult> {
+    // 公众号没有直接返回“曝光/互动”的公开接口；这里返回粉丝数作为主指标。
+    const followerCount = await this.getFollowerCount();
+    return {
+      impressions: 0,
+      engagements: 0,
+      likes: 0,
+      comments: 0,
+      shares: 0,
+      views: 0,
+      followerCount,
+    };
+  }
+
   /**
    * 获取粉丝总数
    * 注意：需要已认证的服务号
    */
   async getFollowerCount(): Promise<number> {
-    const token = await this.getAccessToken();
+    const token = await this.getToken();
     const url = `https://api.weixin.qq.com/cgi-bin/user/get?access_token=${encodeURIComponent(token)}`;
 
     const resp = await fetch(url);
@@ -107,7 +186,7 @@ export class WechatOfficialAdapter {
    * @param count 数量
    */
   async getMaterials(type = 'news', offset = 0, count = 20): Promise<WechatMaterialResult> {
-    const token = await this.getAccessToken();
+    const token = await this.getToken();
     const url = `https://api.weixin.qq.com/cgi-bin/material/batchget_material?access_token=${encodeURIComponent(token)}`;
 
     const resp = await fetch(url, {
@@ -134,7 +213,7 @@ export class WechatOfficialAdapter {
    * @param imageUrl 图片 URL（需要先上传到微信服务器）
    */
   async addImageMaterial(imageUrl: string): Promise<{ media_id: string; url: string }> {
-    const token = await this.getAccessToken();
+    const token = await this.getToken();
     const url = `https://api.weixin.qq.com/cgi-bin/material/add_material?access_token=${encodeURIComponent(token)}&type=image`;
 
     const resp = await fetch(url, {
@@ -157,7 +236,7 @@ export class WechatOfficialAdapter {
    * @param articles 图文消息数组
    */
   async createDraft(articles: WechatArticles[]): Promise<WechatDraftResult> {
-    const token = await this.getAccessToken();
+    const token = await this.getToken();
     const url = `https://api.weixin.qq.com/cgi-bin/draft/add?access_token=${encodeURIComponent(token)}`;
 
     const resp = await fetch(url, {
@@ -184,7 +263,7 @@ export class WechatOfficialAdapter {
    * @param mediaId 草稿 media_id
    */
   async publishDraft(mediaId: string): Promise<WechatPublishResult> {
-    const token = await this.getAccessToken();
+    const token = await this.getToken();
     const url = `https://api.weixin.qq.com/cgi-bin/freepublish/submit?access_token=${encodeURIComponent(token)}`;
 
     const resp = await fetch(url, {
@@ -211,7 +290,7 @@ export class WechatOfficialAdapter {
    * @param mediaId 草稿 media_id
    */
   async deleteDraft(mediaId: string): Promise<void> {
-    const token = await this.getAccessToken();
+    const token = await this.getToken();
     const url = `https://api.weixin.qq.com/cgi-bin/draft/delete?access_token=${encodeURIComponent(token)}`;
 
     const resp = await fetch(url, {

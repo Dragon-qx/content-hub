@@ -57,6 +57,8 @@ export class BilibiliAdapter extends BaseAdapter {
   }
 
   private async getToken(): Promise<string> {
+    const injected = this.getInjectedAccessToken();
+    if (injected) return injected;
     if (this.accessToken && Date.now() < this.tokenExpire - 60000) return this.accessToken;
     if (this.refreshTokenValue) return (await this.refreshToken()).accessToken;
     throw new Error('Bilibili adapter is not authenticated');

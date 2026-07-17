@@ -35,12 +35,11 @@ describe('PlatformSdkController', () => {
   });
 
   it('publish forwards contentId, platform and payload', async () => {
-    await controller.publish({
-      contentId: 'c1',
-      platform: 'TWITTER' as any,
-      payload: { foo: 'bar' },
-    });
-    expect(service.publish).toHaveBeenCalledWith('c1', 'TWITTER', { foo: 'bar' });
+    await controller.publish(
+      { contentId: 'c1', platform: 'TWITTER' as any, payload: { foo: 'bar' } },
+      undefined,
+    );
+    expect(service.publish).toHaveBeenCalledWith('c1', 'TWITTER', { foo: 'bar' }, undefined);
   });
 
   it('validate forwards platform and credentials', async () => {

@@ -13,6 +13,7 @@
 - M11: ✅ platform adapter abstraction layer with WeChat Video, Douyin, XHS, Bilibili adapters and factory
 - M12: ✅ notifications, CSV export, Swagger, CI/CD, deploy config
 - M13: ✅ API docs, coverage
+- M14: ✅ publish execution pipeline: real PlatformSdkService, scheduler executeJob + retry/worker, token-injection adapter seam, PublishJob schema extension, migration
 
 ## 当前任务
 

@@ -4,6 +4,7 @@ import { SchedulerController } from './scheduler.controller';
 import { SchedulerService } from './scheduler.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { PlatformSdkService } from '../platform-sdk/platform-sdk.service';
 
 describe('SchedulerController', () => {
   let controller: SchedulerController;
@@ -16,6 +17,7 @@ describe('SchedulerController', () => {
       findOne: jest.fn().mockResolvedValue({ id: 'job-1' }),
       cancel: jest.fn().mockResolvedValue({ id: 'job-1', status: 'CANCELLED' }),
       retry: jest.fn().mockResolvedValue({ id: 'job-1', status: 'QUEUED' }),
+      executeJob: jest.fn().mockResolvedValue(undefined),
     };
 
     const module = await Test.createTestingModule({
@@ -23,6 +25,7 @@ describe('SchedulerController', () => {
       providers: [
         { provide: SchedulerService, useValue: service },
         { provide: PrismaService, useValue: {} },
+        { provide: PlatformSdkService, useValue: {} },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -42,12 +45,12 @@ describe('SchedulerController', () => {
   it('schedule parses ISO scheduledAt into a Date', async () => {
     await controller.schedule({
       contentId: 'c1',
-      platform: 'TWITTER' as any,
+      platform: 'WECHAT_OFFICIAL' as any,
       scheduledAt: '2026-01-01T00:00:00.000Z',
     });
     expect(service.schedule).toHaveBeenCalledWith(
       'c1',
-      'TWITTER',
+      'WECHAT_OFFICIAL',
       new Date('2026-01-01T00:00:00.000Z'),
     );
   });
@@ -55,5 +58,11 @@ describe('SchedulerController', () => {
   it('findAll forwards pagination', async () => {
     await controller.findAll({ skip: 5, take: 10 } as any);
     expect(service.findAll).toHaveBeenCalledWith({ skip: 5, take: 10 });
+  });
+
+  it('execute triggers job execution then returns the job', async () => {
+    await controller.execute('job-1');
+    expect(service.executeJob).toHaveBeenCalledWith('job-1');
+    expect(service.findOne).toHaveBeenCalledWith('job-1');
   });
 });

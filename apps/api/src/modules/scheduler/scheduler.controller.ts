@@ -46,4 +46,11 @@ export class SchedulerController {
   retry(@Param('id') id: string) {
     return this.scheduler.retry(id);
   }
+
+  /** Manually trigger execution of a queued job. */
+  @Post(':id/execute')
+  async execute(@Param('id') id: string) {
+    await this.scheduler.executeJob(id);
+    return this.scheduler.findOne(id);
+  }
 }

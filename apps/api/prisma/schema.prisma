@@ -67,6 +67,7 @@ model SocialAccount {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   analytics       AnalyticsSnapshot[]
+  publishJobs     PublishJob[]
 
   @@unique([platform, accountId])
 }
@@ -134,12 +135,23 @@ model PlatformPost {
   retryCount      Int           @default(0)
   lastError       String?
   metrics         Json?         // 最新指标快照
+  // Owning job, if this post was produced by a PublishJob.
+  job             PublishJob?   @relation("JobPost", fields: [jobId], references: [id])
+  jobId           String?       @unique
   createdAt       DateTime      @default(now())
+
+  @@index([jobId])
 }
 
 model PublishJob {
   id            String        @id @default(cuid())
   contentId     String
+  platform      Platform      @default(WECHAT_OFFICIAL)
+  // The social account used to publish (resolved from content.teamId at schedule time).
+  accountId     String?
+  account       SocialAccount? @relation(fields: [accountId], references: [id])
+  // Inverse of PlatformPost.job — the post produced by executing this job.
+  post          PlatformPost?  @relation("JobPost")
   status        JobStatus     @default(QUEUED)
   scheduledAt   DateTime
   startedAt     DateTime?
@@ -147,6 +159,9 @@ model PublishJob {
   error         String?
   retryCount    Int           @default(0)
   createdAt     DateTime      @default(now())
+
+  @@index([status, scheduledAt])
+  @@index([accountId])
 }
 
 model AnalyticsSnapshot {

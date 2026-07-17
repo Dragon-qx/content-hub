@@ -12,11 +12,40 @@ const auth = (req: request.Test) =>
 
 let authToken = '';
 
+/**
+ * Mock the global fetch used by platform adapters so the e2e flow can exercise
+ * the full publish pipeline deterministically (no real platform APIs).
+ *   - token endpoint -> access_token
+ *   - draft add      -> media_id
+ *   - publish submit -> publish_id
+ */
+function installFetchMock() {
+  const fetchMock = jest.fn((url: string) => {
+    const u = String(url);
+    let body: any = {};
+    if (u.includes('cgi-bin/token')) {
+      body = { access_token: 'mock-access-token', expires_in: 7200 };
+    } else if (u.includes('draft/add')) {
+      body = { media_id: 'mock-media-id' };
+    } else if (u.includes('freepublish/submit')) {
+      body = { publish_id: 'mock-publish-id' };
+    }
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(body),
+    } as Response);
+  });
+  (globalThis as any).fetch = fetchMock;
+  return fetchMock;
+}
+
 describe('ContentHub API (e2e)', () => {
   let app: INestApplication;
   let prismaMock: any;
 
   beforeAll(async () => {
+    installFetchMock();
     prismaMock = {
       user: {
         findUnique: jest.fn().mockResolvedValue({ id: 'e2e-user', isActive: true }),
@@ -41,7 +70,10 @@ describe('ContentHub API (e2e)', () => {
       },
       content: {
         create: jest.fn().mockResolvedValue({ id: 'content-1', title: 'Test', body: 'Body', version: 1 }),
-        findUnique: jest.fn().mockResolvedValue({ id: 'content-1', title: 'Test', version: 1, tags: [] }),
+        findUnique: jest.fn().mockImplementation((args: any) => {
+          const id = args?.where?.id ?? 'content-1';
+          return Promise.resolve({ id, title: 'Test', body: 'Body', teamId: 'team-1', version: 1, tags: [] });
+        }),
         findMany: jest.fn().mockResolvedValue([]),
         update: jest.fn().mockResolvedValue({ id: 'content-1' }),
         delete: jest.fn().mockResolvedValue({ id: 'content-1' }),
@@ -59,8 +91,16 @@ describe('ContentHub API (e2e)', () => {
         count: jest.fn().mockResolvedValue(0),
       },
       socialAccount: {
-        create: jest.fn().mockResolvedValue({ id: 'account-1', platform: 'TWITTER' }),
+        create: jest.fn().mockResolvedValue({ id: 'account-1', platform: 'WECHAT_OFFICIAL' }),
         findUnique: jest.fn().mockResolvedValue(null),
+        // Bound account used by the publish pipeline (decrypt -> adapter -> publish).
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'account-1',
+          platform: 'WECHAT_OFFICIAL',
+          status: 'ACTIVE',
+          // Plain-JSON credentials; CryptoService.decrypt falls through to this object.
+          credentials: { appid: 'appid', secret: 'secret', rawId: 'raw' },
+        }),
         findMany: jest.fn().mockResolvedValue([]),
         delete: jest.fn().mockResolvedValue({ id: 'account-1' }),
         update: jest.fn().mockResolvedValue({ id: 'account-1' }),
@@ -255,11 +295,28 @@ describe('ContentHub API (e2e)', () => {
 
   // ── Platform SDK ─────────────────────────────────────
   describe('POST /api/v1/platform-sdk/publish', () => {
-    it('should accept publish request', async () => {
-      return auth(req()
+    it('publishes content via the platform adapter', async () => {
+      prismaMock.platformPost.create.mockResolvedValueOnce({
+        id: 'post-1',
+        platform: 'WECHAT_OFFICIAL',
+        externalId: 'mock-publish-id',
+      });
+
+      await auth(req()
         .post(`${PREFIX}/platform-sdk/publish`)
-        .send({ contentId: 'c1', platform: 'TWITTER' }))
+        .send({ contentId: 'c1', platform: 'WECHAT_OFFICIAL' }))
         .expect(201);
+
+      expect(prismaMock.platformPost.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            contentId: 'c1',
+            platform: 'WECHAT_OFFICIAL',
+            externalId: 'mock-publish-id',
+            status: 'PUBLISHED',
+          }),
+        }),
+      );
     });
   });
 

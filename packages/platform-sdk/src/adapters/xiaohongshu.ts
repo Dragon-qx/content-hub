@@ -53,6 +53,8 @@ export class XiaoHongShuAdapter extends BaseAdapter {
   }
 
   private async getToken(): Promise<string> {
+    const injected = this.getInjectedAccessToken();
+    if (injected) return injected;
     if (this.accessToken && Date.now() < this.tokenExpire - 60000) return this.accessToken;
     throw new Error('XiaoHongShu adapter is not authenticated');
   }

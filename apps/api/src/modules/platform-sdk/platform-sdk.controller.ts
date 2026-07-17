@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { PlatformSdkService } from './platform-sdk.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PublishContentDto, ValidateCredentialsDto } from './dto/platform-sdk.dto';
@@ -9,8 +17,13 @@ export class PlatformSdkController {
   constructor(private readonly platformSdk: PlatformSdkService) {}
 
   @Post('publish')
-  publish(@Body() dto: PublishContentDto) {
-    return this.platformSdk.publish(dto.contentId, dto.platform, dto.payload);
+  publish(@Body() dto: PublishContentDto, @Query('accountId') accountId?: string) {
+    return this.platformSdk.publish(
+      dto.contentId,
+      dto.platform,
+      dto.payload ?? {},
+      accountId,
+    );
   }
 
   @Get(':platform/status/:externalId')

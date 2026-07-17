@@ -51,6 +51,8 @@ export class WechatVideoAdapter extends BaseAdapter {
   }
 
   private async getToken(): Promise<string> {
+    const injected = this.getInjectedAccessToken();
+    if (injected) return injected;
     if (this.accessToken && Date.now() < this.tokenExpire - 60000) return this.accessToken;
     if (this.refreshTokenValue) return (await this.refreshToken()).accessToken;
     throw new Error('WeChat Video adapter is not authenticated');

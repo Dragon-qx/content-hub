@@ -6,6 +6,10 @@ module.exports = {
     '^.+\\.ts$': ['ts-jest', { diagnostics: { ignoreCodes: [151001] } }],
   },
   testEnvironment: 'node',
+  moduleNameMapper: {
+    '^@content-hub/platform-sdk$': '<rootDir>/../../packages/platform-sdk/src/index.ts',
+    '^@content-hub/shared-types$': '<rootDir>/../../packages/shared-types/src/index.ts',
+  },
   collectCoverageFrom: [
     'src/**/*.service.ts',
     '!src/**/*.module.ts',
