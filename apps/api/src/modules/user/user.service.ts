@@ -20,11 +20,30 @@ const PUBLIC_SELECT = {
 export class UserService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list() {
-    return this.prisma.user.findMany({
-      select: PUBLIC_SELECT,
-      orderBy: { createdAt: 'desc' },
-    });
+  async list(params: { skip?: number; take?: number; search?: string; isActive?: boolean } = {}) {
+    const where: Record<string, unknown> = {};
+    if (params.isActive !== undefined) {
+      where.isActive = params.isActive;
+    }
+    if (params.search) {
+      where.OR = [
+        { name: { contains: params.search, mode: 'insensitive' } },
+        { email: { contains: params.search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        select: PUBLIC_SELECT,
+        skip: params.skip ?? 0,
+        take: params.take ?? 20,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    return { items, total, skip: params.skip ?? 0, take: params.take ?? 20 };
   }
 
   async findById(id: string): Promise<Omit<User, 'passwordHash' | 'mfaSecret'>> {

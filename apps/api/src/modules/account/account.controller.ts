@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -42,6 +43,11 @@ export class AccountController {
   @Post(':id/sync')
   sync(@Param('id') id: string) {
     return this.accountService.sync(id);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: Partial<BindAccountDto>) {
+    return this.accountService.update(id, dto);
   }
 
   @Delete(':id')

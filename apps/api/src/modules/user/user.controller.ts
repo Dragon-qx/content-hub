@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -15,8 +16,32 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
+import { Type } from 'class-transformer';
+import { IsBooleanString, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserService } from './user.service';
+
+class ListUsersQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  skip?: number = 0;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  take?: number = 20;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsBooleanString()
+  isActive?: boolean;
+}
 
 @Controller('users')
 @UseGuards(JwtAuthGuard)
@@ -36,8 +61,13 @@ export class UserController {
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserRole.OWNER, UserRole.ADMIN)
-  list() {
-    return this.userService.list();
+  list(@Query() query: ListUsersQueryDto) {
+    return this.userService.list({
+      skip: query.skip,
+      take: query.take,
+      search: query.search,
+      isActive: query.isActive,
+    });
   }
 
   @Delete(':id')

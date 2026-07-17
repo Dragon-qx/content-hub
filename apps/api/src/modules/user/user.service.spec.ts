@@ -13,6 +13,7 @@ describe('UserService', () => {
         findUnique: jest.fn(),
         findMany: jest.fn(),
         update: jest.fn(),
+        count: jest.fn(),
       },
     };
 
@@ -45,13 +46,31 @@ describe('UserService', () => {
   });
 
   describe('list', () => {
-    it('should return users list', async () => {
+    it('should return paginated users', async () => {
       prisma.user.findMany.mockResolvedValue([{ id: '1' }, { id: '2' }]);
-      const result = await service.list();
-      expect(result).toHaveLength(2);
-      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
-        orderBy: { createdAt: 'desc' },
-      }));
+      prisma.user.count.mockResolvedValue(2);
+
+      const result = await service.list({ skip: 0, take: 10 });
+      expect(result.items).toHaveLength(2);
+      expect(result.total).toBe(2);
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { createdAt: 'desc' } }),
+      );
+    });
+
+    it('should build a search filter across name and email', async () => {
+      prisma.user.findMany.mockResolvedValue([]);
+      prisma.user.count.mockResolvedValue(0);
+
+      await service.list({ search: 'alice' });
+
+      const arg = prisma.user.findMany.mock.calls[0][0];
+      expect(arg.where.OR).toEqual(
+        expect.arrayContaining([
+          { name: { contains: 'alice', mode: 'insensitive' } },
+          { email: { contains: 'alice', mode: 'insensitive' } },
+        ]),
+      );
     });
   });
 

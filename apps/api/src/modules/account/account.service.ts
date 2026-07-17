@@ -10,6 +10,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { CryptoService } from '../../common/crypto/crypto.service';
 import { BindAccountDto } from './dto/account.dto';
 import { WechatOfficialAdapter } from '@content-hub/platform-sdk';
 
@@ -37,7 +38,23 @@ export type PublicAccount = Prisma.SocialAccountGetPayload<{
 export class AccountService {
   private readonly logger = new Logger(AccountService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly crypto: CryptoService,
+  ) {}
+
+  /** Decrypt stored credentials back into a plain object. */
+  private decryptCredentials(raw: Prisma.JsonValue | null): Record<string, unknown> {
+    if (!raw || typeof raw !== 'string') {
+      return (raw as unknown as Record<string, unknown>) ?? {};
+    }
+    try {
+      return this.crypto.decrypt<Record<string, unknown>>(raw);
+    } catch {
+      // Legacy/unencrypted records stored as plain JSON — return as-is.
+      return (raw as unknown as Record<string, unknown>) ?? {};
+    }
+  }
 
   async listForTeam(teamId: string): Promise<PublicAccount[]> {
     return this.prisma.socialAccount.findMany({
@@ -142,7 +159,8 @@ export class AccountService {
       throw new BadRequestException('This social account is already bound');
     }
 
-    const credentials = this.composeCredentials(dto);
+    // Credentials are encrypted at rest (AES-256-GCM) before persistence.
+    const credentials = this.crypto.encrypt(this.composeCredentials(dto));
 
     return this.prisma.socialAccount.create({
       data: {
@@ -151,7 +169,7 @@ export class AccountService {
         accountId: dto.accountId,
         accountName: dto.accountName,
         accountHandle: dto.accountHandle,
-        credentials: credentials as Prisma.InputJsonValue,
+        credentials: credentials as unknown as Prisma.InputJsonValue,
         status: AccountStatus.ACTIVE,
       },
       select: PUBLIC_SELECT,
@@ -169,10 +187,9 @@ export class AccountService {
     // 微信公众号：调用真实 API
     if (
       account.platform === Platform.WECHAT_OFFICIAL &&
-      account.credentials &&
-      typeof account.credentials === 'object'
+      account.credentials
     ) {
-      const creds = account.credentials as Record<string, unknown>;
+      const creds = this.decryptCredentials(account.credentials);
       if (creds.appid && creds.secret) {
         try {
           const adapter = new WechatOfficialAdapter({
@@ -213,6 +230,32 @@ export class AccountService {
       success: false,
       message: `${account.platform} 暂不支持实时同步`,
     };
+  }
+
+  /**
+   * Update mutable account fields. When new platform credentials are supplied
+   * they are merged over the (decrypted) existing credentials and re-encrypted
+   * before persistence.
+   */
+  async update(id: string, dto: Partial<BindAccountDto>): Promise<PublicAccount> {
+    const existing = await this.prisma.socialAccount.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Account not found');
+    }
+
+    const data: Prisma.SocialAccountUpdateInput = {};
+    if (dto.accountName !== undefined) data.accountName = dto.accountName;
+    if (dto.accountHandle !== undefined) data.accountHandle = dto.accountHandle;
+    if (dto.credentials && Object.keys(dto.credentials).length > 0) {
+      const merged = { ...this.decryptCredentials(existing.credentials), ...dto.credentials };
+      data.credentials = this.crypto.encrypt(merged) as unknown as Prisma.InputJsonValue;
+    }
+
+    return this.prisma.socialAccount.update({
+      where: { id },
+      data,
+      select: PUBLIC_SELECT,
+    });
   }
 
   async unbind(id: string) {

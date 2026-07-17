@@ -42,12 +42,12 @@ export class TeamService {
   }
 
   async update(id: string, userId: string, dto: UpdateTeamDto): Promise<Team> {
-    await this.assertOwner(id, userId);
+    await this.assertAdmin(id, userId);
     return this.prisma.team.update({ where: { id }, data: dto });
   }
 
   async remove(id: string, userId: string): Promise<{ deleted: true }> {
-    await this.assertOwner(id, userId);
+    await this.assertAdmin(id, userId);
     await this.prisma.team.delete({ where: { id } });
     return { deleted: true };
   }
@@ -61,7 +61,7 @@ export class TeamService {
     userId: string,
     dto: AddMemberDto,
   ): Promise<Member> {
-    await this.assertOwner(teamId, userId);
+    await this.assertAdmin(teamId, userId);
     const role = this.parseMemberRole(dto.role);
 
     const existing = await this.prisma.member.findUnique({
@@ -81,7 +81,7 @@ export class TeamService {
     userId: string,
     memberId: string,
   ): Promise<{ deleted: true }> {
-    await this.assertOwner(teamId, userId);
+    await this.assertAdmin(teamId, userId);
     if (memberId === userId) {
       throw new BadRequestException('Owner cannot remove themselves');
     }
@@ -89,10 +89,22 @@ export class TeamService {
     return { deleted: true };
   }
 
-  private async assertOwner(teamId: string, userId: string): Promise<void> {
+  /**
+   * Only the team owner and members with the ADMIN role may mutate the team.
+   * This is a simple RBAC gate shared by update/remove/member-management.
+   */
+  private async assertAdmin(teamId: string, userId: string): Promise<void> {
     const team = await this.findById(teamId);
-    if (team.ownerId !== userId) {
-      throw new ForbiddenException('Only the team owner can perform this action');
+    if (team.ownerId === userId) {
+      return;
+    }
+    const membership = await this.prisma.member.findUnique({
+      where: { teamId_userId: { teamId, userId } },
+    });
+    if (!membership || membership.role !== MemberRole.ADMIN) {
+      throw new ForbiddenException(
+        'Only the team owner or an admin can perform this action',
+      );
     }
   }
 
