@@ -1,6 +1,7 @@
 'use client';
 
-import { useAuth, AuthUser } from '@/lib/auth';
+import { useAuth } from '@/lib/auth';
+import { AuthUser } from '@/lib/types';
 import NotificationBell from './NotificationBell';
 
 export default function Topbar({ user }: { user: AuthUser | null }) {

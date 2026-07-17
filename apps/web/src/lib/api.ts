@@ -84,6 +84,16 @@ export const api = {
 };
 
 /**
+ * Build a scannable QR-code image URL from an otpauth:// URI using the
+ * free QuickChart API, so setup needs no client-side QR dependency. Falls
+ * back to null (caller shows the secret inline) if the browser is offline.
+ */
+export function qrCodeUrl(otpauthUrl: string, size = 220): string {
+  const encoded = encodeURIComponent(otpauthUrl);
+  return `https://quickchart.io/qr?text=${encoded}&size=${size}&margin=1`;
+}
+
+/**
  * Fetch an authenticated endpoint that returns a file and trigger a browser
  * download. The JWT is attached as a Bearer header (it is not present on a
  * plain navigation request, so we cannot just point the browser at the URL).

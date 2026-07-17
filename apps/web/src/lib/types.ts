@@ -1,5 +1,14 @@
 // Frontend data shapes that mirror the API resources.
 
+/** The authenticated user object returned by /users/me and /auth/me. */
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  mfaEnabled: boolean;
+}
+
 export interface Paginated<T> {
   items: T[];
   total: number;

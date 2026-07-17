@@ -19,7 +19,30 @@
 ```json
 { "email": "a@b.com", "password": "password123" }
 ```
-→ `201` `{ accessToken, refreshToken }`
+→ `201` either `{ accessToken, refreshToken }` (no MFA) or
+`{ mfaRequired: true, mfaToken }` when the account has two-factor
+authentication enabled. The `mfaToken` is short-lived (5 min) and redeemed
+via `/auth/mfa/login`.
+
+### MFA login (second step)
+`POST /api/v1/auth/mfa/login`
+```json
+{ "mfaToken": "<mfaToken from /auth/login>", "code": "123456" }
+```
+→ `201` `{ accessToken, refreshToken }` · `401` if the token expired or the
+code is wrong.
+
+### MFA management (all require a valid session)
+| Method | Path                 | Notes                                            |
+| ------ | -------------------- | ------------------------------------------------ |
+| POST   | `/auth/mfa/setup`    | Begin setup — returns `secret` + `otpauthUrl`    |
+| POST   | `/auth/mfa/verify`   | Confirm with a code — enables MFA                |
+| POST   | `/auth/mfa/disable`  | Disable MFA and clear the stored secret          |
+| GET    | `/auth/mfa/status`   | `{ mfaEnabled }`                                 |
+
+Setup flow: call `/setup`, show the `otpauthUrl` as a QR (or the raw `secret`)
+to the user, then call `/verify` with the code their app generates. MFA only
+activates on a successful `/verify`.
 
 ### Refresh
 `POST /api/v1/auth/refresh`

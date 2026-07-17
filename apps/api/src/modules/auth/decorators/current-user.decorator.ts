@@ -10,11 +10,18 @@ export interface AuthUser {
 export const CurrentUser = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): AuthUser => {
     const request = ctx.switchToHttp().getRequest();
-    const payload: JwtPayload = request.user;
+    const payload = request.user as JwtPayload;
+    // Routes using this decorator are protected by JwtAuthGuard, which only
+    // accepts session tokens (access/refresh). The mfa token is short-lived and
+    // never reaches a guarded route, so narrowing on `type` is sound.
+    const session = payload.type === 'mfa' ? null : payload;
+    if (!session) {
+      throw new Error('No session token on guarded route');
+    }
     return {
-      userId: payload.sub,
-      email: payload.email,
-      role: payload.role,
+      userId: session.sub,
+      email: session.email,
+      role: session.role,
     };
   },
 );

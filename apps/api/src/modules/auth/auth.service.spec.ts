@@ -2,6 +2,8 @@ import { Test } from '@nestjs/testing';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuditService } from '../audit/audit.service';
+import { MfaService } from './mfa.service';
+import { CryptoService } from '../../common/crypto/crypto.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -26,6 +28,8 @@ describe('AuthService', () => {
   let jwt: any;
   let config: any;
   let audit: any;
+  let crypto: any;
+  let mfa: any;
 
   beforeEach(async () => {
     prisma = createMockPrisma();
@@ -37,6 +41,17 @@ describe('AuthService', () => {
       get: jest.fn((key: string, def?: string) => def),
     };
     audit = { log: jest.fn().mockResolvedValue({ id: 'log-1' }) };
+    crypto = {
+      // Symmetric stand-ins for the real AES-256-GCM CryptoService: encrypt
+      // prefixes the plaintext, decrypt strips the prefix.
+      encrypt: jest.fn((v: unknown) => `enc:${v}`),
+      decrypt: jest.fn((s: string) => s.slice(4)),
+    };
+    mfa = {
+      generateSecret: jest.fn().mockReturnValue('JBSWY3DPEHPK3PXP'),
+      getOtpauthUrl: jest.fn().mockReturnValue('otpauth://totp/test'),
+      verify: jest.fn().mockReturnValue(false),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -45,6 +60,8 @@ describe('AuthService', () => {
         { provide: JwtService, useValue: jwt },
         { provide: ConfigService, useValue: config },
         { provide: AuditService, useValue: audit },
+        { provide: CryptoService, useValue: crypto },
+        { provide: MfaService, useValue: mfa },
       ],
     }).compile();
 
@@ -115,24 +132,20 @@ describe('AuthService', () => {
         role: 'OWNER',
       });
 
-      // argon2.verify returns false for wrong password
-      // We need to mock it, but since argon2 is imported in auth.service
-      // and we're using a mock prisma, we can't easily mock argon2 here
-      // For a unit test, we mock at the service level, not testing argon2
       await expect(service.login({ email: 'test@example.com', password: 'wrong' }))
         .rejects.toThrow(UnauthorizedException);
     });
 
-    it('records a LOGIN audit entry on successful authentication', async () => {
+    it('records a LOGIN audit entry on successful authentication without MFA', async () => {
       prisma.user.findUnique.mockResolvedValue({
         id: '1',
         isActive: true,
         passwordHash: 'hashed_correct',
         email: 'test@example.com',
         role: 'OWNER',
+        mfaEnabled: false,
+        mfaSecret: null,
       });
-      // argon2.verify returns false by default in this suite, so flip it true
-      // for this single happy-path assertion.
       const argon2Mock = jest.requireMock('argon2');
       argon2Mock.verify.mockResolvedValueOnce(true);
 
@@ -144,8 +157,173 @@ describe('AuthService', () => {
         '1',
         'User',
         '1',
-        { email: 'test@example.com' },
+        { email: 'test@example.com', mfa: false },
       );
+    });
+
+    it('returns an mfaToken (not session tokens) when MFA is enabled', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: '1',
+        isActive: true,
+        passwordHash: 'hashed',
+        email: 'test@example.com',
+        role: 'OWNER',
+        mfaEnabled: true,
+        mfaSecret: 'enc:secret',
+      });
+      const argon2Mock = jest.requireMock('argon2');
+      argon2Mock.verify.mockResolvedValueOnce(true);
+
+      const result = await service.login({ email: 'test@example.com', password: 'correct' });
+
+      expect(result).toHaveProperty('mfaRequired', true);
+      expect(result).toHaveProperty('mfaToken', 'mock-token');
+      // A distinct, short-lived mfa token is signed (one extra call on top of
+      // none: session tokens must NOT be issued here).
+      expect(jwt.signAsync).toHaveBeenCalledTimes(1);
+      expect(jwt.signAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ sub: '1', type: 'mfa' }),
+        expect.objectContaining({ expiresIn: '5m' }),
+      );
+      expect(audit.log).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('mfaLogin', () => {
+    it('issues session tokens when a valid mfaToken and code are presented', async () => {
+      jwt.verifyAsync.mockResolvedValue({ sub: '1', type: 'mfa' });
+      prisma.user.findUnique.mockResolvedValue({
+        id: '1',
+        email: 'test@example.com',
+        role: 'OWNER',
+        isActive: true,
+        mfaEnabled: true,
+        mfaSecret: 'enc:real-secret',
+      });
+      mfa.verify.mockResolvedValueOnce(true);
+
+      const result = await service.mfaLogin({ mfaToken: 'mfa-tok', code: '123456' });
+
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
+      expect(crypto.decrypt).toHaveBeenCalledWith('enc:real-secret');
+      expect(mfa.verify).toHaveBeenCalledWith('real-secret', '123456');
+      expect(audit.log).toHaveBeenCalledWith(
+        'LOGIN',
+        '1',
+        'User',
+        '1',
+        { email: 'test@example.com', mfa: true },
+      );
+    });
+
+    it('rejects an expired or tampered mfaToken', async () => {
+      jwt.verifyAsync.mockRejectedValue(new Error('expired'));
+      await expect(service.mfaLogin({ mfaToken: 'bad', code: '123456' }))
+        .rejects.toThrow(UnauthorizedException);
+    });
+
+    it('rejects a token that is not of type mfa', async () => {
+      jwt.verifyAsync.mockResolvedValue({ sub: '1', type: 'access' });
+      await expect(service.mfaLogin({ mfaToken: 'tok', code: '123456' }))
+        .rejects.toThrow(UnauthorizedException);
+    });
+
+    it('rejects a wrong TOTP code', async () => {
+      jwt.verifyAsync.mockResolvedValue({ sub: '1', type: 'mfa' });
+      prisma.user.findUnique.mockResolvedValue({
+        id: '1',
+        email: 'test@example.com',
+        role: 'OWNER',
+        isActive: true,
+        mfaEnabled: true,
+        mfaSecret: 'enc:secret',
+      });
+      mfa.verify.mockReturnValueOnce(false);
+
+      await expect(service.mfaLogin({ mfaToken: 'tok', code: '000000' }))
+        .rejects.toThrow(UnauthorizedException);
+      expect(audit.log).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('setupMfa / enableMfa', () => {
+    it('generates and persists a secret, returning the provisioning URI', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: '1',
+        email: 'u@e.com',
+        mfaEnabled: false,
+        mfaSecret: null,
+      });
+
+      const result = await service.setupMfa('1');
+
+      expect(result).toEqual({
+        secret: 'JBSWY3DPEHPK3PXP',
+        otpauthUrl: 'otpauth://totp/test',
+      });
+      expect(crypto.encrypt).toHaveBeenCalledWith('JBSWY3DPEHPK3PXP');
+      expect(mfa.generateSecret).toHaveBeenCalled();
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: '1' },
+        data: { mfaSecret: expect.stringContaining('enc:') },
+      });
+    });
+
+    it('refuses setup when MFA is already enabled', async () => {
+      prisma.user.findUnique.mockResolvedValue({ mfaEnabled: true });
+      await expect(service.setupMfa('1')).rejects.toThrow(ConflictException);
+    });
+
+    it('enables MFA only when the submitted code verifies', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        mfaEnabled: false,
+        mfaSecret: 'enc:real-secret',
+        email: 'u@e.com',
+      });
+      mfa.verify.mockResolvedValueOnce(true);
+
+      const result = await service.enableMfa('1', { code: '123456' });
+
+      expect(result).toEqual({ enabled: true });
+      expect(mfa.verify).toHaveBeenCalledWith('real-secret', '123456');
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: '1' },
+        data: { mfaEnabled: true },
+      });
+      expect(audit.log).toHaveBeenCalledWith('MFA_ENABLE', '1', 'User', '1', { email: 'u@e.com' });
+    });
+
+    it('rejects enable when the code is wrong', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        mfaEnabled: false,
+        mfaSecret: 'enc:secret',
+        email: 'u@e.com',
+      });
+      mfa.verify.mockReturnValueOnce(false);
+
+      await expect(service.enableMfa('1', { code: '000000' }))
+        .rejects.toThrow(UnauthorizedException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('disableMfa', () => {
+    it('clears MFA and the secret', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        mfaEnabled: true,
+        mfaSecret: 'enc:secret',
+        email: 'u@e.com',
+      });
+
+      const result = await service.disableMfa('1');
+
+      expect(result).toEqual({ enabled: false });
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: '1' },
+        data: { mfaEnabled: false, mfaSecret: null },
+      });
+      expect(audit.log).toHaveBeenCalledWith('MFA_DISABLE', '1', 'User', '1', { email: 'u@e.com' });
     });
   });
 

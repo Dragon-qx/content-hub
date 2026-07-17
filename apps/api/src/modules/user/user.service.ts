@@ -14,6 +14,7 @@ const PUBLIC_SELECT = {
   updatedAt: true,
   lastLoginAt: true,
   isActive: true,
+  mfaEnabled: true,
 } as const;
 
 @Injectable()

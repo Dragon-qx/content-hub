@@ -14,18 +14,24 @@ import {
   setAuthToken,
   setUnauthorizedHandler,
 } from './api';
+import { AuthUser } from './types';
 
-export interface AuthUser {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
+export interface LoginResult {
+  /** When true, the password was accepted but a TOTP code is now required. */
+  mfaRequired?: boolean;
+  mfaToken?: string;
+  accessToken?: string;
 }
 
 interface AuthState {
   user: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<LoginResult>;
+  /**
+   * Complete an MFA-protected login with the token issued by `login` plus a
+   * TOTP code. On success the session is established as usual.
+   */
+  mfaLogin: (mfaToken: string, code: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => void;
 }
@@ -62,10 +68,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setUnauthorizedHandler(null);
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const res = await api.post<{ accessToken: string }>('/auth/login', {
-      email,
-      password,
+  const login = async (email: string, password: string): Promise<LoginResult> => {
+    const res = await api.post<LoginResult>('/auth/login', { email, password });
+    if (res.mfaRequired && res.mfaToken) {
+      // Keep the mfaToken for the second step; no session yet.
+      return { mfaRequired: true, mfaToken: res.mfaToken };
+    }
+    setAuthToken(res.accessToken ?? null);
+    await hydrate();
+    return {};
+  };
+
+  const mfaLogin = async (mfaToken: string, code: string) => {
+    const res = await api.post<{ accessToken: string }>('/auth/mfa/login', {
+      mfaToken,
+      code,
     });
     setAuthToken(res.accessToken);
     await hydrate();
@@ -87,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, mfaLogin, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

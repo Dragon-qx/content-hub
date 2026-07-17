@@ -3,9 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { JwtPayload } from './dto/auth.dto';
+import { JwtPayload, SessionJwtPayload } from './dto/auth.dto';
 
-export interface JwtValidatedUser extends JwtPayload {
+export interface JwtValidatedUser extends SessionJwtPayload {
   userId: string;
 }
 
@@ -23,6 +23,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload): Promise<JwtValidatedUser> {
+    // The guard extracts any bearer token, but only session tokens (access/
+    // refresh) carry the claims a guarded route needs. An mfa token is rejected
+    // here so it cannot be used to authorize a request.
+    if (payload.type === 'mfa') {
+      throw new UnauthorizedException('Two-factor authentication required');
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       select: { id: true, isActive: true },
