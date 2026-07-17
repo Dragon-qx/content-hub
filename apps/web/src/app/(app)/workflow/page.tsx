@@ -6,8 +6,10 @@ import { Button, Card, StatusBadge } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
 import { Table } from '@/components/Table';
 import { Workflow, Paginated } from '@/lib/types';
+import { useAuth } from '@/lib/auth';
 
 export default function WorkflowPage() {
+  const { user } = useAuth();
   const [rows, setRows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -28,7 +30,10 @@ export default function WorkflowPage() {
 
   const act = async (id: string, action: 'approve' | 'reject') => {
     try {
-      await api.post(`/workflow/${id}/${action}`, { approverId: 'current-user', comment: '' });
+      // Act as the currently authenticated user; fall back to an empty string
+      // only if the session is somehow unavailable (the action will then be
+      // rejected server-side as unauthorized).
+      await api.post(`/workflow/${id}/${action}`, { approverId: user?.id ?? '', comment: '' });
       await load();
     } catch {
       // ignore for now

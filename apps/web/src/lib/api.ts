@@ -22,6 +22,16 @@ export interface Paginated<T> {
 
 let authToken: string | null = null;
 
+/**
+ * Invoked when a request fails with HTTP 401. The auth layer registers a
+ * handler that logs the user out so the AuthGuard redirects to /login.
+ */
+let onUnauthorized: (() => void) | null = null;
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  onUnauthorized = handler;
+}
+
 export function setAuthToken(token: string | null) {
   authToken = token;
   if (typeof window !== 'undefined') {
@@ -47,7 +57,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
 
   if (res.status === 401) {
-    // Bubble up so the auth layer can redirect to login.
+    // The auth layer reacts via setUnauthorizedHandler (logout + redirect).
+    onUnauthorized?.();
     throw new ApiError(401, 'Unauthorized');
   }
 

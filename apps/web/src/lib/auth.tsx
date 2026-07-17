@@ -8,7 +8,12 @@ import {
   ReactNode,
   useCallback,
 } from 'react';
-import { api, getAuthToken, setAuthToken } from './api';
+import {
+  api,
+  getAuthToken,
+  setAuthToken,
+  setUnauthorizedHandler,
+} from './api';
 
 export interface AuthUser {
   id: string;
@@ -49,6 +54,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  // When an API call fails with 401 (expired/invalid token), clear the session.
+  // Setting user to null triggers the AuthGuard to redirect to /login.
+  useEffect(() => {
+    setUnauthorizedHandler(() => logout());
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   const login = async (email: string, password: string) => {
     const res = await api.post<{ accessToken: string }>('/auth/login', {

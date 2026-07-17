@@ -2,16 +2,17 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { Button, Card, Input, StatusBadge } from '@/lib/ui';
+import { Button, Card, Input, Select, StatusBadge } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
 import { Table } from '@/components/Table';
-import { PublishJob, Paginated } from '@/lib/types';
+import { PLATFORMS, PublishJob, Paginated } from '@/lib/types';
 
 export default function SchedulerPage() {
   const [rows, setRows] = useState<PublishJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [contentId, setContentId] = useState('');
+  const [platform, setPlatform] = useState('WECHAT_OFFICIAL');
   const [scheduledAt, setScheduledAt] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -36,11 +37,12 @@ export default function SchedulerPage() {
     try {
       await api.post('/scheduler', {
         contentId,
-        platform: 'WECHAT_OFFICIAL',
+        platform,
         scheduledAt: new Date(scheduledAt).toISOString(),
       });
       setShowForm(false);
       setContentId('');
+      setPlatform('WECHAT_OFFICIAL');
       setScheduledAt('');
       await load();
     } finally {
@@ -64,6 +66,11 @@ export default function SchedulerPage() {
         <Card className="mb-6">
           <form onSubmit={submit} className="flex flex-col gap-3">
             <Input placeholder="Content ID" value={contentId} onChange={(e) => setContentId(e.target.value)} required />
+            <Select value={platform} onChange={(e) => setPlatform(e.target.value)} required>
+              {PLATFORMS.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </Select>
             <Input
               type="datetime-local"
               value={scheduledAt}
