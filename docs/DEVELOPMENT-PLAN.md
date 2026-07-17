@@ -2,7 +2,7 @@
 
 > 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18
 
-> **当前进度（2026-07-18）**: M1–M18 全部完成。13 个后端模块具备完整 CRUD + DTO 验证；前端 13 个核心页面齐全；6 个平台适配器（微信公众号/视频号/抖音/小红书/B站 + 工厂）；发布执行流水线、安全加固（JWT guards/限流/TOTP MFA/审计）均已落地。测试 **221 通过 / 26 套件**，全部构建通过。
+> **当前进度（2026-07-18）**: M1–M19 全部完成 + V1.1 首项落地。14 个后端模块（新增 Engagement Hub 互动管理），前端 14 个核心页面（新增 /engagement）；platform-sdk 补齐评论/回复 seam（适配器中 Bilibili 已原生实现，其余降级到 unsupported 优雅路径）。测试 **231 通过 / 27 套件**，全部构建通过。
 >
 > **本轮新增（M-OAuth）**: OAuth2 授权码绑定流程。所有适配器已实现 `getAuthUrl`/`handleCallback`，但此前无 API 暴露——绑定仅为"粘贴原始凭证"，不满足 PRD P0 的 OAuth2 绑定要求。新增无状态 state-token 回调（state 加密携带上下文，回调无需 JWT）、授权页/回调控制器、前端 OAuth 连接表单与结果横幅。
 
@@ -96,6 +96,17 @@
 - [ ] 通知系统（站内/邮件/Webhook）
 - [ ] 数据导出
 
+### M20: V1.1 — Engagement Hub（互动管理）
+**目标：** 统一评论收件箱 + 情感分析 + 快捷回复（PRD §3.6）
+
+- [x] Prisma schema: EngagementComment + Sentiment enum + CommentTemplate + migration
+- [x] PlatformSdkService seam: `fetchComments()` / `replyToComment()` with graceful unsupported-adapter degradation
+- [x] EngagementModule: service (ingest/list/reply/stats/sentiment heuristic) + JwtAuthGuard-protected controller + DTO validation + unit specs
+- [x] 前端 /engagement 页面：收件箱（平台/情感/未回复筛选 + 分页）、回复编辑器、快捷回复模板、统计卡片
+- [ ] 评论轮询调度（定时摄入，接 BullMQ cron worker）
+- [ ] 舆情监控关键词告警
+- [ ] 私信聚合
+
 ### M13: 测试 + 部署 + 文档
 **目标：** 生产就绪
 
@@ -162,6 +173,7 @@
 - [x] 前端管理面板，含全部核心页面 (M10)
 - [x] 站内通知 + 团队广播 (M12)
 - [x] 双因素认证 TOTP (M18)
+- [x] Engagement Hub — 互动管理：统一评论收件箱 + 情感分析 + 快捷回复 (M20)
 
 ### 技术验收
 - [x] 所有测试通过 (213 API + 10 SDK)
