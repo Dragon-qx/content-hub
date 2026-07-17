@@ -15,7 +15,7 @@ export class AuditController {
   constructor(private readonly audit: AuditService) {}
 
   @Post()
-  log(@Body() dto: CreateAuditDto, @Req() req: any) {
+  log(@Body() dto: CreateAuditDto, @Req() req: { ip?: string }) {
     return this.audit.log(
       dto.action,
       dto.userId,

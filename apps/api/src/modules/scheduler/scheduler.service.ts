@@ -5,7 +5,7 @@ import {
   Inject,
   Optional,
 } from '@nestjs/common';
-import { JobStatus, Platform } from '@prisma/client';
+import { JobStatus, Platform, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import {
   PlatformSdkService,
@@ -14,6 +14,14 @@ import {
 
 /** Max retries before a job is considered permanently failed. */
 export const MAX_RETRY = 3;
+
+/** Query params for listing publish jobs. */
+export interface ListJobParams {
+  skip?: number;
+  take?: number;
+  status?: JobStatus;
+  contentId?: string;
+}
 
 @Injectable()
 export class SchedulerService {
@@ -142,8 +150,8 @@ export class SchedulerService {
     });
   }
 
-  async findAll(params: any = {}) {
-    const where: any = {};
+  async findAll(params: ListJobParams = {}) {
+    const where: Prisma.PublishJobWhereInput = {};
     if (params.status) where.status = params.status;
     if (params.contentId) where.contentId = params.contentId;
 

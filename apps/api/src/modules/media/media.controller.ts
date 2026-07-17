@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -11,7 +12,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { MediaService } from './media.service';
+import { MediaService, UploadedMultipartFile } from './media.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('media')
@@ -21,7 +22,10 @@ export class MediaController {
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
-  upload(@UploadedFile() file: any, @Body('contentId') contentId?: string) {
+  upload(@UploadedFile() file: UploadedMultipartFile | undefined, @Body('contentId') contentId?: string) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
     return this.media.upload(file, contentId);
   }
 

@@ -123,6 +123,17 @@ export class WorkflowService {
     return { items, total, skip: params.skip ?? 0, take: params.take ?? 20 };
   }
 
+  /**
+   * Find the PENDING workflow for a content item, if any. Used by the content
+   * state machine to approve/reject the flow alongside the content status.
+   */
+  async findPendingForContent(contentId: string) {
+    if (!contentId) return null;
+    return this.prisma.workflow.findFirst({
+      where: { contentId, status: 'PENDING' },
+    });
+  }
+
   /** Fetch a single workflow by id. */
   async findOne(id: string) {
     const workflow = await this.prisma.workflow.findUnique({

@@ -2,11 +2,32 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { MediaType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
+/** Fields the API layer reads from an uploaded file (multipart). */
+export interface UploadedMultipartFile {
+  mimetype?: string;
+  filename?: string;
+  originalname?: string;
+  size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  uploadedBy?: string;
+}
+
+/** Query params for listing media assets. */
+export interface ListMediaParams {
+  contentId?: string;
+  type?: string;
+  q?: string;
+  skip?: number;
+  take?: number;
+}
+
 @Injectable()
 export class MediaService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async upload(file: any, contentId?: string) {
+  async upload(file: UploadedMultipartFile, contentId?: string) {
     return this.prisma.mediaAsset.create({
       data: {
         contentId: contentId ?? null,
@@ -37,7 +58,7 @@ export class MediaService {
     return type as MediaType; // 兜底：原样回退
   }
 
-  async findAll(params: any = {}) {
+  async findAll(params: ListMediaParams = {}) {
     const where: Prisma.MediaAssetWhereInput = {};
     if (params.contentId) where.contentId = params.contentId;
 

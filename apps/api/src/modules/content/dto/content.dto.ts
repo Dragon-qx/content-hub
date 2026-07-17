@@ -5,6 +5,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
@@ -58,6 +59,57 @@ export class UpdateContentDto {
   @IsOptional()
   @Type(() => Date)
   publishedAt?: Date;
+}
+
+export class CreateContentVersionDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  body?: string;
+
+  @IsOptional()
+  @IsEnum(ContentType)
+  contentType?: ContentType;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  changeNote?: string;
+}
+
+/** Body for POST /contents/:id/submit — optional override of the approver. */
+export class SubmitContentDto {
+  @IsOptional()
+  @IsString()
+  approverId?: string;
+}
+
+/** Body for POST /contents/:id/approve. */
+export class ApproveContentDto {
+  @IsOptional()
+  @IsString()
+  approverId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  comment?: string;
+}
+
+/** Body for POST /contents/:id/reject. */
+export class RejectContentDto {
+  @IsOptional()
+  @IsString()
+  approverId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  reason?: string;
 }
 
 export class ListContentQueryDto {

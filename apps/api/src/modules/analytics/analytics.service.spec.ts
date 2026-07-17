@@ -147,9 +147,9 @@ describe('AnalyticsService', () => {
         { snapshotDate: new Date(baseDate.getTime() - 172800000), followerCount: 80, impressions: 400 },
       ]);
 
-      const result = await service.getHistory('followers', '30d');
+      const result = await service.getHistory('followerCount', '30d');
 
-      expect(result).toHaveProperty('metric', 'followers');
+      expect(result).toHaveProperty('metric', 'followerCount');
       expect(result).toHaveProperty('period', '30d');
       expect(result).toHaveProperty('data');
       expect(result.data).toBeInstanceOf(Array);
@@ -161,7 +161,7 @@ describe('AnalyticsService', () => {
     it('should return different periods correctly', async () => {
       prisma.analyticsSnapshot.findMany.mockResolvedValue([]);
 
-      const result7d = await service.getHistory('followers', '7d');
+      const result7d = await service.getHistory('followerCount', '7d');
       expect(result7d.period).toBe('7d');
 
       const result90d = await service.getHistory('impressions', '90d');
@@ -209,7 +209,7 @@ describe('AnalyticsService', () => {
       expect(result.items[0]).toHaveProperty('engagementRate');
     });
 
-    it('should return default sortBy impressions when invalid', async () => {
+    it('should sort by the requested metric', async () => {
       prisma.platformPost.findMany.mockResolvedValue([
         {
           contentId: 'c1',
@@ -227,9 +227,14 @@ describe('AnalyticsService', () => {
         },
       ]);
 
-      const result = await service.getTopContent('invalid_field', 10);
-      // Should fall back to impressions and sort correctly (1000 first)
-      expect(result.items[0].impressions).toBe(1000);
+      // Sorted by likes descending (200 first)
+      const result = await service.getTopContent('likes', 10);
+      expect(result.sortBy).toBe('likes');
+      expect(result.items[0].title).toBe('Post B');
+
+      // Sorted by impressions descending (1000 first)
+      const resultImp = await service.getTopContent('impressions', 10);
+      expect(resultImp.items[0].impressions).toBe(1000);
     });
 
     it('should return empty items when no posts', async () => {

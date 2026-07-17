@@ -1,5 +1,45 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+
+/** A numeric metric tracked per account (the columns summed in analytics). */
+export type AnalyticsMetric =
+  | 'followerCount'
+  | 'followingCount'
+  | 'postCount'
+  | 'impressions'
+  | 'engagements'
+  | 'likes'
+  | 'comments'
+  | 'shares'
+  | 'views';
+
+const METRIC_KEYS: readonly AnalyticsMetric[] = [
+  'followerCount',
+  'followingCount',
+  'postCount',
+  'impressions',
+  'engagements',
+  'likes',
+  'comments',
+  'shares',
+  'views',
+];
+
+/** Optional payload for recording a snapshot manually. */
+export interface SnapshotInput {
+  snapshotDate?: string | Date;
+  followerCount?: number;
+  followingCount?: number;
+  postCount?: number;
+  impressions?: number;
+  engagements?: number;
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  views?: number;
+  extra?: Prisma.InputJsonValue;
+}
 
 /**
  * 数据分析服务
@@ -134,8 +174,8 @@ export class AnalyticsService {
   }
 
   /** 从快照列表中聚合指标（取每个 account 最新一条） */
-  private aggregateMetrics(snapshots: any[]) {
-    const byAccount = new Map<string, any>();
+  private aggregateMetrics(snapshots: Prisma.AnalyticsSnapshotGetPayload<{}>[]) {
+    const byAccount = new Map<string, Prisma.AnalyticsSnapshotGetPayload<{}>>();
     for (const s of snapshots) {
       const existing = byAccount.get(s.accountId);
       if (!existing || s.snapshotDate > existing.snapshotDate) {
@@ -164,7 +204,7 @@ export class AnalyticsService {
 
   // ===== 3. 历史趋势 =====
 
-  async getHistory(metric: string, period: string) {
+  async getHistory(metric: AnalyticsMetric, period: string) {
     const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
@@ -178,7 +218,7 @@ export class AnalyticsService {
     const dateMap = new Map<string, number>();
     for (const s of snapshots) {
       const dateKey = s.snapshotDate.toISOString().split('T')[0];
-      const val = (s as any)[metric] ?? 0;
+      const val = s[metric] ?? 0;
       dateMap.set(dateKey, (dateMap.get(dateKey) || 0) + val);
     }
 
@@ -192,7 +232,7 @@ export class AnalyticsService {
 
   // ===== 4. 热门内容榜 =====
 
-  async getTopContent(sortBy: string = 'impressions', limit: number = 10) {
+  async getTopContent(sortBy: AnalyticsMetric = 'impressions', limit: number = 10) {
     const posts = await this.prisma.platformPost.findMany({
       orderBy: { publishedAt: 'desc' },
       take: 100,
@@ -277,7 +317,7 @@ export class AnalyticsService {
 
   // ===== 6. 手动快照 =====
 
-  async recordSnapshot(accountId: string, data?: any) {
+  async recordSnapshot(accountId: string, data?: SnapshotInput) {
     const snapshotDate = data?.snapshotDate ? new Date(data.snapshotDate) : new Date();
     return this.prisma.analyticsSnapshot.create({
       data: {
@@ -292,7 +332,7 @@ export class AnalyticsService {
         comments: data?.comments,
         shares: data?.shares,
         views: data?.views,
-        extra: data?.extra || null,
+        extra: data?.extra ?? Prisma.JsonNull,
       },
     });
   }

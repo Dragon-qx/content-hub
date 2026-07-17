@@ -1,5 +1,6 @@
-import { IsInt, IsOptional, IsString, Min, Max } from 'class-validator';
+import { IsInt, IsOptional, IsString, Min, Max, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
+import { AnalyticsMetric } from '../analytics.service';
 
 /**
  * 时间范围查询 DTO
@@ -17,8 +18,18 @@ export class AnalyticsQueryDto {
  * 历史趋势查询 DTO
  */
 export class HistoryQueryDto {
-  @IsString()
-  metric: string;
+  @IsIn([
+    'followerCount',
+    'followingCount',
+    'postCount',
+    'impressions',
+    'engagements',
+    'likes',
+    'comments',
+    'shares',
+    'views',
+  ])
+  metric: AnalyticsMetric;
 
   @IsString()
   period: string;
@@ -29,8 +40,18 @@ export class HistoryQueryDto {
  */
 export class TopContentQueryDto {
   @IsOptional()
-  @IsString()
-  sortBy?: string = 'impressions';
+  @IsIn([
+    'followerCount',
+    'followingCount',
+    'postCount',
+    'impressions',
+    'engagements',
+    'likes',
+    'comments',
+    'shares',
+    'views',
+  ])
+  sortBy?: AnalyticsMetric = 'impressions';
 
   @IsOptional()
   @Type(() => Number)
