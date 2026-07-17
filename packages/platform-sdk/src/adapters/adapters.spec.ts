@@ -5,6 +5,8 @@ import { DouyinAdapter } from './douyin';
 import { XiaoHongShuAdapter } from './xiaohongshu';
 import { BilibiliAdapter } from './bilibili';
 import { WeiboAdapter } from './weibo';
+import { TwitterAdapter } from './twitter';
+import { YouTubeAdapter } from './youtube';
 
 // Minimal global.fetch mock so adapters can be exercised without IO.
 const jsonResponse = (body: unknown): Response =>
@@ -23,7 +25,15 @@ afterEach(() => {
 
 describe('PlatformAdapterFactory', () => {
   it('creates an adapter for every supported platform', () => {
-    for (const p of [Platform.WECHAT_VIDEO, Platform.DOUYIN, Platform.XIAOHONGSHU, Platform.BILIBILI, Platform.WEIBO]) {
+    for (const p of [
+      Platform.WECHAT_VIDEO,
+      Platform.DOUYIN,
+      Platform.XIAOHONGSHU,
+      Platform.BILIBILI,
+      Platform.WEIBO,
+      Platform.TWITTER,
+      Platform.YOUTUBE,
+    ]) {
       const adapter = PlatformAdapterFactory.create(p, { clientKey: 'k', clientSecret: 's', accountId: 'a' });
       expect(adapter).not.toBeNull();
       expect(adapter!.platform).toBe(p);
@@ -186,6 +196,186 @@ describe('WeiboAdapter', () => {
     await adapter.handleCallback('code');
     const metrics = await adapter.fetchMetrics('u1', { start: new Date(), end: new Date() });
     expect(metrics.followerCount).toBe(1234);
+    spy.mockRestore();
+  });
+});
+
+describe('TwitterAdapter', () => {
+  it('builds an OAuth2 URL containing the client key', () => {
+    const adapter = new TwitterAdapter({ clientKey: 'CK', clientSecret: 'CS', userId: 'u1' });
+    const url = adapter.getAuthUrl('xyz');
+    expect(url).toContain('CK');
+    expect(url).toContain('xyz');
+    expect(url).toContain('code_challenge_method=S256');
+    expect(url).toContain('tweet.write');
+  });
+
+  it('exchanges a code for tokens', async () => {
+    const spy = jest.spyOn(global, 'fetch').mockResolvedValue(
+      jsonResponse({ access_token: 'AT', refresh_token: 'RT', expires_in: 7200 }),
+    );
+    const adapter = new TwitterAdapter({ clientKey: 'CK', clientSecret: 'CS', userId: 'u1' });
+    const creds = await adapter.handleCallback('code-123');
+    expect(creds.accessToken).toBe('AT');
+    // The token endpoint must be called with HTTP Basic auth.
+    const init = spy.mock.calls[0][1] as RequestInit;
+    expect((init.headers as Record<string, string>)['Authorization']).toMatch(/^Basic /);
+    spy.mockRestore();
+  });
+
+  it('refreshes an expired token', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        jsonResponse({ access_token: 'T1', refresh_token: 'R1', expires_in: 10 }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ access_token: 'T2', refresh_token: 'R2', expires_in: 7200 }),
+      );
+    const adapter = new TwitterAdapter({ clientKey: 'CK', clientSecret: 'CS', userId: 'u1' });
+    await adapter.handleCallback('code');
+    (adapter as unknown as { tokenExpire: number }).tokenExpire = 0;
+    const creds = await adapter.refreshToken();
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(creds.accessToken).toBe('T2');
+    spy.mockRestore();
+  });
+
+  it('publishes a tweet and returns the id + url', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        jsonResponse({ access_token: 'AT', refresh_token: 'RT', expires_in: 3600 }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ data: { id: 'tid-42', text: 'hi' } }));
+    const adapter = new TwitterAdapter({ clientKey: 'CK', clientSecret: 'CS', userId: 'u1' });
+    await adapter.handleCallback('code');
+    const result = await adapter.publish({ content: 'hi' });
+    expect(result.externalId).toBe('tid-42');
+    expect(result.externalUrl).toContain('u1');
+    expect(result.externalUrl).toContain('tid-42');
+    spy.mockRestore();
+  });
+
+  it('fetches follower metrics from the users lookup', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        jsonResponse({ access_token: 'AT', refresh_token: 'RT', expires_in: 3600 }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ data: { id: 'u1', public_metrics: { followers_count: 1500 } } }),
+      );
+    const adapter = new TwitterAdapter({ clientKey: 'CK', clientSecret: 'CS', userId: 'u1' });
+    await adapter.handleCallback('code');
+    const metrics = await adapter.fetchMetrics('u1', { start: new Date(), end: new Date() });
+    expect(metrics.followerCount).toBe(1500);
+    spy.mockRestore();
+  });
+});
+
+describe('YouTubeAdapter', () => {
+  it('builds an OAuth2 URL containing the client id and YouTube scopes', () => {
+    const adapter = new YouTubeAdapter({ clientId: 'CID', clientSecret: 'CS', channelId: 'UC1' });
+    const url = adapter.getAuthUrl('xyz');
+    expect(url).toContain('CID');
+    expect(url).toContain('xyz');
+    expect(url).toContain(encodeURIComponent('https://www.googleapis.com/auth/youtube'));
+    expect(url).toContain('access_type=offline');
+  });
+
+  it('exchanges a code for tokens', async () => {
+    const spy = jest.spyOn(global, 'fetch').mockResolvedValue(
+      jsonResponse({ access_token: 'AT', refresh_token: 'RT', expires_in: 3600 }),
+    );
+    const adapter = new YouTubeAdapter({ clientId: 'CID', clientSecret: 'CS', channelId: 'UC1' });
+    const creds = await adapter.handleCallback('code');
+    expect(creds.accessToken).toBe('AT');
+    spy.mockRestore();
+  });
+
+  it('refreshes an expired token with the refresh_token grant', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        jsonResponse({ access_token: 'T1', refresh_token: 'R1', expires_in: 10 }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'T2', expires_in: 3600 }));
+    const adapter = new YouTubeAdapter({ clientId: 'CID', clientSecret: 'CS', channelId: 'UC1' });
+    await adapter.handleCallback('code');
+    (adapter as unknown as { tokenExpire: number }).tokenExpire = 0;
+    const creds = await adapter.refreshToken();
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(creds.accessToken).toBe('T2');
+    spy.mockRestore();
+  });
+
+  it('registers upload metadata and returns a video id + url', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        jsonResponse({ access_token: 'AT', refresh_token: 'RT', expires_in: 3600 }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ id: 'yt-123' }));
+    const adapter = new YouTubeAdapter({ clientId: 'CID', clientSecret: 'CS', channelId: 'UC1' });
+    await adapter.handleCallback('code');
+    const result = await adapter.publish({ content: 'description text', extra: { title: 'My Vid' } });
+    expect(result.externalId).toBe('yt-123');
+    expect(result.externalUrl).toContain('yt-123');
+    spy.mockRestore();
+  });
+
+  it('fetches channel metrics (subs + views)', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        jsonResponse({ access_token: 'AT', refresh_token: 'RT', expires_in: 3600 }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ items: [{ statistics: { subscriberCount: '9999', viewCount: '50000' } }] }),
+      );
+    const adapter = new YouTubeAdapter({ clientId: 'CID', clientSecret: 'CS', channelId: 'UC1' });
+    await adapter.handleCallback('code');
+    const metrics = await adapter.fetchMetrics('UC1', { start: new Date(), end: new Date() });
+    expect(metrics.followerCount).toBe(9999);
+    expect(metrics.views).toBe(50000);
+    spy.mockRestore();
+  });
+
+  it('fetches comment threads and maps them', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'AT', refresh_token: 'RT', expires_in: 3600 }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          items: [
+            {
+              id: 'thread-1',
+              snippet: {
+                authorChannelId: { value: 'UC-author' },
+                authorDisplayName: 'fan',
+                textDisplay: 'great video',
+                publishedAt: '2026-01-01T00:00:00Z',
+              },
+            },
+          ],
+        }),
+      );
+    const adapter = new YouTubeAdapter({ clientId: 'CID', clientSecret: 'CS', channelId: 'UC1' });
+    await adapter.handleCallback('code');
+    const comments = await adapter.fetchComments('UC1', 'yt-123');
+    expect(comments).toHaveLength(1);
+    expect(comments[0].authorName).toBe('fan');
+    expect(comments[0].content).toBe('great video');
+    spy.mockRestore();
+  });
+
+  it('replies to a comment via the comments.insert endpoint', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'AT', refresh_token: 'RT', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({}));
+    const adapter = new YouTubeAdapter({ clientId: 'CID', clientSecret: 'CS', channelId: 'UC1' });
+    await adapter.handleCallback('code');
+    await adapter.replyToComment('UC1', 'thread-1', 'thanks!');
+    // Second call targets the comments insert endpoint.
+    const replyUrl = spy.mock.calls[1][0];
+    expect(String(replyUrl)).toContain('/youtube/v3/comments');
+    const replyBody = JSON.parse(((spy.mock.calls[1][1] as RequestInit).body as string) ?? '{}');
+    expect(replyBody.snippet.parentId).toBe('thread-1');
+    expect(replyBody.snippet.textOriginal).toBe('thanks!');
     spy.mockRestore();
   });
 });

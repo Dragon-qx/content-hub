@@ -10,3 +10,5 @@ export * from './adapters/douyin';
 export * from './adapters/xiaohongshu';
 export * from './adapters/bilibili';
 export * from './adapters/weibo';
+export * from './adapters/twitter';
+export * from './adapters/youtube';

@@ -3,6 +3,8 @@ import { DouyinAdapter } from './adapters/douyin';
 import { XiaoHongShuAdapter } from './adapters/xiaohongshu';
 import { BilibiliAdapter } from './adapters/bilibili';
 import { WeiboAdapter } from './adapters/weibo';
+import { TwitterAdapter } from './adapters/twitter';
+import { YouTubeAdapter } from './adapters/youtube';
 import { WechatVideoAdapter } from './adapters/wechat-video';
 import { WechatOfficialAdapter } from './wechat-official';
 
@@ -51,6 +53,18 @@ export class PlatformAdapterFactory {
           appKey: String(config.appKey ?? config.appid ?? ''),
           appSecret: String(config.appSecret ?? config.secret ?? ''),
           uid: String(config.uid ?? config.accountId ?? ''),
+        });
+      case Platform.TWITTER:
+        return new TwitterAdapter({
+          clientKey: String(config.clientKey ?? config.appKey ?? config.appid ?? ''),
+          clientSecret: String(config.clientSecret ?? config.appSecret ?? config.secret ?? ''),
+          userId: String(config.userId ?? config.accountId ?? ''),
+        });
+      case Platform.YOUTUBE:
+        return new YouTubeAdapter({
+          clientId: String(config.clientId ?? config.clientKey ?? config.appKey ?? config.appid ?? ''),
+          clientSecret: String(config.clientSecret ?? config.appSecret ?? config.secret ?? ''),
+          channelId: String(config.channelId ?? config.accountId ?? ''),
         });
       default:
         return null;
