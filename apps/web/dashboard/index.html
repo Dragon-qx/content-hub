@@ -1,0 +1,1674 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ContentHub Dashboard</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: #f0f2f5; color: #1a1a2e; font-size: 14px; line-height: 1.5; -webkit-tap-highlight-color: transparent; }
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; font-family: inherit; }
+input, textarea, select { font-family: inherit; font-size: inherit; }
+ul { list-style: none; }
+
+/* Layout */
+.app { display: flex; min-height: 100vh; }
+.sidebar { width: 240px; background: #1a1a2e; color: #a0a3bd; display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; transition: transform 0.3s ease; }
+.sidebar-header { padding: 20px; border-bottom: 1px solid #2d2d44; }
+.sidebar-header h1 { color: #fff; font-size: 18px; font-weight: 700; }
+.sidebar-header small { color: #6c6e8a; font-size: 11px; }
+
+.sidebar-nav { display: flex; flex-direction: column; gap: 2px; padding: 0 12px; }
+.nav-item { display: flex; align-items: center; padding: 10px 16px; color: #a0a3bd; font-size: 13px; cursor: pointer; border-radius: 8px; transition: all 0.2s; -webkit-tap-highlight-color: rgba(79,70,229,0.3); user-select: none; touch-action: manipulation; }
+.nav-item:hover { background: #2d2d44; color: #fff; }
+.nav-item.active { background: #4f46e5; color: #fff; font-weight: 600; box-shadow: 0 2px 8px rgba(79,70,229,0.4); }
+.nav-item .icon { width: 20px; margin-right: 10px; font-size: 16px; text-align: center; }
+.sidebar-footer { padding: 12px 20px; border-top: 1px solid #2d2d44; font-size: 11px; }
+.main-content { flex: 1; margin-left: 240px; display: flex; flex-direction: column; min-height: 100vh; }
+.header { background: #fff; height: 56px; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 4px rgba(0,0,0,0.06); position: sticky; top: 0; z-index: 50; }
+.header-left { display: flex; align-items: center; gap: 16px; }
+.header-right { display: flex; align-items: center; gap: 16px; }
+.header .page-title { font-size: 16px; font-weight: 600; }
+.user-avatar { width: 32px; height: 32px; border-radius: 50%; background: #4f46e5; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+.content-area { flex: 1; padding: 24px; }
+
+/* Cards */
+.card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 16px; }
+.card-header { padding: 16px 20px; border-bottom: 1px solid #f0f2f5; display: flex; justify-content: space-between; align-items: center; }
+.card-body { padding: 20px; }
+.card-title { font-size: 14px; font-weight: 600; }
+
+/* Stats Grid */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.stat-card .stat-label { color: #6b7280; font-size: 12px; margin-bottom: 8px; }
+.stat-card .stat-value { font-size: 28px; font-weight: 700; color: #1a1a2e; }
+.stat-card .stat-change { font-size: 12px; margin-top: 4px; }
+.stat-change.up { color: #10b981; }
+.stat-change.down { color: #ef4444; }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; border: 1px solid transparent; transition: all 0.2s; white-space: nowrap; cursor: pointer; }
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: #4f46e5; color: #fff; }
+.btn-primary:hover { background: #4338ca; }
+.btn-secondary { background: #fff; color: #374151; border-color: #d1d5db; }
+.btn-secondary:hover { background: #f9fafb; }
+.btn-danger { background: #ef4444; color: #fff; }
+.btn-danger:hover { background: #dc2626; }
+.btn-success { background: #10b981; color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+
+/* Tables */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #f0f2f5; }
+th { font-weight: 600; font-size: 12px; color: #6b7280; text-transform: uppercase; }
+td { font-size: 13px; }
+tr:hover td { background: #f9fafb; }
+
+/* Forms */
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+.form-input { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; transition: border-color 0.2s; }
+.form-input:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+textarea.form-input { resize: vertical; min-height: 80px; }
+
+/* Modal */
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; display: none; align-items: center; justify-content: center; padding: 20px; }
+.modal-overlay.show { display: flex; }
+.modal { background: #fff; border-radius: 12px; width: 100%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
+.modal-header { padding: 16px 20px; border-bottom: 1px solid #f0f2f5; display: flex; justify-content: space-between; align-items: center; }
+.modal-body { padding: 20px; }
+.modal-footer { padding: 12px 20px; border-top: 1px solid #f0f2f5; display: flex; justify-content: flex-end; gap: 8px; }
+.modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #6b7280; }
+
+/* Badges */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+.badge-green { background: #d1fae5; color: #065f46; }
+.badge-yellow { background: #fef3c7; color: #92400e; }
+.badge-red { background: #fee2e2; color: #991b1b; }
+.badge-blue { background: #dbeafe; color: #1e40af; }
+.badge-gray { background: #f3f4f6; color: #4b5563; }
+
+/* Activity Log */
+.activity-list { list-style: none; }
+.activity-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f0f2f5; }
+.activity-item:last-child { border-bottom: none; }
+.activity-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+.activity-icon.create { background: #dbeafe; }
+.activity-icon.update { background: #fef3c7; }
+.activity-icon.delete { background: #fee2e2; }
+.activity-icon.approve { background: #d1fae5; }
+.activity-content { flex: 1; }
+.activity-content .act-title { font-size: 13px; font-weight: 500; }
+.activity-content .act-time { font-size: 11px; color: #9ca3af; }
+
+/* Toast */
+.toast-container { position: fixed; top: 20px; right: 20px; z-index: 999; }
+.toast { background: #1a1a2e; color: #fff; padding: 10px 16px; border-radius: 6px; margin-bottom: 8px; font-size: 13px; animation: slideIn 0.3s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.toast.success { background: #10b981; }
+.toast.error { background: #ef4444; }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* Login */
+.login-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #1a1a2e; z-index: 500; display: none; align-items: center; justify-content: center; }
+.login-overlay.show { display: flex; }
+.login-box { background: #fff; border-radius: 12px; padding: 40px; width: 100%; max-width: 380px; text-align: center; }
+.login-box h2 { margin-bottom: 8px; font-size: 22px; }
+.login-box p { color: #6b7280; margin-bottom: 24px; font-size: 13px; }
+
+/* Coming Soon */
+.coming-soon { text-align: center; padding: 60px 20px; color: #6b7280; }
+.coming-soon .icon { font-size: 48px; margin-bottom: 16px; }
+.comcoming-soon h3 { font-size: 18px; margin-bottom: 8px; color: #1a1a2e; }
+
+/* Media Grid */
+.media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.media-item { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; cursor: pointer; transition: box-shadow 0.2s; }
+.media-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.media-thumb { width: 100%; height: 120px; background: #f3f4f6; display: flex; align-items: center; justify-content: center; font-size: 32px; }
+.media-info { padding: 8px; font-size: 12px; }
+.media-info .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.media-info .size { color: #9ca3af; font-size: 11px; }
+
+/* Upload Zone */
+.upload-zone { border: 2px dashed #d1d5db; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.2s; background: #f9fafb; }
+.upload-zone:hover { border-color: #4f46e5; background: #eef2ff; }
+.upload-zone p { color: #6b7280; font-size: 13px; margin-top: 8px; }
+
+/* Tags */
+.tag { display: inline-block; padding: 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 4px; font-size: 11px; margin-right: 4px; }
+
+/* Theme */
+.theme-toggle { background: none; border: 1px solid #e5e7eb; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; }
+body.dark { background: #111827; color: #e5e7eb; }
+body.dark .card, body.dark .stat-card, body.dark .header { background: #1f2937; box-shadow: none; }
+body.dark .sidebar { background: #0f172a; }
+body.dark .form-input { background: #374151; border-color: #4b5563; color: #e5e7eb; }
+body.dark tr:hover td { background: #374151; }
+body.dark th { color: #9ca3af; }
+body.dark td { border-color: #374151; }
+
+/* Responsive */
+.sidebar-toggle { display: none; background: none; border: none; font-size: 24px; cursor: pointer; }
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .main-content { margin-left: 0; }
+  .sidebar-toggle { display: flex; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Loader */
+.loader { display: inline-block; width: 16px; height: 16px; border: 2px solid #e5e7eb; border-top-color: #4f46e5; border-radius: 50%; animation: spin 0.6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Hidden */
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="toast-container" class="toast-container"></div>
+
+<!-- Login Overlay -->
+<div id="login-overlay" class="login-overlay">
+  <div class="login-box">
+    <h2>ContentHub</h2>
+    <p>请登录以继续</p>
+    <div class="form-group">
+      <input class="form-input" id="login-email" type="email" placeholder="邮箱" value="admin@contenthub.io">
+    </div>
+    <div class="form-group">
+      <input class="form-input" id="login-password" type="password" placeholder="密码" value="admin123">
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">登 录</button>
+    <p style="margin-top:16px;font-size:11px;color:#9ca3af">Token 将存储在 localStorage 中</p>
+  </div>
+</div>
+
+<!-- Sidebar Overlay (mobile) -->
+<div id="sidebar-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:90" onclick="toggleSidebar()"></div>
+
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h1>ContentHub</h1>
+      <small>内容管理中台</small>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-route="dashboard"><span class="icon">📊</span> 仪表盘</a>
+      <a href="#" class="nav-item" data-route="content"><span class="icon">📝</span> 内容管理</a>
+      <a href="#" class="nav-item" data-route="media"><span class="icon">🖼️</span> 媒体资源</a>
+      <a href="#" class="nav-item" data-route="scheduler"><span class="icon">⏰</span> 定时任务</a>
+      <a href="#" class="nav-item" data-route="analytics"><span class="icon">📈</span> 数据分析</a>
+      <a href="#" class="nav-item" data-route="workflow"><span class="icon">🔄</span> 工作流</a>
+      <a href="#" class="nav-item" data-route="teams"><span class="icon">👥</span> 团队管理</a>
+      <a href="#" class="nav-item" data-route="accounts"><span class="icon">🔗</span> 账号关联</a>
+      <a href="#" class="nav-item" data-route="settings"><span class="icon">⚙️</span> 系统设置</a>
+    </nav>
+    <div class="sidebar-footer">
+      <span id="api-status">●</span> API <span id="api-status-text">连接中</span>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <section class="main-content">
+    <header class="header">
+      <div class="header-left">
+        <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+        <span class="page-title" id="page-title">仪表盘</span>
+      </div>
+      <div class="header-right">
+        <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
+        <div class="user-avatar" id="user-avatar">A</div>
+        <span style="font-size:13px" id="user-display">Admin</span>
+        <button class="btn btn-sm btn-secondary" onclick="doLogout()">退出</button>
+      </div>
+    </header>
+
+    <div class="content-area" id="content-area">
+      <!-- Dynamic content rendered here -->
+    </div>
+  </section>
+</div>
+
+<!-- Modal -->
+<div id="modal-overlay" class="modal-overlay">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="card-title" id="modal-title">标题</span>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<script>
+
+  // ===== API Helper =====
+  var API_BASE = '/api/v1';
+
+  function api(method, path, data, callback) {
+    var xhr = new XMLHttpRequest();
+    xhr.open(method, API_BASE + path, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    var token = localStorage.getItem('ch_token');
+    if (token) { xhr.setRequestHeader('Authorization', 'Bearer ' + token); }
+    xhr.timeout = 10000;
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState === 4) {
+        if (!callback) return;
+        var resp;
+        try { resp = JSON.parse(xhr.responseText); } catch(e) { resp = { raw: xhr.responseText }; }
+        callback(xhr.status, resp, xhr);
+      }
+    };
+    xhr.onerror = function() {
+      if (callback) callback(0, { message: '网络请求失败 (XHR error)' });
+    };
+    xhr.ontimeout = function() {
+      if (callback) callback(408, { message: '请求超时' });
+    };
+    xhr.send(data ? JSON.stringify(data) : null);
+  }
+
+  function apiForm(method, path, formData, callback) {
+    var xhr = new XMLHttpRequest();
+    xhr.open(method, API_BASE + path, true);
+    var token = localStorage.getItem('ch_token');
+    if (token) { xhr.setRequestHeader('Authorization', 'Bearer ' + token); }
+    xhr.timeout = 30000;
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState === 4) {
+        if (!callback) return;
+        var resp;
+        try { resp = JSON.parse(xhr.responseText); } catch(e) { resp = { raw: xhr.responseText }; }
+        callback(xhr.status, resp, xhr);
+      }
+    };
+    xhr.onerror = function() { if (callback) callback(0, { message: '网络请求失败' }); };
+    xhr.ontimeout = function() { if (callback) callback(408, { message: '请求超时' }); };
+    xhr.send(formData);
+  }
+
+  // ===== Toast =====
+  function toast(msg, type) {
+    var c = document.getElementById('toast-container');
+    var el = document.createElement('div');
+    el.className = 'toast ' + (type || '');
+    el.textContent = msg;
+    c.appendChild(el);
+    setTimeout(function() { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; }, 2500);
+    setTimeout(function() { if(el.parentNode) el.parentNode.removeChild(el); }, 3000);
+  }
+
+  // ===== Theme =====
+  function toggleTheme() {
+    var body = document.body;
+    var isDark = body.classList.toggle('dark');
+    localStorage.setItem('ch_theme', isDark ? 'dark' : 'light');
+    var btn = document.querySelector('.theme-toggle');
+    if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+  }
+
+  function applyTheme() {
+    var theme = localStorage.getItem('ch_theme');
+    if (theme === 'dark') {
+      document.body.classList.add('dark');
+      var btn = document.querySelector('.theme-toggle');
+      if (btn) btn.textContent = '☀️';
+    }
+  }
+
+  // ===== Sidebar =====
+  function toggleSidebar() {
+    var s = document.getElementById('sidebar');
+    var o = document.getElementById('sidebar-overlay');
+    s.classList.toggle('open');
+    o.style.display = s.classList.contains('open') ? 'block' : 'none';
+  }
+
+  function navTo(route) {
+    try { renderCurrentRoute(route); } catch(e) {}
+  }
+
+  // ===== Auth =====
+  function isLoggedIn() {
+    return !!localStorage.getItem('ch_token');
+  }
+
+  function requireAuth() {
+    if (!isLoggedIn()) {
+      document.getElementById('login-overlay').classList.add('show');
+      return false;
+    }
+    return true;
+  }
+
+  function doLogin() {
+    var email = document.getElementById('login-email').value;
+    var password = document.getElementById('login-password').value;
+    if (!email || !password) { toast('请填写邮箱和密码', 'error'); return; }
+    api('POST', '/auth/login', { email: email, password: password }, function(status, resp) {
+      if ((status === 200 || status === 201) && resp.data && resp.data.accessToken) {
+        localStorage.setItem('ch_token', resp.data.accessToken);
+        if (resp.data.user) {
+          localStorage.setItem('ch_user', JSON.stringify(resp.data.user));
+          updateUserDisplay(resp.data.user);
+        }
+        document.getElementById('login-overlay').classList.remove('show');
+        toast('登录成功', 'success');
+        renderCurrentRoute();
+      } else {
+        toast(resp.message || '登录失败', 'error');
+      }
+    });
+  }
+
+  function doLogout() {
+    localStorage.removeItem('ch_token');
+    localStorage.removeItem('ch_user');
+    document.getElementById('user-display').textContent = '未登录';
+    document.getElementById('user-avatar').textContent = '?';
+    toast('已退出登录');
+    navTo('dashboard');
+  }
+
+  function updateUserDisplay(user) {
+    var el = document.getElementById('user-display');
+    var av = document.getElementById('user-avatar');
+    var name = user.name || user.email || 'User';
+    el.textContent = name;
+    av.textContent = name.charAt(0).toUpperCase();
+  }
+
+  function initUserDisplay() {
+    var u = localStorage.getItem('ch_user');
+    if (u) {
+      try { updateUserDisplay(JSON.parse(u)); return; } catch(e) {}
+    }
+    var t = localStorage.getItem('ch_token');
+    if (t) {
+      api('GET', '/auth/me', null, function(status, resp) {
+        if (status === 200 && resp) {
+          localStorage.setItem('ch_user', JSON.stringify(resp));
+          updateUserDisplay(resp);
+        }
+      });
+    }
+  }
+
+  // ===== Modal =====
+  function openModal(title, bodyHTML, footerHTML) {
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-body').innerHTML = bodyHTML;
+    document.getElementById('modal-footer').innerHTML = footerHTML || '';
+    document.getElementById('modal-overlay').classList.add('show');
+  }
+
+  function closeModal() {
+    document.getElementById('modal-overlay').classList.remove('show');
+  }
+
+  // Backdrop click to close (prevent double-fire on X5)
+  document.getElementById('modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+
+  // ===== Check API Status =====
+  function checkApiStatus() {
+    api('GET', '/health', null, function(status, resp) {
+      var dot = document.getElementById('api-status');
+      var txt = document.getElementById('api-status-text');
+      if (status === 200) {
+        dot.style.color = '#10b981';
+        txt.textContent = '已连接';
+      } else {
+        dot.style.color = '#ef4444';
+        txt.textContent = '断开 (' + status + ')';
+      }
+    });
+  }
+
+  // ===== Route Handler =====
+  var routes = {
+    'dashboard': renderDashboard,
+    'content': renderContent,
+    'media': renderMedia,
+    'scheduler': renderScheduler,
+    'analytics': renderAnalytics,
+    'workflow': renderWorkflow,
+    'teams': renderTeams,
+    'accounts': renderAccounts,
+    'settings': renderSettings
+  };
+
+  function renderCurrentRoute(routeOverride) {
+    var hash = routeOverride || window.location.hash.replace('#', '') || 'dashboard';
+    var fn = routes[hash] || renderDashboard;
+
+    var titles = {
+      'dashboard': '仪表盘', 'content': '内容管理', 'media': '媒体资源',
+      'scheduler': '定时任务', 'analytics': '数据分析', 'workflow': '工作流',
+      'teams': '团队管理', 'accounts': '账号关联', 'settings': '系统设置'
+    };
+    document.getElementById('page-title').textContent = titles[hash] || '仪表盘';
+
+    // Update nav active
+    var allNavs = document.querySelectorAll('.nav-item');
+    for (var i = 0; i < allNavs.length; i++) {
+      if (allNavs[i].textContent.indexOf(titles[hash]) >= 0 || (hash === 'dashboard' && allNavs[i].textContent.indexOf('仪表盘') >= 0)) {
+        allNavs[i].classList.add('active');
+      } else {
+        allNavs[i].classList.remove('active');
+      }
+    }
+
+    var area = document.getElementById('content-area');
+    area.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px"><span class="loader"></span></div>';
+
+    // Auth check for protected routes
+    if ((hash === 'teams' || hash === 'accounts') && !requireAuth()) {
+      area.innerHTML = '<div class="coming-soon"><div class="icon">🔒</div><h3>需要登录</h3><p>请先登录后访问此模块</p><button class="btn btn-primary" onclick="requireAuth()" style="margin-top:16px">去登录</button></div>';
+      return;
+    }
+
+    try {
+      fn(area);
+    } catch(err) {
+      area.innerHTML = '<div class="coming-soon"><div class="icon">⚠️</div><h3>渲染错误</h3><p>' + err.message + '</p></div>';
+    }
+  }
+
+  // FastClick: dual-event for X5 (touchstart) and desktop (click)
+  var _navLinks = document.querySelectorAll('.nav-item');
+  var _touched = false;
+  for (var _i = 0; _i < _navLinks.length; _i++) {
+    (function(_el) {
+      _el.addEventListener('touchstart', function(_e) {
+        _touched = true;
+        _e.preventDefault();
+        var _route = _el.getAttribute('data-route');
+        if (_route) navTo(_route);
+      }, {passive: false});
+      _el.addEventListener('click', function(_e) {
+        if (_touched) { _touched = false; return; }
+        var _route = _el.getAttribute('data-route');
+        if (_route) navTo(_route);
+      });
+    })(_navLinks[_i]);
+  }
+
+  // ===== MODULE 1: Dashboard =====
+  function renderDashboard(el) {
+    el.innerHTML = '<div class="stats-grid" id="stat-cards"></div><div style="display:grid;grid-template-columns:2fr 1fr;gap:16px">' +
+      '<div class="card"><div class="card-header"><span class="card-title">最近内容</span></div><div class="card-body" id="recent-contents"><p style="color:#9ca3af">加载中...</p></div></div>' +
+      '<div class="card"><div class="card-header"><span class="card-title">活动日志</span></div><div class="card-body" id="activity-log"><p style="color:#9ca3af">加载中...</p></div></div>' +
+      '</div>';
+
+    api('GET', '/health', null, function(status, resp) {
+      var cards = document.getElementById('stat-cards');
+      var stats = resp.stats || resp;
+      if (status === 200) {
+        cards.innerHTML =
+          statCard(stats.contents !== undefined ? stats.contents : '--', '总内容', '📝') +
+          statCard(stats.media !== undefined ? stats.media : '--', '媒体文件', '🖼️') +
+          statCard(stats.scheduled !== undefined ? stats.scheduled : '--', '待执行任务', '⏰') +
+          statCard(stats.users !== undefined ? stats.users : '--', '用户数', '👤');
+      } else {
+        cards.innerHTML = statCard('--', '总内容', '📝') + statCard('--', '媒体文件', '🖼️') + statCard('--', '待执行任务', '⏰') + statCard('--', '用户数', '👤');
+      }
+    });
+
+    api('GET', '/contents?skip=0&take=5', null, function(status, resp) {
+      var container = document.getElementById('recent-contents');
+      if (status === 200 && resp.data && resp.data.length) {
+        var html = '<table><thead><tr><th>标题</th><th>状态</th><th>更新时间</th></tr></thead><tbody>';
+        for (var i = 0; i < resp.data.length; i++) {
+          var c = resp.data[i];
+          html += '<tr><td>' + (c.title || '--') + '</td><td>' + badgeByStatus(c.status) + '</td><td>' + formatTime(c.updatedAt || c.createdAt) + '</td></tr>';
+        }
+        html += '</tbody></table>';
+        container.innerHTML = html;
+      } else {
+        container.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:20px">暂无内容</p>';
+      }
+    });
+
+    api('GET', '/audit?skip=0&take=10', null, function(status, resp) {
+      var container = document.getElementById('activity-log');
+      var items = (status === 200 && resp.data) ? resp.data : (resp.items || resp);
+      if (items && items.length) {
+        var html = '<ul class="activity-list">';
+        for (var i = 0; i < Math.min(items.length, 8); i++) {
+          var item = items[i];
+          var icon = item.action === 'delete' ? '🗑️' : (item.action === 'approve' ? '✅' : (item.action === 'update' ? '✏️' : '📄'));
+          var iconClass = item.action || 'create';
+          html += '<li class="activity-item"><div class="activity-icon ' + iconClass + '">' + icon + '</div>' +
+            '<div class="activity-content"><div class="act-title">' + (item.description || item.action || '系统活动') + '</div>' +
+            '<div class="act-time">' + formatTime(item.createdAt || item.timestamp) + '</div></div></li>';
+        }
+        html += '</ul>';
+        container.innerHTML = html;
+      } else {
+        container.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:20px">暂无活动</p>';
+      }
+    });
+  }
+
+  function statCard(value, label, icon) {
+    return '<div class="stat-card"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div class="stat-label">' + label + '</div><div class="stat-value">' + value + '</div></div><span style="font-size:24px">' + icon + '</span></div></div>';
+  }
+
+  // ===== MODULE 2: Content =====
+  function renderContent(el) {
+    el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
+      '<div style="display:flex;gap:8px"><select class="form-input" style="width:auto" id="content-filter"><option value="">全部状态</option><option value="draft">草稿</option><option value="published">已发布</option><option value="archived">已归档</option></select></div>' +
+      '<button class="btn btn-primary" onclick="openCreateContentModal()">+ 新建内容</button></div>' +
+      '<div class="card"><div class="card-body" id="content-list"><p style="color:#9ca3af">加载中...</p></div></div>';
+
+    document.getElementById('content-filter').onchange = function() {
+      loadContents(this.value);
+    };
+
+    window.loadContents = function(filter) {
+      var url = '/contents?skip=0&take=50';
+      if (filter) {
+        // 前端状态值 draft/published/archived → 后端枚举大写
+        url += '&status=' + encodeURIComponent(filter.toUpperCase());
+      }
+      api('GET', url, null, function(status, resp) {
+        var container = document.getElementById('content-list');
+        var items = (status === 200 && (resp.data || resp.items)) ? (resp.data || resp.items) : [];
+        renderContentTable(container, items);
+      });
+    };
+
+    loadContents('');
+  }
+
+  function renderContentTable(container, items) {
+    if (!items || !items.length) {
+      container.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:30px">暂无内容，点击右上角创建</p>';
+      return;
+    }
+    var html = '<div class="table-wrap"><table><thead><tr><th>标题</th><th>类型</th><th>状态</th><th>作者</th><th>更新时间</th><th>操作</th></tr></thead><tbody>';
+    for (var i = 0; i < items.length; i++) {
+      var c = items[i];
+      html += '<tr><td><strong>' + (c.title || '无标题') + '</strong>' + (c.body ? '<br><small style="color:#9ca3af">' + c.body.substring(0,40) + '</small>' : '') + '</td><td>' + (c.contentType || '--') + '</td><td>' + badgeByStatus(c.status) + '</td><td>' + (c.createdBy || '--') + '</td><td>' + formatTime(c.updatedAt || c.createdAt) + '</td>' +
+        '<td><button class="btn btn-sm btn-secondary" onclick="viewContent(\'' + c.id + '\')">查看</button> ' +
+        '<button class="btn btn-sm btn-secondary" onclick="editContent(\'' + c.id + '\')">编辑</button> ' +
+        '<button class="btn btn-sm btn-danger" onclick="deleteContent(\'' + c.id + '\',\'' + (c.title || '') + '\')">删除</button></td></tr>';
+    }
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+  }
+
+  function openCreateContentModal() {
+    // 加载团队列表供选择
+    api('GET', '/teams', null, function(status, resp) {
+      var teams = (status === 200 && (resp.data || resp.items)) ? (resp.data || resp.items) : [];
+      if (!teams.length) { toast('请先创建团队', 'error'); return; }
+      var teamOpts = '';
+      for (var i = 0; i < teams.length; i++) {
+        teamOpts += '<option value="' + teams[i].id + '">' + (teams[i].name || '团队') + '</option>';
+      }
+      openModal('新建内容',
+        '<div class="form-group"><label class="form-label">所属团队</label><select class="form-input" id="ct-teamId">' + teamOpts + '</select></div>' +
+        '<div class="form-group"><label class="form-label">标题</label><input class="form-input" id="ct-title" placeholder="内容标题"></div>' +
+        '<div class="form-group"><label class="form-label">内容类型</label><select class="form-input" id="ct-type"><option value="TEXT">文本</option><option value="IMAGE">图文</option><option value="VIDEO">视频</option><option value="CAROUSEL">轮播</option><option value="ARTICLE">文章</option></select></div>' +
+        '<div class="form-group"><label class="form-label">正文</label><textarea class="form-input" id="ct-body" placeholder="正文内容（支持 Markdown）" rows="6"></textarea></div>' +
+        '<div class="form-group"><label class="form-label">标签（逗号分隔）</label><input class="form-input" id="ct-tags" placeholder="科技, 生活"></div>',
+        '<button class="btn btn-primary" onclick="submitCreateContent()">创建</button><button class="btn btn-secondary" onclick="closeModal()">取消</button>'
+      );
+    });
+  }
+
+  function submitCreateContent() {
+    var data = {
+      teamId: document.getElementById('ct-teamId').value,
+      title: document.getElementById('ct-title').value,
+      contentType: document.getElementById('ct-type').value,
+      body: document.getElementById('ct-body').value,
+      tags: document.getElementById('ct-tags').value.split(',').map(function(t){ return t.trim(); }).filter(function(t){ return t.length > 0; })
+    };
+    if (!data.teamId) { toast('请选择团队', 'error'); return; }
+    if (!data.title) { toast('请输入标题', 'error'); return; }
+    api('POST', '/contents', data, function(status, resp) {
+      if (status === 200 || status === 201) {
+        toast('内容创建成功', 'success');
+        closeModal();
+        loadContents(document.getElementById('content-filter') ? document.getElementById('content-filter').value : '');
+      } else {
+        toast(resp.message || '创建失败', 'error');
+      }
+    });
+  }
+
+  function viewContent(id) {
+    api('GET', '/contents/' + id, null, function(status, resp) {
+      if (status === 200) {
+        openModal(resp.title || '内容详情',
+          '<p><strong>ID:</strong> ' + resp.id + '</p>' +
+          '<p><strong>类型:</strong> ' + (resp.contentType || '--') + '</p>' +
+          '<p><strong>状态:</strong> ' + badgeByStatus(resp.status) + '</p>' +
+          '<p><strong>作者:</strong> ' + (resp.createdBy || '--') + '</p>' +
+          '<p><strong>创建时间:</strong> ' + formatTime(resp.createdAt) + '</p>' +
+          '<p><strong>更新时间:</strong> ' + formatTime(resp.updatedAt) + '</p>' +
+          (resp.tags && resp.tags.length ? '<p><strong>标签:</strong> ' + resp.tags.map(function(t){ return '<span class="tag">' + (t.name || t) + '</span>'; }).join(' ') + '</p>' : '') +
+          (resp.body ? '<div class="form-group" style="margin-top:12px"><label class="form-label">正文</label><div style="padding:12px;background:#f9fafb;border-radius:6px;white-space:pre-wrap;max-height:300px;overflow-y:auto">' + escapeHtml(resp.body) + '</div></div>' : ''),
+          '<button class="btn btn-secondary" onclick="closeModal()">关闭</button>'
+        );
+      } else {
+        toast('获取内容详情失败', 'error');
+      }
+    });
+  }
+
+  function editContent(id) {
+    api('GET', '/contents/' + id, null, function(status, resp) {
+      if (status === 200) {
+        openModal('编辑内容',
+          '<div class="form-group"><label class="form-label">标题</label><input class="form-input" id="ct-title" value="' + (resp.title || '') + '"></div>' +
+          '<div class="form-group"><label class="form-label">类型</label><select class="form-input" id="ct-type"><option value="TEXT"' + (resp.contentType==='TEXT'?' selected':'') + '>文本</option><option value="IMAGE"' + (resp.contentType==='IMAGE'?' selected':'') + '>图文</option><option value="VIDEO"' + (resp.contentType==='VIDEO'?' selected':'') + '>视频</option><option value="ARTICLE"' + (resp.contentType==='ARTICLE'?' selected':'') + '>文章</option><option value="CAROUSEL"' + (resp.contentType==='CAROUSEL'?' selected':'') + '>轮播</option></select></div>' +
+          '<div class="form-group"><label class="form-label">正文</label><textarea class="form-input" id="ct-body" rows="6">' + (resp.body || '') + '</textarea></div>' +
+          '<div class="form-group"><label class="form-label">状态</label><select class="form-input" id="ct-status"><option value="DRAFT"' + (resp.status==='DRAFT'?' selected':'') + '>草稿</option><option value="PUBLISHED"' + (resp.status==='PUBLISHED'?' selected':'') + '>已发布</option><option value="ARCHIVED"' + (resp.status==='ARCHIVED'?' selected':'') + '>已归档</option></select></div>',
+          '<button class="btn btn-primary" onclick="submitEditContent(\'' + id + '\')">保存</button><button class="btn btn-secondary" onclick="closeModal()">取消</button>'
+        );
+      }
+    });
+  }
+
+  function submitEditContent(id) {
+    var data = {
+      title: document.getElementById('ct-title').value,
+      contentType: document.getElementById('ct-type').value,
+      body: document.getElementById('ct-body').value,
+      status: document.getElementById('ct-status').value
+    };
+    api('PUT', '/contents/' + id, data, function(status, resp) {
+      if (status === 200) {
+        toast('保存成功', 'success');
+        closeModal();
+        loadContents(document.getElementById('content-filter') ? document.getElementById('content-filter').value : '');
+      } else {
+        toast(resp.message || '保存失败', 'error');
+      }
+    });
+  }
+
+  function deleteContent(id, title) {
+    openModal('确认删除',
+      '<p>确定要删除内容 <strong>"' + (title || id) + '"</strong> 吗？此操作不可撤销。</p>',
+      '<button class="btn btn-danger" onclick="confirmDeleteContent(\'' + id + '\')">确认删除</button><button class="btn btn-secondary" onclick="closeModal()">取消</button>'
+    );
+  }
+
+  function confirmDeleteContent(id) {
+    api('DELETE', '/contents/' + id, null, function(status, resp) {
+      if (status === 200 || status === 204) {
+        toast('删除成功', 'success');
+        closeModal();
+        loadContents(document.getElementById('content-filter') ? document.getElementById('content-filter').value : '');
+      } else {
+        toast(resp.message || '删除失败', 'error');
+      }
+    });
+  }
+
+  // ===== MODULE 3: Media =====
+  function renderMedia(el) {
+    el.innerHTML = '<div style="margin-bottom:16px">' +
+      '<div class="upload-zone" id="upload-zone" onclick="document.getElementById(\'file-input\').click()">' +
+      '<div style="font-size:32px">📁</div><p>点击或拖拽文件到此区域上传</p>' +
+      '<input type="file" id="file-input" multiple style="display:none" onchange="handleFiles(this.files)">' +
+      '</div></div>' +
+      '<div style="margin-bottom:12px"><select class="form-input" style="width:auto" id="upload-contentId"><option value="">-- 关联内容（可选）--</option></select></div>' +
+      '<div style="display:flex;gap:8px;margin-bottom:16px">' +
+      '<select class="form-input" style="width:auto" id="media-type-filter" onchange="loadMedia()">' +
+      '<option value="">全部类型</option><option value="image">图片</option><option value="video">视频</option><option value="document">文档</option></select>' +
+      '<input class="form-input" style="max-width:240px" placeholder="搜索文件名..." id="media-search" oninput="loadMedia()">' +
+      '</div>' +
+      '<div class="media-grid" id="media-grid"></div>';
+
+    // 加载内容列表供上传关联
+    loadUploadContentOptions();
+    loadMedia();
+  }
+
+  function loadUploadContentOptions() {
+    api('GET', '/contents?skip=0&take=100', null, function(status, resp) {
+      var sel = document.getElementById('upload-contentId');
+      if (!sel) return;
+      var items = (status === 200 && (resp.data || resp.items)) ? (resp.data || resp.items) : [];
+      var opts = '<option value="">-- 关联内容（可选）--</option>';
+      for (var i = 0; i < items.length; i++) {
+        opts += '<option value="' + items[i].id + '">' + (items[i].title || '无标题') + '</option>';
+      }
+      sel.innerHTML = opts;
+    });
+  }
+
+  function loadMedia() {
+    var type = document.getElementById('media-type-filter') ? document.getElementById('media-type-filter').value : '';
+    var search = document.getElementById('media-search') ? document.getElementById('media-search').value : '';
+    var url = '/media?skip=0&take=60';
+    if (type) {
+      // 前端类型值 image/video/document → 后端 MediaType 枚举
+      var typeMap = { 'image': 'IMAGE', 'video': 'VIDEO', 'document': 'AUDIO' };
+      url += '&type=' + encodeURIComponent(typeMap[type] || type);
+    }
+    if (search) url += '&q=' + encodeURIComponent(search);
+    api('GET', url, null, function(status, resp) {
+      var grid = document.getElementById('media-grid');
+      var items = (status === 200 && (resp.data || resp.items)) ? (resp.data || resp.items) : [];
+      if (!items.length) {
+        grid.innerHTML = '<p style="color:#9ca3af;text-align:center;grid-column:1/-1;padding:40px">暂无媒体文件</p>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < items.length; i++) {
+        var m = items[i];
+        // 从 url 解析文件名
+        var fileName = m.url ? m.url.split('/').pop() : '文件';
+        var thumbIcon = (m.type === 'IMAGE') ? '🖼️' : (m.type === 'VIDEO') ? '🎬' : '📄';
+        html += '<div class="media-item" onclick="viewMedia(\'' + m.id + '\')">' +
+          '<div class="media-thumb">' + thumbIcon + '</div>' +
+          '<div class="media-info"><div class="name" title="' + fileName + '">' + fileName + '</div>' +
+          '<div class="size">' + formatSize(m.fileSize) + '</div></div></div>';
+      }
+      grid.innerHTML = html;
+    });
+  }
+
+  function handleFiles(files) {
+    if (!files || !files.length) return;
+    var contentId = document.getElementById('upload-contentId') ? document.getElementById('upload-contentId').value : '';
+    for (var i = 0; i < files.length; i++) {
+      uploadFile(files[i], contentId);
+    }
+  }
+
+  function uploadFile(file, contentId) {
+    var fd = new FormData();
+    fd.append('file', file);
+    fd.append('name', file.name);
+    if (contentId) fd.append('contentId', contentId);
+    apiForm('POST', '/media/upload', fd, function(status, resp) {
+      if (status === 200 || status === 201) {
+        toast('上传成功: ' + file.name, 'success');
+        loadMedia();
+      } else {
+        toast('上传失败: ' + file.name, 'error');
+      }
+    });
+  }
+
+  function viewMedia(id) {
+    api('GET', '/media/' + id, null, function(status, resp) {
+      if (status === 200) {
+        openMediaDetail(resp);
+      } else {
+        toast('获取文件信息失败', 'error');
+      }
+    });
+  }
+
+  function openMediaDetail(m) {
+    // 从 url 解析文件名
+    var fileName = m.url ? m.url.split('/').pop() : '--';
+    var html = '<p><strong>文件名:</strong> ' + fileName + '</p>' +
+      '<p><strong>类型:</strong> ' + (m.type || '--') + '</p>' +
+      '<p><strong>大小:</strong> ' + formatSize(m.fileSize) + '</p>' +
+      '<p><strong>上传时间:</strong> ' + formatTime(m.createdAt) + '</p>' +
+      (m.mimeType ? '<p><strong>MIME:</strong> ' + m.mimeType + '</p>' : '') +
+      (m.url ? '<p style="margin-top:12px"><a href="' + m.url + '" target="_blank" class="btn btn-sm btn-primary">下载文件</a></p>' : '');
+    openModal('文件详情', html, '<button class="btn btn-danger" onclick="deleteMedia(\'' + m.id + '\')">删除</button><button class="btn btn-secondary" onclick="closeModal()">关闭</button>');
+  }
+
+  function deleteMedia(id) {
+    api('DELETE', '/media/' + id, null, function(status) {
+      if (status === 200 || status === 204) {
+        toast('文件已删除', 'success');
+        closeModal();
+        loadMedia();
+      } else {
+        toast('删除失败', 'error');
+      }
+    });
+  }
+
+  // ===== MODULE 4: Scheduler =====
+  function renderScheduler(el) {
+    el.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:16px">' +
+      '<button class="btn btn-secondary" onclick="loadScheduler()">刷新</button>' +
+      '<button class="btn btn-primary" onclick="openCreateScheduleModal()">+ 新建任务</button></div>' +
+      '<div class="card"><div class="card-body" id="scheduler-list"></div></div>';
+
+    loadScheduler();
+  }
+
+  function loadScheduler() {
+    var c = document.getElementById('scheduler-list');
+    if (!c) return;
+    c.innerHTML = '<p style="color:#9ca3af">加载中...</p>';
+    api('GET', '/scheduler?skip=0&take=50', null, function(status, resp) {
+      var respData = resp.data || resp;
+      var items = respData.items || respData;
+      if (!items.length) {
+        c.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:30px">暂无定时任务</p>';
+        return;
+      }
+      var html = '<table><thead><tr><th>内容ID</th><th>平台</th><th>状态</th><th>计划时间</th><th>操作</th></tr></thead><tbody>';
+      for (var i = 0; i < items.length; i++) {
+        var s = items[i];
+        html += '<tr><td>' + (s.contentId || '--') + '</td><td>' + (s.platform || '--') + '</td><td>' + badgeByStatus(s.status) + '</td><td>' + formatTime(s.scheduledAt) + '</td>' +
+          '<td><button class="btn btn-sm btn-secondary" onclick="retrySchedule(\'' + s.id + '\')">重试</button> <button class="btn btn-sm btn-danger" onclick="deleteSchedule(\'' + s.id + '\')">取消</button></td></tr>';
+      }
+      html += '</tbody></table>';
+      c.innerHTML = html;
+    });
+  }
+
+  function openCreateScheduleModal() {
+    // 先加载内容和账号列表
+    api('GET', '/contents?skip=0&take=50', null, function(cStatus, cResp) {
+      var contents = (cStatus === 200 && cResp.data) ? (cResp.data.items || cResp.data) : [];
+      api('GET', '/accounts', null, function(aStatus, aResp) {
+        var accounts = (aStatus === 200 && aResp.data) ? (aResp.data.items || aResp.data) : [];
+
+        var contentOpts = '<option value="">-- 选择内容 --</option>';
+        for (var i = 0; i < contents.length; i++) {
+          var c = contents[i];
+          contentOpts += '<option value="' + c.id + '">' + (c.title || '无标题') + ' (' + (c.status || '') + ')</option>';
+        }
+
+        var accountOpts = '<option value="">-- 选择发布账号 --</option>';
+        for (var j = 0; j < accounts.length; j++) {
+          var a = accounts[j];
+          accountOpts += '<option value="' + a.id + '">' + (a.accountName || '--') + ' (' + a.platform + ')</option>';
+        }
+
+        openModal('新建定时任务',
+          '<div class="form-group"><label class="form-label">关联内容</label><select class="form-input" id="sch-contentId">' + contentOpts + '</select></div>' +
+          '<div class="form-group"><label class="form-label">发布账号</label><select class="form-input" id="sch-accountId">' + accountOpts + '</select></div>' +
+          '<div class="form-group"><label class="form-label">计划执行时间</label><input class="form-input" id="sch-scheduledAt" type="datetime-local"></div>' +
+          '<div class="form-group"><label class="form-label">平台</label><select class="form-input" id="sch-platform" disabled><option>自动根据账号</option></select></div>',
+          '<button class="btn btn-primary" onclick="submitCreateSchedule()">创建</button><button class="btn btn-secondary" onclick="closeModal()">取消</button>'
+        );
+
+        // 自动根据账号设置平台
+        document.getElementById('sch-accountId').onchange = function() {
+          var accId = this.value;
+          for (var k = 0; k < accounts.length; k++) {
+            if (accounts[k].id === accId) {
+              document.getElementById('sch-platform').value = accounts[k].platform;
+              break;
+            }
+          }
+        };
+      });
+    });
+  }
+
+  function submitCreateSchedule() {
+    var contentId = document.getElementById('sch-contentId').value;
+    var accountId = document.getElementById('sch-accountId').value;
+    var scheduledAt = document.getElementById('sch-scheduledAt').value;
+    var platform = document.getElementById('sch-platform').value;
+    if (!contentId) { toast('请选择关联内容', 'error'); return; }
+    if (!accountId) { toast('请选择发布账号', 'error'); return; }
+    if (!scheduledAt) { toast('请选择执行时间', 'error'); return; }
+    var data = {
+      contentId: contentId,
+      platform: platform,
+      scheduledAt: new Date(scheduledAt).toISOString()
+    };
+    api('POST', '/scheduler', data, function(status, resp) {
+      if (status === 200 || status === 201) {
+        toast('定时任务创建成功', 'success');
+        closeModal();
+        loadScheduler();
+      } else {
+        toast(resp.message || '创建失败', 'error');
+      }
+    });
+  }
+
+  function retrySchedule(id) {
+    api('POST', '/scheduler/' + id + '/retry', null, function(status, resp) {
+      if (status === 200) {
+        toast('任务已重新触发', 'success');
+        loadScheduler();
+      } else {
+        toast(resp.message || '重试失败', 'error');
+      }
+    });
+  }
+
+  function deleteSchedule(id) {
+    api('DELETE', '/scheduler/' + id, null, function(status) {
+      if (status === 200 || status === 204) {
+        toast('已删除', 'success');
+        loadScheduler();
+      } else {
+        toast('删除失败', 'error');
+      }
+    });
+  }
+
+  // ===== MODULE 5: Analytics (Coming Soon + Mock) =====
+/**
+ * 渲染数据分析页面
+ * 包含总览、趋势、热门内容、平台分布
+ */
+function renderAnalytics(el) {
+  el.innerHTML = '<div class="analytics-page">' +
+    '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">' +
+    '<select class="form-input" id="analytics-platform" style="width:auto" onchange="loadAnalytics()">' +
+    '<option value="">全部平台</option>' +
+    '<option value="WECHAT_OFFICIAL">微信公众号</option>' +
+    '<option value="WECHAT_VIDEO">微信视频号</option>' +
+    '<option value="DOUYIN">抖音</option>' +
+    '<option value="XIAOHONGSHU">小红书</option>' +
+    '<option value="BILIBILI">B站</option>' +
+    '<option value="WEIBO">微博</option>' +
+    '</select>' +
+    '<select class="form-input" id="analytics-period" style="width:auto" onchange="loadAnalytics()">' +
+    '<option value="7d">近 7 天</option>' +
+    '<option value="30d" selected>近 30 天</option>' +
+    '<option value="90d">近 90 天</option>' +
+    '</select>' +
+    '</div>' +
+    '<div class="stats-grid" id="analytics-stats"><p style="color:#9ca3af">加载中...</p></div>' +
+    '<div class="card" style="margin-top:16px"><div class="card-body">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
+    '<strong>趋势分析</strong>' +
+    '<select id="analytics-metric" onchange="loadHistory()" style="padding:4px 8px;border:1px solid #e5e7eb;border-radius:4px">' +
+    '<option value="followers">粉丝增长</option>' +
+    '<option value="impressions">曝光量</option>' +
+    '<option value="engagements">互动量</option>' +
+    '<option value="likes">点赞</option>' +
+    '<option value="comments">评论</option>' +
+    '<option value="shares">转发</option>' +
+    '</select></div>' +
+    '<div id="trend-chart" style="height:200px"><p style="color:#9ca3af;text-align:center;padding:40px">加载中...</p></div>' +
+    '</div></div>' +
+    '<div class="card" style="margin-top:16px"><div class="card-body">' +
+    '<strong>热门内容 Top 10</strong>' +
+    '<div id="top-content-list" style="margin-top:12px"><p style="color:#9ca3af">加载中...</p></div>' +
+    '</div></div>' +
+    '</div>';
+
+  loadAnalytics();
+}
+
+/**
+ * 加载分析数据：总览卡片和热门内容
+ */
+function loadAnalytics() {
+  // 1. 加载团队总览
+  api('GET', '/analytics/dashboard', null, function(status, resp) {
+    var container = document.getElementById('analytics-stats');
+    if (!container) return;
+    if (status !== 200 || !resp.data) {
+      container.innerHTML = '<p style="color:#9ca3af">暂无数据</p>';
+      return;
+    }
+    var d = resp.data;
+    container.innerHTML =
+      '<div class="stat-card"><div class="stat-label">总粉丝</div><div class="stat-value">' + (d.totalFollowers || 0).toLocaleString() + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">总互动</div><div class="stat-value">' + (d.totalEngagements || 0).toLocaleString() + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">总曝光</div><div class="stat-value">' + (d.totalImpressions || 0).toLocaleString() + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">互动率</div><div class="stat-value">' + (d.engagementRate || '0%') + '</div></div>';
+  });
+
+  // 2. 加载趋势
+  loadHistory();
+
+  // 3. 加载热门内容
+  api('GET', '/analytics/top-content?sortBy=impressions&limit=10', null, function(status, resp) {
+    var container = document.getElementById('top-content-list');
+    if (!container) return;
+    if (status !== 200 || !resp.data || !resp.data.items || !resp.data.items.length) {
+      container.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:30px">暂无数据</p>';
+      return;
+    }
+    var items = resp.data.items;
+    var html = '<table><thead><tr><th>标题</th><th>平台</th><th>发布时间</th><th>曝光</th><th>互动</th><th>点赞</th><th>评论</th><th>转发</th><th>互动率</th></tr></thead><tbody>';
+    for (var i = 0; i < items.length; i++) {
+      var p = items[i];
+      html += '<tr><td>' + escapeHtml(p.title || '--') + '</td><td>' + p.platform + '</td><td>' + formatTime(p.publishedAt) + '</td><td>' + (p.impressions || 0).toLocaleString() + '</td><td>' + (p.engagements || 0).toLocaleString() + '</td><td>' + (p.likes || 0).toLocaleString() + '</td><td>' + (p.comments || 0).toLocaleString() + '</td><td>' + (p.shares || 0).toLocaleString() + '</td><td>' + p.engagementRate + '</td></tr>';
+    }
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  });
+}
+
+/**
+ * 加载历史趋势数据并渲染 SVG 折线图
+ */
+function loadHistory() {
+  var metric = document.getElementById('analytics-metric') ? document.getElementById('analytics-metric').value : 'followers';
+  var period = document.getElementById('analytics-period') ? document.getElementById('analytics-period').value : '30d';
+  api('GET', '/analytics/history?metric=' + encodeURIComponent(metric) + '&period=' + encodeURIComponent(period), null, function(status, resp) {
+    var container = document.getElementById('trend-chart');
+    if (!container) return;
+    if (status !== 200 || !resp.data || !resp.data.data || !resp.data.data.length) {
+      container.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:40px">暂无数据</p>';
+      return;
+    }
+    renderLineChart('trend-chart', resp.data.data);
+  });
+}
+
+/**
+ * 纯 SVG 折线图渲染（无外部库，兼容微信 X5）
+ * @param {string} containerId - 容器元素 ID
+ * @param {Array<{date: string, value: number}>} data - 数据点
+ */
+function renderLineChart(containerId, data) {
+  var container = document.getElementById(containerId);
+  if (!container) return;
+  var w = container.offsetWidth || 600;
+  var h = 200;
+  var pad = 40;
+  var values = data.map(function(d) { return d.value; });
+  var max = Math.max.apply(null, values);
+  if (max === 0) max = 1;
+  max = max * 1.1; // 顶部留白 10%
+  var min = 0;
+  var n = data.length;
+  if (n === 0) return;
+
+  var stepX = n > 1 ? (w - pad * 2) / (n - 1) : 0;
+  // 构建路径点
+  var points = [];
+  for (var i = 0; i < n; i++) {
+    var x = pad + i * stepX;
+    var y = h - pad - ((values[i] - min) / (max - min)) * (h - pad * 2);
+    points.push({ x: x, y: y, value: values[i], date: data[i].date });
+  }
+
+  // 构建 SVG 路径
+  var pathD = '';
+  for (var j = 0; j < points.length; j++) {
+    pathD += (j === 0 ? 'M' : 'L') + points[j].x.toFixed(1) + ',' + points[j].y.toFixed(1) + ' ';
+  }
+
+  // Y轴标签
+  var yLabelTop = Math.round(max);
+  var yLabelMid = Math.round(max / 2);
+  var yLabelBot = '0';
+
+  var svg = '<svg width="100%" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="xMidYMid meet" style="overflow:visible">' +
+    // Y轴网格线
+    '<line x1="' + pad + '" y1="' + pad + '" x2="' + pad + '" y2="' + (h - pad) + '" stroke="#e5e7eb" stroke-width="1"/>' +
+    '<line x1="' + pad + '" y1="' + (h - pad) + '" x2="' + (w - pad) + '" y2="' + (h - pad) + '" stroke="#e5e7eb" stroke-width="1"/>' +
+    '<line x1="' + pad + '" y1="' + (h / 2) + '" x2="' + (w - pad) + '" y2="' + (h / 2) + '" stroke="#f3f4f6" stroke-width="1" stroke-dasharray="4,4"/>' +
+    // Y轴刻度文字
+    '<text x="' + (pad - 5) + '" y="' + (pad + 4) + '" text-anchor="end" font-size="10" fill="#9ca3af">' + yLabelTop + '</text>' +
+    '<text x="' + (pad - 5) + '" y="' + (h / 2 + 4) + '" text-anchor="end" font-size="10" fill="#9ca3af">' + yLabelMid + '</text>' +
+    '<text x="' + (pad - 5) + '" y="' + (h - pad + 4) + '" text-anchor="end" font-size="10" fill="#9ca3af">' + yLabelBot + '</text>' +
+    // 折线
+    '<path d="' + pathD + '" fill="none" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+
+  // 数据点和 hover tooltip
+  for (var k = 0; k < points.length; k++) {
+    svg += '<circle cx="' + points[k].x.toFixed(1) + '" cy="' + points[k].y.toFixed(1) + '" r="3" fill="#4f46e5">' +
+      '<title>' + points[k].date + ': ' + points[k].value.toLocaleString() + '</title>' +
+      '</circle>';
+  }
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
+  // ===== MODULE 6: Workflow =====
+  function renderWorkflow(el) {
+    el.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:16px">' +
+      '<div class="tag" style="cursor:pointer" onclick="filterWorkflow(\'\')">全部</div>' +
+      '<div class="tag" style="cursor:pointer" onclick="filterWorkflow(\'pending\')">待审批</div>' +
+      '<button class="btn btn-primary" onclick="openCreateWorkflowModal()">+ 新建工单</button></div>' +
+      '<div class="card"><div class="card-body" id="workflow-list"></div></div>';
+
+    loadWorkflow('');
+  }
+
+  function filterWorkflow(status) {
+    loadWorkflow(status);
+  }
+
+  function loadWorkflow(status) {
+    var c = document.getElementById('workflow-list');
+    if (!c) return;
+    c.innerHTML = '<p style="color:#9ca3af">加载中...</p>';
+    var url = '/workflow?skip=0&take=50';
+    if (status) url += '&status=' + encodeURIComponent(status);
+    api('GET', url, null, function(status, resp) {
+      var respData = resp.data || resp;
+      var items = respData.items || respData;
+      if (!items.length) {
+        c.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:30px">暂无工单</p>';
+        return;
+      }
+      var html = '<table><thead><tr><th>内容</th><th>审批人</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody>';
+      for (var i = 0; i < items.length; i++) {
+        var w = items[i];
+        var actions = '';
+        if (w.status === 'PENDING') {
+          actions = '<button class="btn btn-sm btn-success" onclick="approveWorkflow(\'' + w.id + '\')">通过</button> ' +
+            '<button class="btn btn-sm btn-danger" onclick="rejectWorkflow(\'' + w.id + '\')">拒绝</button>';
+        } else {
+          actions = '<span style="color:#9ca3af">' + w.status + '</span>';
+        }
+        var contentTitle = w.content ? (w.content.title || w.contentId || '--') : (w.contentId || '--');
+        html += '<tr><td>' + contentTitle + '</td><td>' + (w.approverId || '--') + '</td><td>' + badgeByStatus(w.status) + '</td><td>' + formatTime(w.createdAt) + '</td><td>' + actions + '</td></tr>';
+      }
+      html += '</tbody></table>';
+      c.innerHTML = html;
+    });
+  }
+
+  function openCreateWorkflowModal() {
+    // 先加载内容和用户列表
+    api('GET', '/contents?skip=0&take=50', null, function(cStatus, cResp) {
+      var contents = (cStatus === 200 && cResp.data) ? (cResp.data.items || cResp.data) : [];
+      var contentOpts = '<option value="">-- 选择要审批的内容 --</option>';
+      for (var i = 0; i < contents.length; i++) {
+        var c = contents[i];
+        contentOpts += '<option value="' + c.id + '">' + (c.title || '无标题') + ' (' + (c.status || '') + ')</option>';
+      }
+      openModal('新建审批工单',
+        '<div class="form-group"><label class="form-label">待审批内容</label><select class="form-input" id="wf-contentId">' + contentOpts + '</select></div>' +
+        '<div class="form-group"><label class="form-label">审批人 ID</label><input class="form-input" id="wf-approverId" placeholder="输入审批人用户 ID"></div>',
+        '<button class="btn btn-primary" onclick="submitCreateWorkflow()">提交</button><button class="btn btn-secondary" onclick="closeModal()">取消</button>'
+      );
+    });
+  }
+
+  function submitCreateWorkflow() {
+    var data = {
+      contentId: document.getElementById('wf-contentId').value,
+      approverId: document.getElementById('wf-approverId').value
+    };
+    if (!data.contentId) { toast('请选择待审批内容', 'error'); return; }
+    if (!data.approverId) { toast('请输入审批人 ID', 'error'); return; }
+    api('POST', '/workflow/approval', data, function(status, resp) {
+      if (status === 200 || status === 201) {
+        toast('工单已提交', 'success');
+        closeModal();
+        loadWorkflow('');
+      } else {
+        toast(resp.message || '提交失败', 'error');
+      }
+    });
+  }
+
+  function approveWorkflow(id) {
+    api('POST', '/workflow/' + id + '/approve', null, function(status, resp) {
+      if (status === 200) {
+        toast('已通过', 'success');
+        loadWorkflow('');
+      } else {
+        toast(resp.message || '操作失败', 'error');
+      }
+    });
+  }
+
+  function rejectWorkflow(id) {
+    api('POST', '/workflow/' + id + '/reject', { reason: 'rejected' }, function(status, resp) {
+      if (status === 200) {
+        toast('已拒绝', 'success');
+        loadWorkflow('');
+      } else {
+        toast(resp.message || '操作失败', 'error');
+      }
+    });
+  }
+
+  // ===== MODULE 7: Teams =====
+  function renderTeams(el) {
+    if (!requireAuth()) {
+      el.innerHTML = '<div class="coming-soon"><div class="icon">🔒</div><h3>需要登录</h3><p>请先登录后访问此模块</p></div>';
+      return;
+    }
+    el.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:16px">' +
+      '<button class="btn btn-secondary" onclick="loadTeams()">刷新</button>' +
+      '<button class="btn btn-primary" onclick="openCreateTeamModal()">+ 创建团队</button></div>' +
+      '<div id="teams-container"></div>';
+    loadTeams();
+  }
+
+  function loadTeams() {
+    var c = document.getElementById('teams-container');
+    if (!c) return;
+    c.innerHTML = '<p style="color:#9ca3af">加载中...</p>';
+    api('GET', '/teams', null, function(status, resp) {
+      var items = (status === 200 && (resp.data || resp.items)) ? (resp.data || resp.items) : [];
+      if (!items.length) {
+        c.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:30px">暂无团队</p>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < items.length; i++) {
+        var t = items[i];
+        html += '<div class="card" style="margin-bottom:12px"><div class="card-header"><div><strong>' + (t.name || '--') + '</strong>' + (t.description ? '<br><small style="color:#9ca3af">' + t.description + '</small>' : '') + '</div>' +
+          '<div><button class="btn btn-sm btn-secondary" onclick="manageTeamMembers(\'' + t.id + '\')">成员管理</button> ' +
+          '<button class="btn btn-sm btn-danger" onclick="deleteTeam(\'' + t.id + '\')">删除</button></div></div></div>';
+      }
+      c.innerHTML = html;
+    });
+  }
+
+  function openCreateTeamModal() {
+    openModal('创建团队',
+      '<div class="form-group"><label class="form-label">团队名称</label><input class="form-input" id="team-name" placeholder="团队名称"></div>' +
+      '<div class="form-group"><label class="form-label">描述</label><textarea class="form-input" id="team-desc" placeholder="团队描述"></textarea></div>',
+      '<button class="btn btn-primary" onclick="submitCreateTeam()">创建</button><button class="btn btn-secondary" onclick="closeModal()">取消</button>'
+    );
+  }
+
+  function submitCreateTeam() {
+    var data = {
+      name: document.getElementById('team-name').value,
+      description: document.getElementById('team-desc').value
+    };
+    if (!data.name) { toast('请输入团队名称', 'error'); return; }
+    api('POST', '/teams', data, function(status, resp) {
+      if (status === 200 || status === 201) {
+        toast('团队创建成功', 'success');
+        closeModal();
+        loadTeams();
+      } else {
+        toast(resp.message || '创建失败', 'error');
+      }
+    });
+  }
+
+  function manageTeamMembers(teamId) {
+    api('GET', '/teams/' + teamId + '/members', null, function(status, resp) {
+      var members = (status === 200 && (resp.data || resp.members)) ? (resp.data || resp.members) : [];
+      var html = '<div style="margin-bottom:12px"><input class="form-input" id="member-email" placeholder="邀请邮箱" style="display:inline-block;width:70%;margin-right:8px"><button class="btn btn-sm btn-primary" onclick="inviteMember(\'' + teamId + '\')">邀请</button></div>';
+      if (members.length) {
+        html += '<table><thead><tr><th>用户</th><th>角色</th><th>加入时间</th><th>操作</th></tr></thead><tbody>';
+        for (var i = 0; i < members.length; i++) {
+          var m = members[i];
+          html += '<tr><td>' + (m.name || m.email || '--') + '</td><td>' + (m.role || 'member') + '</td><td>' + formatTime(m.joinedAt) + '</td><td>' + ((m.role !== 'owner') ? '<button class="btn btn-sm btn-danger" onclick="removeMember(\'' + teamId + '\',\'' + m.id + '\')">移除</button>' : '<span style="color:#9ca3af">所有者</span>') + '</td></tr>';
+        }
+        html += '</tbody></table>';
+      } else {
+        html += '<p style="color:#9ca3af">暂无成员</p>';
+      }
+      openModal('成员管理 - ' + (resp.teamName || teamId), html, '<button class="btn btn-secondary" onclick="closeModal()">关闭</button>');
+    });
+  }
+
+  function inviteMember(teamId) {
+    var email = document.getElementById('member-email').value;
+    if (!email) { toast('请输入邮箱', 'error'); return; }
+    api('POST', '/teams/' + teamId + '/members', { email: email }, function(status, resp) {
+      if (status === 200 || status === 201) {
+        toast('邀请已发送', 'success');
+        manageTeamMembers(teamId);
+      } else {
+        toast(resp.message || '邀请失败', 'error');
+      }
+    });
+  }
+
+  function removeMember(teamId, memberId) {
+    api('DELETE', '/teams/' + teamId + '/members/' + memberId, null, function(status) {
+      if (status === 200 || status === 204) {
+        toast('成员已移除', 'success');
+        manageTeamMembers(teamId);
+      } else {
+        toast('移除失败', 'error');
+      }
+    });
+  }
+
+  function deleteTeam(id) {
+    api('DELETE', '/teams/' + id, null, function(status) {
+      if (status === 200 || status === 204) {
+        toast('团队已删除', 'success');
+        loadTeams();
+      } else {
+        toast('删除失败', 'error');
+      }
+    });
+  }
+
+  // ===== MODULE 8: Accounts =====
+  function renderAccounts(el) {
+    if (!requireAuth()) {
+      el.innerHTML = '<div class="coming-soon"><div class="icon">🔒</div><h3>需要登录</h3><p>请先登录后访问此模块</p></div>';
+      return;
+    }
+    el.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:16px">' +
+      '<select class="form-input" style="width:auto" id="accounts-platform-filter" onchange="loadAccounts()">' +
+      '<option value="">全部平台</option><option value="WECHAT_OFFICIAL">微信公众号</option><option value="DOUYIN">抖音</option><option value="XIAOHONGSHU">小红书</option><option value="BILIBILI">B站</option><option value="WEIBO">微博</option><option value="TWITTER">Twitter</option><option value="YOUTUBE">YouTube</option></select>' +
+      '<button class="btn btn-primary" onclick="openConnectAccountModal()">+ 关联账号</button></div>' +
+      '<div id="accounts-container"></div>';
+    loadAccounts();
+  }
+
+  function loadAccounts() {
+    var c = document.getElementById('accounts-container');
+    if (!c) return;
+    c.innerHTML = '<p style="color:#9ca3af">加载中...</p>';
+    var platform = document.getElementById('accounts-platform-filter') ? document.getElementById('accounts-platform-filter').value : '';
+    api('GET', '/accounts', null, function(status, resp) {
+      var respData = resp.data || resp;
+      var items = respData.items || respData;
+      // 客户端按平台过滤
+      if (platform) {
+        items = items.filter(function(a){ return a.platform === platform; });
+      }
+      if (!items.length) {
+        c.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:30px">暂无关联账号<br><small style="font-size:11px">点击右上角「关联账号」开始</small></p>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < items.length; i++) {
+        var a = items[i];
+        var icons = { WECHAT_OFFICIAL:'💬', WECHAT_VIDEO:'📺', DOUYIN:'🎵', XIAOHONGSHU:'📕', BILIBILI:'📺', WEIBO:'📢', TWITTER:'🐦', YOUTUBE:'▶️' };
+        var icon = icons[a.platform] || '🔗';
+        html += '<div class="card" style="margin-bottom:12px"><div class="card-body" style="display:flex;justify-content:space-between;align-items:center">' +
+          '<div><span style="font-size:20px;margin-right:12px">' + icon + '</span><strong>' + (a.accountName || '--') + '</strong>' +
+          (a.followerCount !== null && a.followerCount !== undefined ? '<br><small style="color:#9ca3af;margin-left:32px">粉丝: ' + a.followerCount.toLocaleString() + ' · ' + (a.platform.replace(/_/g,' ') || '--') + ' · ' + (a.accountId || '--') + '</small>' : '<br><small style="color:#9ca3af;margin-left:32px">' + (a.platform.replace(/_/g,' ') || '--') + ' · ' + (a.accountId || '--') + ' · ' + (a.status || '已连接') + '</small>') +
+          '</div>' +
+          '<div><button class="btn btn-sm btn-danger" onclick="deleteAccount(\'' + a.id + '\')">删除</button></div></div></div>';
+      }
+      c.innerHTML = html;
+    });
+  }
+
+  function openConnectAccountModal() {
+    openModal('关联新账号',
+      '<div class="form-group"><label class="form-label">平台</label><select class="form-input" id="acc-platform" onchange="renderPlatformFields()"><option value="">-- 请选择平台 --</option><option value="WECHAT_OFFICIAL">微信公众号</option><option value="WECHAT_VIDEO">微信视频号</option><option value="DOUYIN">抖音</option><option value="XIAOHONGSHU">小红书</option><option value="BILIBILI">B站</option><option value="WEIBO">微博</option><option value="TWITTER">Twitter / X</option><option value="YOUTUBE">YouTube</option></select></div>' +
+      '<div id="platform-fields"></div>' +
+      '<div id="platform-guide" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px;color:#6b7280;display:none"></div>',
+      '<button class="btn btn-primary" onclick="submitConnectAccount()">关联</button><button class="btn btn-secondary" onclick="closeModal()">取消</button>'
+    );
+  }
+
+  function renderPlatformFields() {
+    var p = document.getElementById('acc-platform').value;
+    var container = document.getElementById('platform-fields');
+    var guide = document.getElementById('platform-guide');
+    if (!p) { container.innerHTML = ''; guide.style.display='none'; return; }
+
+    var fields = '';
+    if (p === 'WECHAT_OFFICIAL' || p === 'WECHAT_VIDEO') {
+      fields =
+        '<div class="form-group"><label class="form-label">AppID</label><input class="form-input" id="acc-appid" placeholder="wx8b2d28e4ada363bb"></div>' +
+        '<div class="form-group"><label class="form-label">AppSecret</label><input class="form-input" id="acc-secret" type="password" placeholder="AppSecret"></div>' +
+        '<div class="form-group"><label class="form-label">原始 ID</label><input class="form-input" id="acc-rawid" placeholder="gh_45d844e6f5d6"></div>' +
+        '<div class="form-group"><label class="form-label">账号名称</label><input class="form-input" id="acc-name" placeholder="公众号显示名称"></div>';
+    } else if (p === 'DOUYIN') {
+      fields =
+        '<div class="form-group"><label class="form-label">Client Key</label><input class="form-input" id="acc-clientkey" placeholder="抖音开放平台 Client Key"></div>' +
+        '<div class="form-group"><label class="form-label">Client Secret</label><input class="form-input" id="acc-clientsecret" type="password" placeholder="Client Secret"></div>' +
+        '<div class="form-group"><label class="form-label">授权回调 URL</label><input class="form-input" id="acc-callback" placeholder="https://your-domain.com/callback"></div>' +
+        '<div class="form-group"><label class="form-label">账号名称</label><input class="form-input" id="acc-name" placeholder="抖音号显示名称"></div>';
+    } else if (p === 'XIAOHONGSHU') {
+      fields =
+        '<div class="form-group"><label class="form-label">App Key</label><input class="form-input" id="acc-appkey" placeholder="小红书开放平台 App Key"></div>' +
+        '<div class="form-group"><label class="form-label">App Secret</label><input class="form-input" id="acc-appsecret" type="password" placeholder="App Secret"></div>' +
+        '<div class="form-group"><label class="form-label">账号名称</label><input class="form-input" id="acc-name" placeholder="小红书账号名称"></div>';
+    } else if (p === 'BILIBILI') {
+      fields =
+        '<div class="form-group"><label class="form-label">App Key</label><input class="form-input" id="acc-appkey" placeholder="B站开放平台 App Key"></div>' +
+        '<div class="form-group"><label class="form-label">Access Key</label><input class="form-input" id="acc-accesskey" placeholder="Access Key"></div>' +
+        '<div class="form-group"><label class="form-label">Secret Key</label><input class="form-input" id="acc-appsecret" type="password" placeholder="Secret Key"></div>' +
+        '<div class="form-group"><label class="form-label">账号名称</label><input class="form-input" id="acc-name" placeholder="B站账号名称"></div>';
+    } else if (p === 'WEIBO') {
+      fields =
+        '<div class="form-group"><label class="form-label">App Key</label><input class="form-input" id="acc-appkey" placeholder="微博开放平台 App Key"></div>' +
+        '<div class="form-group"><label class="form-label">App Secret</label><input class="form-input" id="acc-appsecret" type="password" placeholder="App Secret"></div>' +
+        '<div class="form-group"><label class="form-label">账号名称</label><input class="form-input" id="acc-name" placeholder="微博账号名称"></div>';
+    } else if (p === 'TWITTER') {
+      fields =
+        '<div class="form-group"><label class="form-label">Bearer Token</label><input class="form-input" id="acc-bearertoken" type="password" placeholder="Twitter Bearer Token"></div>' +
+        '<div class="form-group"><label class="form-label">API Key</label><input class="form-input" id="acc-apikey" placeholder="API Key"></div>' +
+        '<div class="form-group"><label class="form-label">API Secret</label><input class="form-input" id="acc-apisecret" type="password" placeholder="API Secret"></div>' +
+        '<div class="form-group"><label class="form-label">账号名称</label><input class="form-input" id="acc-name" placeholder="Twitter 显示名称"></div>';
+    } else if (p === 'YOUTUBE') {
+      fields =
+        '<div class="form-group"><label class="form-label">Client ID</label><input class="form-input" id="acc-clientid" placeholder="Google Cloud Client ID"></div>' +
+        '<div class="form-group"><label class="form-label">Client Secret</label><input class="form-input" id="acc-clientsecretyoutube" type="password" placeholder="Client Secret"></div>' +
+        '<div class="form-group"><label class="form-label">Channel ID</label><input class="form-input" id="acc-channelid" placeholder="UC..."></div>' +
+        '<div class="form-group"><label class="form-label">账号名称</label><input class="form-input" id="acc-name" placeholder="YouTube 频道名称"></div>';
+    }
+    container.innerHTML = fields;
+
+    // Show guide
+    guide.style.display = 'block';
+    var guides = {
+      WECHAT_OFFICIAL: '1. 登录 <a href="https://mp.weixin.qq.com" target="_blank">mp.weixin.qq.com</a><br>2. 设置与开发 → 基本配置 → 获取 AppID + AppSecret<br>3. 原始 ID 在 设置与开发 → 公众号设置 → 注册信息',
+      WECHAT_VIDEO: '1. 视频号助手 → 设置 → 开发设置<br>2. 绑定小程序获取 AppID + AppSecret',
+      DOUYIN: '1. <a href="https://open.douyin.com" target="_blank">抖音开放平台</a> 注册开发者<br>2. 创建应用 → 获取 Client Key + Client Secret<br>3. 设置授权回调 URL',
+      XIAOHONGSHU: '1. <a href="https://open.xiaohongshu.com" target="_blank">小红书开放平台</a> 入驻<br>2. 创建应用 → 获取 App Key + App Secret',
+      BILIBILI: '1. <a href="https://open.bilibili.com" target="_blank">B站开放平台</a> 注册<br>2. 创建应用 → 获取 App Key + Access Key + Secret Key',
+      WEIBO: '1. <a href="https://open.weibo.com" target="_blank">微博开放平台</a> 创建应用<br>2. 获取 App Key + App Secret',
+      TWITTER: '1. <a href="https://developer.twitter.com" target="_blank">Twitter Developer Portal</a><br>2. 创建 App → 获取 Bearer Token + API Key/Secret',
+      YOUTUBE: '1. <a href="https://console.developers.google.com" target="_blank">Google Cloud Console</a><br>2. 启用 YouTube Data API v3<br>3. 创建 OAuth 2.0 Client ID'
+    };
+    guide.innerHTML = '<b>📖 ' + p.replace(/_/g,' ') + ' API 获取指引</b><br><br>' + (guides[p] || '');
+  }
+
+  function submitConnectAccount() {
+    var platform = document.getElementById('acc-platform').value;
+    var accountName = document.getElementById('acc-name') ? document.getElementById('acc-name').value : '';
+    if (!platform) { toast('请选择平台', 'error'); return; }
+    if (!accountName) { toast('请输入账号名称', 'error'); return; }
+
+    // 基础数据
+    var data = {
+      platform: platform,
+      accountName: accountName,
+      accountId: ''
+    };
+
+    // 根据平台收集字段
+    if (platform === 'WECHAT_OFFICIAL' || platform === 'WECHAT_VIDEO') {
+      data.appid = document.getElementById('acc-appid').value;
+      data.secret = document.getElementById('acc-secret').value;
+      data.rawId = document.getElementById('acc-rawid').value;
+      data.accountId = data.rawId || data.appid;
+      if (!data.appid || !data.secret) { toast('请填写 AppID 和 AppSecret', 'error'); return; }
+    } else if (platform === 'DOUYIN') {
+      data.clientKey = document.getElementById('acc-clientkey').value;
+      data.clientSecret = document.getElementById('acc-clientsecret').value;
+      data.callbackUrl = document.getElementById('acc-callback').value;
+      data.accountId = data.clientKey;
+      if (!data.clientKey || !data.clientSecret) { toast('请填写 Client Key 和 Client Secret', 'error'); return; }
+    } else if (platform === 'XIAOHONGSHU' || platform === 'WEIBO') {
+      data.appKey = document.getElementById('acc-appkey').value;
+      data.appSecret = document.getElementById('acc-appsecret').value;
+      data.accountId = data.appKey;
+      if (!data.appKey || !data.appSecret) { toast('请填写 App Key 和 App Secret', 'error'); return; }
+    } else if (platform === 'BILIBILI') {
+      data.appKey = document.getElementById('acc-appkey').value;
+      data.accessKey = document.getElementById('acc-accesskey').value;
+      data.appSecret = document.getElementById('acc-appsecret').value;
+      data.accountId = data.appKey;
+      if (!data.appKey || !data.accessKey || !data.appSecret) { toast('请填写完整 B站 凭证', 'error'); return; }
+    } else if (platform === 'TWITTER') {
+      data.bearerToken = document.getElementById('acc-bearertoken').value;
+      data.apiKey = document.getElementById('acc-apikey').value;
+      data.apiSecret = document.getElementById('acc-apisecret').value;
+      data.accountId = data.apiKey;
+      if (!data.bearerToken) { toast('请填写 Bearer Token', 'error'); return; }
+    } else if (platform === 'YOUTUBE') {
+      data.clientId = document.getElementById('acc-clientid').value;
+      data.clientSecretYouTube = document.getElementById('acc-clientsecretyoutube').value;
+      data.channelId = document.getElementById('acc-channelid').value;
+      data.accountId = data.channelId || data.clientId;
+      if (!data.clientId || !data.clientSecretYouTube) { toast('请填写 Client ID 和 Client Secret', 'error'); return; }
+    }
+
+    // 获取当前用户第一个团队 ID
+    api('GET', '/teams', null, function(status, resp) {
+      var teams = (status === 200 && resp.data) ? resp.data : [];
+      if (!teams.length) { toast('请先创建团队', 'error'); return; }
+      data.teamId = teams[0].id;
+      api('POST', '/accounts', data, function(status, resp) {
+        if (status === 200 || status === 201) {
+          toast('账号关联成功', 'success');
+          closeModal();
+          loadAccounts();
+        } else {
+          toast(resp.message || '关联失败', 'error');
+        }
+      });
+    });
+  }
+
+  function syncAccount(id) {
+    api('POST', '/accounts/' + id + '/sync', null, function(status, resp) {
+      if (status === 200) {
+        toast('同步完成', 'success');
+        loadAccounts();
+      } else {
+        toast(resp.message || '同步失败', 'error');
+      }
+    });
+  }
+
+  function deleteAccount(id) {
+    api('DELETE', '/accounts/' + id, null, function(status) {
+      if (status === 200 || status === 204) {
+        toast('账号已移除', 'success');
+        loadAccounts();
+      } else {
+        toast('删除失败', 'error');
+      }
+    });
+  }
+
+  // ===== MODULE 9: Settings =====
+  function renderSettings(el) {
+    var user = null;
+    try { user = JSON.parse(localStorage.getItem('ch_user') || '{}'); } catch(e) { user = {}; }
+    el.innerHTML = '<div style="max-width:600px">' +
+      '<div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">用户信息</span></div><div class="card-body">' +
+      '<div class="form-group"><label class="form-label">显示名</label><input class="form-input" id="set-name" value="' + (user.name || '') + '"></div>' +
+      '<div class="form-group"><label class="form-label">邮箱</label><input class="form-input" id="set-email" type="email" value="' + (user.email || '') + '"></div>' +
+      '<button class="btn btn-primary" onclick="saveUserProfile()">保存修改</button></div></div>' +
+
+      '<div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">外观设置</span></div><div class="card-body">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center"><div><strong>深色模式</strong><br><small style="color:#9ca3af">切换界面主题</small></div><button class="btn btn-secondary btn-sm" onclick="toggleTheme()">切换主题</button></div></div></div>' +
+
+      '<div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">API Token</span></div><div class="card-body">' +
+      '<div class="form-group"><label class="form-label">当前 Token</label><input class="form-input" id="set-token" value="' + (localStorage.getItem('ch_token') || '') + '" readonly style="background:#f9fafb"></div>' +
+      '<div style="display:flex;gap:8px"><button class="btn btn-secondary btn-sm" onclick="regenerateToken()">重新生成</button><button class="btn btn-danger btn-sm" onclick="clearToken()">清除 Token</button></div></div></div>' +
+
+      '<div class="card" style="margin-bottom:16px"><div class="card-header"><span class="card-title">API 端点</span></div><div class="card-body">' +
+      '<div class="form-group"><label class="form-label">API Base</label><input class="form-input" value="' + API_BASE + '" readonly style="background:#f9fafb"></div>' +
+      '<div class="form-group"><label class="form-label">健康检查</label><p id="settings-api-status" style="color:#9ca3af">检测中...</p></div></div></div>' +
+
+      '</div>';
+
+    api('GET', '/health', null, function(status) {
+      var el = document.getElementById('settings-api-status');
+      if (el) {
+        if (status === 200) {
+          el.innerHTML = '<span style="color:#10b981">● 已连接 (200)</span>';
+        } else {
+          el.innerHTML = '<span style="color:#ef4444">● 不可达 (' + status + ')</span>';
+        }
+      }
+    });
+  }
+
+  function saveUserProfile() {
+    var data = {
+      name: document.getElementById('set-name').value,
+      email: document.getElementById('set-email').value
+    };
+    api('PUT', '/auth/me', data, function(status, resp) {
+      if (status === 200) {
+        if (resp) { localStorage.setItem('ch_user', JSON.stringify(resp)); updateUserDisplay(resp); }
+        toast('用户信息已保存', 'success');
+      } else {
+        toast(resp.message || '保存失败', 'error');
+      }
+    });
+  }
+
+  function regenerateToken() {
+    api('POST', '/auth/refresh', null, function(status, resp) {
+      if (status === 200 && resp.token) {
+        localStorage.setItem('ch_token', resp.token);
+        var inp = document.getElementById('set-token');
+        if (inp) inp.value = resp.token;
+        toast('Token 已更新', 'success');
+      } else {
+        toast(resp.message || '操作失败', 'error');
+      }
+    });
+  }
+
+  function clearToken() {
+    localStorage.removeItem('ch_token');
+    localStorage.removeItem('ch_user');
+    toast('Token 已清除');
+    navTo('dashboard');
+  }
+
+  // ===== Helpers =====
+  function badgeByStatus(status) {
+    if (!status) return '<span class="badge badge-gray">未知</span>';
+    var s = status.toLowerCase();
+    if (s === 'published' || s === 'active' || s === 'connected' || s === 'approved' || s === 'success' || s === 'completed') return '<span class="badge badge-green">' + status + '</span>';
+    if (s === 'draft' || s === 'pending' || s === 'processing' || s === 'running' || s === 'in_progress') return '<span class="badge badge-yellow">' + status + '</span>';
+    if (s === 'archived' || s === 'inactive' || s === 'deleted' || s === 'rejected' || s === 'failed' || s === 'error' || s === 'expired') return '<span class="badge badge-red">' + status + '</span>';
+    if (s === 'scheduled' || s === 'queued' || s === 'waiting') return '<span class="badge badge-blue">' + status + '</span>';
+    return '<span class="badge badge-gray">' + status + '</span>';
+  }
+
+  function formatTime(ts) {
+    if (!ts) return '--';
+    try {
+      var d = new Date(ts);
+      if (isNaN(d.getTime())) return '--';
+      var now = new Date();
+      var diff = (now - d) / 1000;
+      if (diff < 60) return '刚刚';
+      if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+      if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+      if (diff < 604800) return Math.floor(diff / 86400) + '天前';
+      var Y = d.getFullYear();
+      var M = String(d.getMonth() + 1).padStart(2, '0');
+      var D = String(d.getDate()).padStart(2, '0');
+      return Y + '-' + M + '-' + D;
+    } catch(e) { return '--'; }
+  }
+
+  function formatSize(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    var k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    var map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&#39;', "'": '&#39;' };
+    return String(str).replace(/[&<>"']/g, function(c) { return map[c]; });
+  }
+
+  // ===== Init =====
+  initUserDisplay();
+  applyTheme();
+  checkApiStatus();
+  renderCurrentRoute('dashboard');
+
+</script>
+</body>
+</html>

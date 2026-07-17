@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Post, Query, ParseIntPipe, NotFoundException } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, NotFoundException } from '@nestjs/common';
 import { WorkflowService } from './workflow.service';
+import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
 @Controller('workflow')
 export class WorkflowController {
@@ -14,9 +15,6 @@ export class WorkflowController {
   @Post(':id/reject') reject(@Param('id') id: string, @Body() dto: any) {
     return this.workflow.reject(id, dto);
   }
-  @Get() findAll(
-    @Query('skip', new ParseIntPipe({ optional: true })) skip?: number,
-    @Query('take', new ParseIntPipe({ optional: true })) take?: number,
-  ) { return this.workflow.findAll({ skip, take }); }
+  @Get() findAll(@Query() query: PaginationQueryDto) { return this.workflow.findAll({ skip: query.skip, take: query.take }); }
   @Get(':id') findOne(@Param('id') id: string) { return this.workflow.findOne(id); }
 }

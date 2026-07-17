@@ -16,6 +16,7 @@ export class TeamService {
     return this.prisma.team.create({
       data: {
         name: dto.name,
+        description: dto.description,
         ownerId,
         members: {
           create: { userId: ownerId, role: MemberRole.ADMIN },

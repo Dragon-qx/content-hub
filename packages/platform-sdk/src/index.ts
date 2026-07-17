@@ -2,5 +2,4 @@
 // Unified platform adapter interface for ContentHub
 
 export * from './types';
-
-// Future exports: adapter registry, factory, per-platform adapters
+export * from './wechat-official';

@@ -23,10 +23,33 @@ export class MediaService {
     });
   }
 
+  /**
+   * 将前端传入的 media type 映射为后端 MediaType 枚举
+   * 前端可能传: image/video/document → 后端: IMAGE/VIDEO/AUDIO
+   */
+  private mapTypeParam(type: string): MediaType {
+    const t = type.toLowerCase();
+    if (t === 'image') return MediaType.IMAGE;
+    if (t === 'video') return MediaType.VIDEO;
+    if (t === 'document') return MediaType.AUDIO; // document 映射为 AUDIO（后端无 DOCUMENT）
+    // 如果后端直接传了大写，也支持
+    if (t === 'IMAGE' || t === 'VIDEO' || t === 'AUDIO') return t as MediaType;
+    return type as MediaType; // 兜底：原样回退
+  }
+
   async findAll(params: any = {}) {
     const where: Prisma.MediaAssetWhereInput = {};
     if (params.contentId) where.contentId = params.contentId;
-    if (params.type) where.type = params.type;
+
+    // 处理类型过滤：前端可能传 image/video/document/IMAGE/VIDEO/AUDIO
+    if (params.type) {
+      where.type = this.mapTypeParam(params.type);
+    }
+
+    // 处理搜索：对 url 字段做 contains 搜索，提取文件名匹配
+    if (params.q) {
+      where.url = { contains: params.q };
+    }
 
     const [items, total] = await Promise.all([
       this.prisma.mediaAsset.findMany({

@@ -4,6 +4,10 @@ export class CreateTeamDto {
   @IsString()
   @MinLength(1)
   name: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
 }
 
 export class UpdateTeamDto {
@@ -11,6 +15,10 @@ export class UpdateTeamDto {
   @IsString()
   @MinLength(1)
   name?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
 }
 
 export class AddMemberDto {

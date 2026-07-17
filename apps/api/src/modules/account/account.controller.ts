@@ -39,6 +39,11 @@ export class AccountController {
     return this.accountService.bind(dto.teamId, dto);
   }
 
+  @Post(':id/sync')
+  sync(@Param('id') id: string) {
+    return this.accountService.sync(id);
+  }
+
   @Delete(':id')
   unbind(@Param('id') id: string) {
     return this.accountService.unbind(id);

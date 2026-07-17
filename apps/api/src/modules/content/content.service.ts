@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ContentStatus, ContentType, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -8,6 +8,9 @@ export class ContentService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: any, userId: string) {
+    if (!dto.teamId) {
+      throw new BadRequestException('teamId 不能为空');
+    }
     const version = 1;
     const content = await this.prisma.content.create({
       data: {

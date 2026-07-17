@@ -19,7 +19,9 @@
     "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@content-hub/platform-sdk": ["../../packages/platform-sdk/src"],
+      "@content-hub/shared-types": ["../../packages/shared-types/src"]
     },
     "types": ["node", "jest"]
   },
