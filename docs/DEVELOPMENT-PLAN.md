@@ -2,9 +2,9 @@
 
 > 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18
 
-> **当前进度（2026-07-18）**: M1–M19 全部完成 + M20 Engagement Hub 基本落地。14 个后端模块（Engagement Hub 含评论摄入/回复/统计/快捷模板/关键词告警/定时轮询），前端 15 个核心页面（/engagement 新增关键词面板 + 手动同步按钮）。测试 **251 通过 / 28 套件**，全部构建通过。
+> **当前进度（2026-07-18）**: M1–M19 全部完成 + M20 Engagement Hub **完全落地** + V1.1 平台扩展首项。14 个后端模块（Engagement Hub 含评论/私信摄入、回复、统计、快捷模板、关键词告警、定时轮询），前端 15 个核心页面（/engagement 新增关键词面板 + Messages tab + 手动同步按钮），SDK 新增 Weibo 适配器。测试 **256 通过 / 28 套件** + SDK **16 通过**，全部构建通过。
 >
-> **本轮新增（M20 续）**: 评论轮询调度 + 舆情关键词告警。(1) `EngagementService.syncTeam`/`syncAllTeams` + worker 定时摄入 tick（复用 Prisma-polling worker 模式，默认 10 分钟一次）；(2) `SentimentKeyword` 模型（team 级 watch keywords），蕴含关键词或强负面（score ≤ -0.5）的新评论自动 `broadcastToTeam` 告警（已评论去重，`alerted` 标记）；(3) `GET/POST/DELETE /engagement/keywords` + DTO 校验；(4) 前端关键词管理面板与 `Sync now` 按钮。
+> **本轮新增（M20 闭环 + Weibo）**: (1) **私信聚合** — `Message` type + `fetchMessages` adapter seam（BaseAdapter 默认降级，Bilibili 原生实现）+ `PlatformSdkService.fetchMessages`；`EngagementMessage` 模型 + migration；`ingestMessages`/`listMessages`；`GET /engagement/messages` + `POST /engagement/messages/ingest`；前端 Messages tab。syncTeam 现在同时摄入评论与私信（summary 含 comments/messages 计数）。(2) **Weibo 适配器** — `WeiboAdapter`（OAuth2 授权/发布/粉丝指标）+ 工厂注册 + 4 单元测试。
 
 ---
 
