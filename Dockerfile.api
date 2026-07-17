@@ -1,0 +1,27 @@
+# Dockerfile.api — ContentHub API (NestJS)
+FROM node:20-alpine AS base
+WORKDIR /app
+RUN corepack enable
+
+FROM base AS deps
+COPY package.json pnpm-lock.yaml ./
+COPY apps/api/package.json ./apps/api/
+COPY packages/shared-types/package.json ./packages/shared-types/
+COPY packages/platform-sdk/package.json ./packages/platform-sdk/
+RUN pnpm install --frozen-lockfile
+
+FROM base AS builder
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN pnpm build --filter=@content-hub/api
+RUN pnpm --filter=@content-hub/api prisma generate
+
+FROM base AS runner
+ENV NODE_ENV=production
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/apps/api/dist ./dist
+COPY --from=builder /app/apps/api/prisma ./prisma
+RUN pnpm --filter=@content-hub/api prisma generate
+
+EXPOSE 3000
+CMD ["node", "dist/main"]

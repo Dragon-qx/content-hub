@@ -85,5 +85,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run tests
-        run: pnpm test
+      - name: Run API tests
+        run: pnpm --filter=@content-hub/api test
+
+      - name: Run platform-sdk tests
+        run: pnpm --filter=@content-hub/platform-sdk test
+
+      - name: API coverage
+        run: pnpm --filter=@content-hub/api test -- --coverage

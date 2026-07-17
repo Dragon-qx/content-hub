@@ -103,6 +103,44 @@ describe('AccountService', () => {
     });
   });
 
+  describe('listForTeam / listForUser', () => {
+    it('returns accounts for a team', async () => {
+      prisma.socialAccount.findMany.mockResolvedValue([{ id: 'a1' }]);
+      const result = await service.listForTeam('team-1');
+      expect(result).toHaveLength(1);
+    });
+
+    it('returns an empty list when the user has no teams', async () => {
+      prisma.member.findMany.mockResolvedValue([]);
+      const result = await service.listForUser('lonely');
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('get', () => {
+    it('throws NotFound for unknown account', async () => {
+      prisma.socialAccount.findUnique.mockResolvedValue(null);
+      await expect(service.get('ghost')).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('bind', () => {
+    it('rejects unsupported platforms', async () => {
+      await expect(
+        service.bind('team-1', { platform: 'NOPE', accountId: '1', accountName: 'x' } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('unbind', () => {
+    it('deletes the account', async () => {
+      prisma.socialAccount.findUnique.mockResolvedValue({ id: 'acc-1' });
+      prisma.socialAccount.delete.mockResolvedValue({ id: 'acc-1' });
+      const result = await service.unbind('acc-1');
+      expect(result).toEqual({ deleted: true, id: 'acc-1' });
+    });
+  });
+
   describe('sync', () => {
     it('decrypts credentials before calling the adapter', async () => {
       prisma.socialAccount.findUnique.mockResolvedValue({

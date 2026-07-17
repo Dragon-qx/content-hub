@@ -1,4 +1,5 @@
-import { Controller, Get, Param, Post, Body, Query } from '@nestjs/common';
+import { Controller, Get, Header, Param, Post, Body, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { AnalyticsService } from './analytics.service';
 import { AnalyticsQueryDto, HistoryQueryDto, TopContentQueryDto } from './dto/analytics-query.dto';
 import { SnapshotCreateDto } from './dto/snapshot-create.dto';
@@ -35,6 +36,17 @@ export class AnalyticsController {
   @Get('account/:accountId')
   getAccountMetrics(@Param('accountId') accountId: string) {
     return this.analytics.getAccountMetrics(accountId);
+  }
+
+  /** Export the history trend as CSV. */
+  @Get('history/export')
+  @Header('Content-Type', 'text/csv')
+  @Header('Content-Disposition', 'attachment; filename="analytics-history.csv"')
+  async exportHistory(@Query() query: HistoryQueryDto, @Res() res: Response) {
+    const { data } = await this.analytics.getHistory(query.metric, query.period);
+    const header = 'date,value\n';
+    const body = data.map((d) => `${d.date},${d.value}`).join('\n');
+    return res.send(header + body);
   }
 
   /** 手动触发快照采集 */

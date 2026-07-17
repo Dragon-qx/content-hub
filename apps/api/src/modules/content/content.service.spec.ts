@@ -97,6 +97,17 @@ describe('ContentService', () => {
     });
   });
 
+  describe('createVersion', () => {
+    it('creates a new version and bumps the counter', async () => {
+      prisma.content.findUnique.mockResolvedValue({ id: '1', version: 1, title: 'T' });
+      prisma.$transaction.mockResolvedValue([{ id: '1', version: 2 }, { id: 'v2' }]);
+
+      const result = await service.createVersion('1', { title: 'T2' }, 'user-1');
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(result[1]).toHaveProperty('id', 'v2');
+    });
+  });
+
   describe('remove', () => {
     it('should delete content', async () => {
       prisma.content.findUnique.mockResolvedValue({ id: '1' });
