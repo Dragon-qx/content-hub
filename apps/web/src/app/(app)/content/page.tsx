@@ -3,8 +3,9 @@
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { Button, Card, Input, Select, Textarea, Badge } from '@/lib/ui';
+import { Button, Card, Input, Select, Badge } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
+import MarkdownEditor from '@/components/MarkdownEditor';
 import { Table } from '@/components/Table';
 import {
   Content,
@@ -112,11 +113,10 @@ export default function ContentPage() {
         <Card className="mb-6">
           <form onSubmit={submit} className="flex flex-col gap-3">
             <Input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
-            <Textarea
-              placeholder="Write your content (Markdown supported)…"
-              rows={6}
+            <MarkdownEditor
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              onChange={setBody}
+              placeholder="Write your content (Markdown supported)…"
             />
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <Select value={contentType} onChange={(e) => setContentType(e.target.value)}>

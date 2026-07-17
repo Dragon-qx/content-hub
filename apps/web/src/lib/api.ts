@@ -81,6 +81,39 @@ export const api = {
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
   del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  /**
+   * Upload a file as multipart/form-data. The Content-Type header is
+   * intentionally omitted so the browser sets the correct `boundary`.
+   * Extra text fields (e.g. contentId) may be attached alongside the file.
+   */
+  upload: async <T>(path: string, file: File, fields?: Record<string, string>): Promise<T> => {
+    const form = new FormData();
+    form.append('file', file);
+    if (fields) {
+      for (const [key, value] of Object.entries(fields)) {
+        form.append(key, value);
+      }
+    }
+    const headers = new Headers();
+    const token = getAuthToken();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+
+    const res = await fetch(`${API_BASE}${path}`, { method: 'POST', body: form, headers });
+
+    if (res.status === 401) {
+      onUnauthorized?.();
+      throw new ApiError(401, 'Unauthorized');
+    }
+
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : null;
+
+    if (!res.ok) {
+      const message = data?.message ?? `Upload failed (${res.status})`;
+      throw new ApiError(res.status, message, data);
+    }
+    return data as T;
+  },
 };
 
 /**

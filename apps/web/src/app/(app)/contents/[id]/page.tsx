@@ -1,11 +1,13 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { Button, Card, Input, Select, Textarea, Badge, StatusBadge } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
+import MarkdownEditor, { renderMarkdown } from '@/components/MarkdownEditor';
+import MediaLibrary from '@/components/MediaLibrary';
 import {
   Content,
   ContentVersion,
@@ -15,15 +17,17 @@ import {
   STATUS_ACTIONS,
   StatusAction,
   CONTENT_TYPES,
+  MediaAsset,
 } from '@/lib/types';
 
-/** Body rendered with preserved whitespace as a lightweight preview. */
+/** Rendered, XSS-sanitized markdown preview. */
 function Preview({ body }: { body: string | undefined }) {
   if (!body) return <p className="text-sm text-slate-400">No content yet.</p>;
   return (
-    <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-4 font-mono text-sm text-slate-700">
-      {body}
-    </pre>
+    <div
+      className="prose max-w-none text-sm text-slate-700"
+      dangerouslySetInnerHTML={{ __html: renderMarkdown(body) }}
+    />
   );
 }
 
@@ -50,6 +54,9 @@ function ContentDetail({ id }: { id: string }) {
   const [actionNote, setActionNote] = useState('');
   const [pendingAction, setPendingAction] = useState<StatusAction | null>(null);
   const [acting, setActing] = useState(false);
+
+  // Media library picker
+  const [showMedia, setShowMedia] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -141,6 +148,16 @@ function ContentDetail({ id }: { id: string }) {
       setActing(false);
     }
   };
+
+  /** Insert a picked media asset as a markdown image reference at caret / end. */
+  const insertMedia = useCallback(
+    (asset: MediaAsset) => {
+      const ref = `![${asset.url.replace(/.*\//, '')}](${asset.url})`;
+      setBody((prev) => prev + (prev.endsWith('\n') || prev === '' ? '' : '\n') + ref + '\n');
+      setShowMedia(false);
+    },
+    [],
+  );
 
   if (loading) return <div className="text-slate-400">Loading…</div>;
   if (error && !content) return <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>;
@@ -247,25 +264,23 @@ function ContentDetail({ id }: { id: string }) {
                 ))}
               </Select>
             </div>
-            <div className="flex gap-2">
-              <Button variant={!preview ? 'primary' : 'secondary'} type="button" onClick={() => setPreview(false)}>Write</Button>
-              <Button variant={preview ? 'primary' : 'secondary'} type="button" onClick={() => setPreview(true)}>Preview</Button>
-            </div>
-            {preview ? (
-              <Preview body={body} />
-            ) : (
-              <Textarea
-                rows={16}
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                placeholder="Write content in Markdown…"
-              />
-            )}
+            <MarkdownEditor
+              value={body}
+              onChange={setBody}
+              placeholder="Write content in Markdown…"
+              contentId={id}
+              onInsertMedia={() => setShowMedia(true)}
+            />
           </div>
         ) : (
           <Preview body={content.body} />
         )}
       </Card>
+
+      {/* Media library modal */}
+      {showMedia && (
+        <MediaLibrary contentId={id} onSelect={insertMedia} onClose={() => setShowMedia(false)} />
+      )}
 
       {/* Versions */}
       <Card>
