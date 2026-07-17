@@ -55,4 +55,60 @@ export class CryptoService {
     ]);
     return JSON.parse(decrypted.toString('utf8')) as T;
   }
+
+  // ── OAuth state tokens ───────────────────────────────────────────────
+  // The OAuth2 authorization-code flow is stateless: the platform redirects
+  // the user's browser back to our callback with no JWT, so the context
+  // (who is binding, to which team, with which app credentials) is carried in
+  // a tamper-proof, short-lived `state` token. AES-256-GCM gives us both
+  // confidentiality and integrity, and the embedded `exp` bounds its life.
+
+  /** Embedding this in a state token lets `verifyOAuthState` reject replays. */
+  private static readonly STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+  /**
+   * Seal an opaque, expiring state token carrying the OAuth attempt's
+   * context. The nonce is derived internally so callers only pass meaning.
+   */
+  sealOAuthState(payload: OauthStatePayload): string {
+    const envelope: OauthStateEnvelope = {
+      ...payload,
+      nonce: randomBytes(8).toString('hex'),
+      exp: Date.now() + CryptoService.STATE_TTL_MS,
+    };
+    return this.encrypt(envelope);
+  }
+
+  /**
+   * Open and validate a state token. Returns the original payload when the
+   * token is authentic and unexpired; throws otherwise (tampered, expired, or
+   // * not produced by this server).
+   */
+  openOAuthState(token: string): OauthStatePayload {
+    const envelope = this.decrypt<OauthStateEnvelope>(token);
+    if (typeof envelope.exp !== 'number' || envelope.exp < Date.now()) {
+      throw new Error('OAuth state token expired');
+    }
+    // `nonce` and `exp` are verified-only — strip them before returning.
+    const { nonce: _nonce, exp: _exp, ...payload } = envelope;
+    return payload;
+  }
+}
+
+/** What the caller cares about; embedded in the signed state token. */
+export interface OauthStatePayload {
+  userId: string;
+  teamId: string;
+  platform: string;
+  /** Platform OAuth app credentials needed to (re)build the adapter. */
+  appKey: string;
+  appSecret: string;
+  accountName?: string;
+  accountId?: string;
+}
+
+/** Internal shape: the payload plus verification metadata. */
+interface OauthStateEnvelope extends OauthStatePayload {
+  nonce: string;
+  exp: number;
 }

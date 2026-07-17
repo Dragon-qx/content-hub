@@ -11,7 +11,10 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
+import { OauthStatePayload } from '../../common/crypto/crypto.service';
+import { PlatformAdapterFactory } from '@content-hub/platform-sdk';
 import { BindAccountDto } from './dto/account.dto';
+import { OAuthAuthorizeDto } from './dto/oauth.dto';
 import { WechatOfficialAdapter } from '@content-hub/platform-sdk';
 
 const PUBLIC_SELECT = {
@@ -289,5 +292,159 @@ export class AccountService {
     await this.get(id);
     await this.prisma.socialAccount.delete({ where: { id } });
     return { deleted: true, id };
+  }
+
+  // ── OAuth2 authorization-code flow ────────────────────────────────────
+  // Platform adapters already implement getAuthUrl(state) + handleCallback(code),
+  // but until now nothing exposed them: binding was "paste raw credentials".
+  // These two methods drive the redirect flow instead.
+  //
+  //   1. authorizeOAuth()  → seal context in a signed `state`, return authUrl
+  //   2. browser visits provider → redirects back with ?code=&state=
+  //   3. callbackOAuth()    → open state, exchange code, bind the account
+  //
+  // The callback arrives in the user's browser with no JWT, so all context it
+  // needs (who/which team/which app) rides inside the sealed state token.
+
+  /** Map a uniform app-key/secret pair onto the aliases each adapter reads. */
+  private oauthAdapterConfig(appKey: string, appSecret: string) {
+    return {
+      appKey,
+      appSecret,
+      appid: appKey,
+      secret: appSecret,
+      clientKey: appKey,
+      clientSecret: appSecret,
+      accessKey: appKey,
+      secretKey: appSecret,
+    };
+  }
+
+  /**
+   * Step 1 — build the provider authorize URL. The returned `state` is a
+   * short-lived, tamper-proof token that the callback uses to recover context.
+   */
+  authorizeOAuth(dto: OAuthAuthorizeDto, userId: string): {
+    authUrl: string;
+    state: string;
+  } {
+    if (!Object.values(Platform).includes(dto.platform as Platform)) {
+      throw new BadRequestException('Unsupported platform');
+    }
+    const adapter = PlatformAdapterFactory.create(
+      dto.platform,
+      this.oauthAdapterConfig(dto.appKey, dto.appSecret),
+    );
+    if (!adapter) {
+      throw new BadRequestException(
+        `${dto.platform} does not support OAuth binding`,
+      );
+    }
+
+    const payload: OauthStatePayload = {
+      userId,
+      teamId: dto.teamId,
+      platform: dto.platform,
+      appKey: dto.appKey,
+      appSecret: dto.appSecret,
+      accountName: dto.accountName,
+      accountId: dto.accountId,
+    };
+    const state = this.crypto.sealOAuthState(payload);
+    const authUrl = adapter.getAuthUrl(state);
+    return { authUrl, state };
+  }
+
+  /**
+   * Step 2 — exchange an authorization code for tokens and bind the account.
+   * Returns the freshly-bound account plus the verified userId from the sealed
+   * state. The callback is stateless (no JWT), so the controller relies on this
+   * trusted id to write the audit log.
+   */
+  async callbackOAuth(
+    platform: string,
+    code: string,
+    state: string,
+  ): Promise<{ account: PublicAccount; userId: string }> {
+    let payload: OauthStatePayload;
+    try {
+      payload = this.crypto.openOAuthState(state);
+    } catch {
+      throw new BadRequestException('Invalid or expired OAuth state');
+    }
+    if (payload.platform !== platform) {
+      throw new BadRequestException('OAuth state does not match platform');
+    }
+
+    const adapter = PlatformAdapterFactory.create(
+      platform,
+      this.oauthAdapterConfig(payload.appKey, payload.appSecret),
+    );
+    if (!adapter) {
+      throw new BadRequestException(`${platform} does not support OAuth binding`);
+    }
+
+    let credentials: {
+      accessToken?: string;
+      refreshToken?: string;
+      expiresAt?: Date | string;
+    };
+    try {
+      credentials = await adapter.handleCallback(code);
+    } catch (err) {
+      this.logger.warn(`OAuth code exchange failed for ${platform}: ${err.message}`);
+      throw new BadRequestException(
+        `OAuth code exchange failed: ${err.message}`,
+      );
+    }
+
+    // Persist app credentials alongside the obtained tokens so publish() can
+    // rebuild the adapter and re-inject the tokens without a fresh handshake.
+    const stored = {
+      ...this.oauthAdapterConfig(payload.appKey, payload.appSecret),
+      oauth: true,
+      accessToken: credentials.accessToken ?? null,
+      refreshToken: credentials.refreshToken ?? null,
+      expiresAt: credentials.expiresAt instanceof Date
+        ? credentials.expiresAt.toISOString()
+        : (credentials.expiresAt ?? null),
+    };
+
+    const accountId = payload.accountId?.trim()
+      || (credentials.accessToken
+        ? `${platform.toLowerCase()}_${credentials.accessToken.slice(-12)}`
+        : `${platform.toLowerCase()}_oauth`);
+    const accountName =
+      payload.accountName?.trim() || `${platform}`;
+
+    // Idempotent: re-authorizing an already-bound account refreshes tokens.
+    const existing = await this.prisma.socialAccount.findUnique({
+      where: { platform_accountId: { platform: platform as Platform, accountId } },
+    });
+    if (existing) {
+      const account = await this.prisma.socialAccount.update({
+        where: { id: existing.id },
+        data: {
+          credentials: this.crypto.encrypt(stored) as unknown as Prisma.InputJsonValue,
+          accountName,
+          status: AccountStatus.ACTIVE,
+        },
+        select: PUBLIC_SELECT,
+      });
+      return { account, userId: payload.userId };
+    }
+
+    const account = await this.prisma.socialAccount.create({
+      data: {
+        teamId: payload.teamId,
+        platform: platform as Platform,
+        accountId,
+        accountName,
+        credentials: this.crypto.encrypt(stored) as unknown as Prisma.InputJsonValue,
+        status: AccountStatus.ACTIVE,
+      },
+      select: PUBLIC_SELECT,
+    });
+    return { account, userId: payload.userId };
   }
 }
