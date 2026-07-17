@@ -215,6 +215,45 @@ export interface Notification {
   createdAt: string;
 }
 
+/** Analytics metrics the history/trend API accepts. */
+export type AnalyticsMetric =
+  | 'followerCount'
+  | 'followingCount'
+  | 'postCount'
+  | 'impressions'
+  | 'engagements'
+  | 'likes'
+  | 'comments'
+  | 'shares'
+  | 'views';
+
+export const ANALYTICS_METRICS: AnalyticsMetric[] = [
+  'followerCount',
+  'followingCount',
+  'postCount',
+  'impressions',
+  'engagements',
+  'likes',
+  'comments',
+  'shares',
+  'views',
+];
+
+export const METRIC_LABELS: Record<AnalyticsMetric, string> = {
+  followerCount: 'Followers',
+  followingCount: 'Following',
+  postCount: 'Posts',
+  impressions: 'Impressions',
+  engagements: 'Engagements',
+  likes: 'Likes',
+  comments: 'Comments',
+  shares: 'Shares',
+  views: 'Views',
+};
+
+export const TREND_PERIODS = ['7d', '30d', '90d'] as const;
+export type TrendPeriod = (typeof TREND_PERIODS)[number];
+
 export const NOTIFICATION_TONE: Record<NotificationType, 'neutral' | 'success' | 'warning' | 'danger'> = {
   info: 'neutral',
   success: 'success',
