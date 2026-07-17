@@ -1,110 +1,102 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { AuditLog, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
-export interface CreateAuditDto {
-  action: string;
-  userId: string;
-  entityType: string;
-  entityId?: string;
-  metadata?: any;
-  ipAddress?: string;
-}
+const PUBLIC_SELECT = {
+  id: true,
+  userId: true,
+  action: true,
+  entityType: true,
+  entityId: true,
+  metadata: true,
+  ipAddress: true,
+  createdAt: true,
+} as const;
 
-export interface ListAuditDto {
-  skip?: number;
-  take?: number;
-  action?: string;
-  userId?: string;
-  entityType?: string;
-  entityId?: string;
-  startDate?: Date;
-  endDate?: Date;
-}
+export type PublicAuditLog = Prisma.AuditLogGetPayload<{
+  select: typeof PUBLIC_SELECT;
+}>;
 
 @Injectable()
 export class AuditService {
-  private readonly logger = new Logger(AuditService.name);
-
   constructor(private readonly prisma: PrismaService) {}
 
-  async log(dto: CreateAuditDto) {
-    try {
-      const auditLog = await this.prisma.auditLog.create({
-        data: {
-          action: dto.action,
-          userId: dto.userId,
-          entityType: dto.entityType,
-          entityId: dto.entityId,
-          metadata: dto.metadata ?? undefined,
-          ipAddress: dto.ipAddress || undefined,
-        },
-      });
-
-      this.logger.debug(
-        `Audit: ${dto.action} | entity:${dto.entityType}:${dto.entityId} | user:${dto.userId}`,
-      );
-
-      return auditLog;
-    } catch (error) {
-      this.logger.error(`Failed to create audit log: ${error.message}`);
-      return null;
+  /**
+   * Record an audit entry. Controller payloads name the fields
+   * `resourceType` / `resourceId`; the schema stores them as
+   * `entityType` / `entityId`, so we translate here.
+   */
+  async log(
+    action: string,
+    userId: string,
+    resourceType: string,
+    resourceId: string,
+    details?: Prisma.InputJsonValue,
+    ipAddress?: string,
+  ): Promise<PublicAuditLog> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!user) {
+      throw new NotFoundException(`User ${userId} not found`);
     }
+
+    return this.prisma.auditLog.create({
+      data: {
+        action,
+        user: { connect: { id: userId } },
+        entityType: resourceType,
+        entityId: resourceId,
+        metadata: details ?? Prisma.JsonNull,
+        ipAddress: ipAddress ?? null,
+      },
+      select: PUBLIC_SELECT,
+    });
   }
 
-  async findAll(dto: ListAuditDto = {}) {
-    const where: any = {};
+  /** List audit logs with optional filters and pagination. */
+  async findAll(
+    params: {
+      skip?: number;
+      take?: number;
+      userId?: string;
+      action?: string;
+      entityType?: string;
+      entityId?: string;
+    } = {},
+  ): Promise<{ items: PublicAuditLog[]; total: number; skip: number; take: number }> {
+    const where: Prisma.AuditLogWhereInput = {};
+    if (params.userId) where.userId = params.userId;
+    if (params.action) where.action = params.action;
+    if (params.entityType) where.entityType = params.entityType;
+    if (params.entityId) where.entityId = params.entityId;
 
-    if (dto.action) where.action = dto.action;
-    if (dto.userId) where.userId = dto.userId;
-    if (dto.entityType) where.entityType = dto.entityType;
-    if (dto.entityId) where.entityId = dto.entityId;
-    if (dto.startDate || dto.endDate) {
-      where.createdAt = {} as any;
-      if (dto.startDate) (where.createdAt as any).gte = dto.startDate;
-      if (dto.endDate) (where.createdAt as any).lte = dto.endDate;
-    }
-
-    const [items, total] = await Promise.all([
+    const [items, total] = await this.prisma.$transaction([
       this.prisma.auditLog.findMany({
         where,
-        skip: dto.skip ?? 0,
-        take: dto.take ?? 20,
+        skip: params.skip ?? 0,
+        take: params.take ?? 20,
         orderBy: { createdAt: 'desc' },
+        select: PUBLIC_SELECT,
       }),
       this.prisma.auditLog.count({ where }),
     ]);
 
-    return {
-      items,
-      total,
-      skip: dto.skip ?? 0,
-      take: dto.take ?? 20,
-    };
+    return { items, total, skip: params.skip ?? 0, take: params.take ?? 20 };
   }
 
-  async findByResource(entityType: string, entityId: string) {
+  /** Fetch every audit log for a given resource. */
+  async findByResource(
+    resourceType: string,
+    resourceId: string,
+  ): Promise<{ resourceType: string; resourceId: string; logs: PublicAuditLog[] }> {
     const logs = await this.prisma.auditLog.findMany({
-      where: { entityType, entityId },
+      where: { entityType: resourceType, entityId: resourceId },
       orderBy: { createdAt: 'desc' },
+      select: PUBLIC_SELECT,
     });
 
-    return { entityType, entityId, logs };
-  }
-
-  async findByUser(userId: string, limit = 50) {
-    return this.prisma.auditLog.findMany({
-      where: { userId },
-      take: limit,
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  async cleanup(retentionDays = 180) {
-    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
-    const result = await this.prisma.auditLog.deleteMany({
-      where: { createdAt: { lt: cutoff } },
-    });
-    this.logger.log(`Cleaned up ${result.count} audit logs older than ${retentionDays} days`);
-    return { deleted: result.count };
+    return { resourceType, resourceId, logs };
   }
 }

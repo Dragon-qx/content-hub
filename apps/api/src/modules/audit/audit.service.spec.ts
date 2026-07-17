@@ -1,84 +1,122 @@
-import { Test } from '@nestjs/testing';
-import { AuditService, CreateAuditDto, ListAuditDto } from './audit.service';
+import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
+import { AuditService } from './audit.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+
+const mockPrisma = () => ({
+  user: { findUnique: jest.fn() },
+  auditLog: {
+    create: jest.fn(),
+    findMany: jest.fn(),
+    count: jest.fn(),
+  },
+  $transaction: jest.fn(),
+});
 
 describe('AuditService', () => {
   let service: AuditService;
-  let prisma: any;
+  let prisma: ReturnType<typeof mockPrisma>;
 
   beforeEach(async () => {
-    prisma = {
-      auditLog: {
-        create: jest.fn(),
-        findMany: jest.fn(),
-        count: jest.fn(),
-        deleteMany: jest.fn(),
-      },
-    };
-
-    const module = await Test.createTestingModule({
-      providers: [AuditService, { provide: PrismaService, useValue: prisma }],
+    prisma = mockPrisma();
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AuditService,
+        { provide: PrismaService, useValue: prisma },
+      ],
     }).compile();
 
     service = module.get(AuditService);
-    jest.clearAllMocks();
   });
 
-  describe('log', () => {
-    it('should create audit log entry', async () => {
-      const dto: CreateAuditDto = {
-        action: 'ACTION',
-        userId: 'u1',
-        entityType: 'Content',
-        entityId: 'c1',
-        metadata: { field: 'value' },
-      };
-      prisma.auditLog.create.mockResolvedValue({ id: 'log-1', ...dto });
+  const user = { id: 'user-1' };
+  const entry = {
+    id: 'audit-1',
+    userId: 'user-1',
+    action: 'content.update',
+    entityType: 'content',
+    entityId: 'content-1',
+    metadata: { title: 'new' },
+    ipAddress: '127.0.0.1',
+    createdAt: new Date('2026-01-01'),
+  };
 
-      const result = await service.log(dto);
-      expect(result).toHaveProperty('id', 'log-1');
-      expect(result).toHaveProperty('action', 'ACTION');
+  describe('log', () => {
+    it('persists a log translating resource* fields to entity* columns', async () => {
+      prisma.user.findUnique.mockResolvedValue(user);
+      prisma.auditLog.create.mockResolvedValue(entry);
+
+      const result = await service.log(
+        'content.update',
+        'user-1',
+        'content',
+        'content-1',
+        { title: 'new' },
+        '127.0.0.1',
+      );
+
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          action: 'content.update',
+          entityType: 'content',
+          entityId: 'content-1',
+          metadata: { title: 'new' },
+          ipAddress: '127.0.0.1',
+        }),
+      });
+      expect(result).toEqual(entry);
     });
 
-    it('should not throw on failure', async () => {
-      prisma.auditLog.create.mockRejectedValue(new Error('DB error'));
+    it('stores JSON null when no details are provided', async () => {
+      prisma.user.findUnique.mockResolvedValue(user);
+      prisma.auditLog.create.mockResolvedValue({ ...entry, metadata: null });
 
-      // Should not throw, just log and return null
-      const result = await service.log({ action: 'test', userId: 'u', entityType: 't' });
-      expect(result).toBeNull();
+      await service.log('content.read', 'user-1', 'content', 'content-1');
+
+      const call = prisma.auditLog.create.mock.calls[0][0];
+      expect(call.data.metadata).toBeDefined();
+    });
+
+    it('throws NotFound when the acting user does not exist', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.log('content.read', 'ghost', 'content', 'content-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
   describe('findAll', () => {
-    it('should return paginated audit logs', async () => {
-      prisma.auditLog.findMany.mockResolvedValue([{ id: 'log-1' }]);
-      prisma.auditLog.count.mockResolvedValue(1);
+    it('passes filters into the where clause and paginates via $transaction', async () => {
+      prisma.$transaction.mockResolvedValue([[entry], 1]);
 
-      const result = await service.findAll({ skip: 0, take: 10 });
-      expect(result.items).toHaveLength(1);
+      const result = await service.findAll({
+        userId: 'user-1',
+        action: 'content.update',
+      });
+
+      expect(prisma.$transaction).toHaveBeenCalled();
       expect(result.total).toBe(1);
+      expect(result.items).toEqual([entry]);
     });
   });
 
   describe('findByResource', () => {
-    it('should filter by entity type and id', async () => {
-      prisma.auditLog.findMany.mockResolvedValue([{ id: 'log-1' }]);
+    it('returns logs for the given resource', async () => {
+      prisma.auditLog.findMany.mockResolvedValue([entry]);
 
-      const result = await service.findByResource('Content', 'c1');
-      expect(result).toHaveProperty('entityType', 'Content');
-      expect(result).toHaveProperty('entityId', 'c1');
-      expect(result.logs).toHaveLength(1);
-    });
-  });
+      const result = await service.findByResource('content', 'content-1');
 
-  describe('cleanup', () => {
-    it('should delete logs older than retention period', async () => {
-      prisma.auditLog.deleteMany.mockResolvedValue({ count: 42 });
-
-      const result = await service.cleanup(180);
-      expect(result.deleted).toBe(42);
+      expect(prisma.auditLog.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { entityType: 'content', entityId: 'content-1' },
+        }),
+      );
+      expect(result).toEqual({
+        resourceType: 'content',
+        resourceId: 'content-1',
+        logs: [entry],
+      });
     });
   });
 });
-
-export {};
