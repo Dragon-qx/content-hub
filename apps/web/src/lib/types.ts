@@ -199,3 +199,25 @@ export const PLATFORMS: PlatformOption[] = [
 export const CONTENT_TYPES = ['TEXT', 'IMAGE', 'VIDEO', 'CAROUSEL', 'THREAD', 'ARTICLE'] as const;
 
 export type ContentType = (typeof CONTENT_TYPES)[number];
+
+export type NotificationType = 'info' | 'success' | 'warning' | 'error';
+export type NotificationChannel = 'in_app' | 'email' | 'webhook';
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  channel: NotificationChannel;
+  title: string;
+  body: string;
+  link?: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export const NOTIFICATION_TONE: Record<NotificationType, 'neutral' | 'success' | 'warning' | 'danger'> = {
+  info: 'neutral',
+  success: 'success',
+  warning: 'warning',
+  error: 'danger',
+};

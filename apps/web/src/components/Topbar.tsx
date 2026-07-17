@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth, AuthUser } from '@/lib/auth';
+import NotificationBell from './NotificationBell';
 
 export default function Topbar({ user }: { user: AuthUser | null }) {
   const { logout } = useAuth();
@@ -9,6 +10,7 @@ export default function Topbar({ user }: { user: AuthUser | null }) {
     <header className="flex h-16 flex-shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6 lg:px-8">
       <div className="text-sm text-slate-500">Multi-platform content operations</div>
       <div className="flex items-center gap-4">
+        <NotificationBell />
         <span className="text-sm text-slate-600">
           {user ? `${user.name} · ${user.role}` : 'Guest'}
         </span>
