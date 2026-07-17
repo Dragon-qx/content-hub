@@ -6,7 +6,11 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 export class SchedulerService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async schedule(contentId: string, platform: string, scheduledAt: Date) {
+  async schedule(
+    contentId: string,
+    platform: string,
+    scheduledAt: Date = new Date(),
+  ) {
     const content = await this.prisma.content.findUnique({
       where: { id: contentId },
     });

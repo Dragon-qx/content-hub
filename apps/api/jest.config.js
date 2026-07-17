@@ -3,7 +3,7 @@ module.exports = {
   rootDir: '.',
   testRegex: '.spec.ts$',
   transform: {
-    '^.+\\.(t|j)s$': 'ts-jest',
+    '^.+\\.ts$': ['ts-jest', { diagnostics: { ignoreCodes: [151001] } }],
   },
   testEnvironment: 'node',
   collectCoverageFrom: [

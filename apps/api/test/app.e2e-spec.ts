@@ -1,10 +1,16 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 
 const PREFIX = '/api/v1';
+
+const auth = (req: request.Test) =>
+  req.set('Authorization', `Bearer ${authToken}`);
+
+let authToken = '';
 
 describe('ContentHub API (e2e)', () => {
   let app: INestApplication;
@@ -13,7 +19,7 @@ describe('ContentHub API (e2e)', () => {
   beforeAll(async () => {
     prismaMock = {
       user: {
-        findUnique: jest.fn().mockResolvedValue(null),
+        findUnique: jest.fn().mockResolvedValue({ id: 'e2e-user', isActive: true }),
         create: jest.fn().mockResolvedValue({ id: '1', email: 'test@e2e.com', name: 'E2E User', role: 'OWNER' }),
         findMany: jest.fn().mockResolvedValue([]),
         update: jest.fn().mockResolvedValue({ id: '1', isActive: false }),
@@ -112,6 +118,14 @@ describe('ContentHub API (e2e)', () => {
       }),
     );
     await app.init();
+
+    const jwt = app.get(JwtService);
+    authToken = jwt.sign({
+      sub: 'e2e-user',
+      email: 'test@e2e.com',
+      role: 'OWNER',
+      type: 'access',
+    });
   });
 
   afterAll(async () => {
@@ -184,8 +198,8 @@ describe('ContentHub API (e2e)', () => {
   // ── Workflow ──────────────────────────────────────────
   describe('POST /api/v1/workflow/approval', () => {
     it('should create workflow', async () => {
-      prismaMock.user.findUnique.mockResolvedValue({ id: 'u1' });
-      prismaMock.content.findUnique.mockResolvedValue({ id: 'c1' });
+      prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'u1' });
+      prismaMock.content.findUnique.mockResolvedValueOnce({ id: 'c1' });
       prismaMock.workflow.findFirst.mockResolvedValue(null);
       prismaMock.workflow.create.mockResolvedValue({
         id: 'wf-1',
@@ -209,9 +223,9 @@ describe('ContentHub API (e2e)', () => {
         tags: [],
       });
 
-      return req()
+      return auth(req()
         .post(`${PREFIX}/contents`)
-        .send({ title: 'Test', body: 'Body', teamId: 'team-1' })
+        .send({ title: 'Test', body: 'Body', teamId: 'team-1' }))
         .expect(201);
     });
   });
@@ -221,8 +235,8 @@ describe('ContentHub API (e2e)', () => {
       prismaMock.content.findMany.mockResolvedValueOnce([]);
       prismaMock.content.count.mockResolvedValueOnce(0);
 
-      return req()
-        .get(`${PREFIX}/contents?skip=0&take=10`)
+      return auth(req()
+        .get(`${PREFIX}/contents?skip=0&take=10`))
         .expect(200);
     });
   });
@@ -233,8 +247,8 @@ describe('ContentHub API (e2e)', () => {
       prismaMock.publishJob.findMany.mockResolvedValueOnce([]);
       prismaMock.publishJob.count.mockResolvedValueOnce(0);
 
-      return req()
-        .get(`${PREFIX}/scheduler?skip=0&take=10`)
+      return auth(req()
+        .get(`${PREFIX}/scheduler?skip=0&take=10`))
         .expect(200);
     });
   });
@@ -242,18 +256,18 @@ describe('ContentHub API (e2e)', () => {
   // ── Platform SDK ─────────────────────────────────────
   describe('POST /api/v1/platform-sdk/publish', () => {
     it('should accept publish request', async () => {
-      return req()
+      return auth(req()
         .post(`${PREFIX}/platform-sdk/publish`)
-        .send({ contentId: 'c1', platform: 'TWITTER' })
+        .send({ contentId: 'c1', platform: 'TWITTER' }))
         .expect(201);
     });
   });
 
   describe('POST /api/v1/platform-sdk/validate', () => {
     it('should validate credentials', async () => {
-      return req()
+      return auth(req()
         .post(`${PREFIX}/platform-sdk/validate`)
-        .send({ platform: 'TWITTER', credentials: {} })
+        .send({ platform: 'TWITTER', credentials: {} }))
         .expect(201);
     });
   });
@@ -264,8 +278,8 @@ describe('ContentHub API (e2e)', () => {
       prismaMock.mediaAsset.findMany.mockResolvedValueOnce([]);
       prismaMock.mediaAsset.count.mockResolvedValueOnce(0);
 
-      return req()
-        .get(`${PREFIX}/media`)
+      return auth(req()
+        .get(`${PREFIX}/media`))
         .expect(200);
     });
   });
