@@ -71,6 +71,13 @@ const STATUS_TONE: Record<string, 'neutral' | 'success' | 'warning' | 'danger'> 
   COMPLETED: 'success',
   RUNNING: 'warning',
   QUEUED: 'neutral',
+  // Content workflow states
+  DRAFT: 'neutral',
+  IN_REVIEW: 'warning',
+  SCHEDULED: 'neutral',
+  PUBLISHING: 'warning',
+  PUBLISHED: 'success',
+  ARCHIVED: 'neutral',
 };
 
 export function StatusBadge({ status }: { status?: string }) {

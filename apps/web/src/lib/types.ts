@@ -12,15 +12,92 @@ export interface Content {
   title: string;
   body?: string;
   contentType: string;
-  status: string;
+  status: ContentStatus;
   teamId: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
   scheduledAt?: string;
   publishedAt?: string;
+  version?: number;
   tags?: { id: string; name: string }[];
+  versions?: ContentVersion[];
 }
+
+export interface ContentVersion {
+  id: string;
+  contentId: string;
+  version: number;
+  title: string;
+  body?: string;
+  contentType: string;
+  changedBy: string;
+  changeNote?: string;
+  createdAt: string;
+}
+
+/** Statuses a content item may be in — mirrors the backend ContentStatus enum. */
+export type ContentStatus =
+  | 'DRAFT'
+  | 'IN_REVIEW'
+  | 'APPROVED'
+  | 'SCHEDULED'
+  | 'PUBLISHING'
+  | 'PUBLISHED'
+  | 'FAILED'
+  | 'ARCHIVED';
+
+export const CONTENT_STATUSES: ContentStatus[] = [
+  'DRAFT',
+  'IN_REVIEW',
+  'APPROVED',
+  'SCHEDULED',
+  'PUBLISHING',
+  'PUBLISHED',
+  'FAILED',
+  'ARCHIVED',
+];
+
+/** Human-friendly status labels for badges and filters. */
+export const STATUS_LABELS: Record<ContentStatus, string> = {
+  DRAFT: 'Draft',
+  IN_REVIEW: 'In review',
+  APPROVED: 'Approved',
+  SCHEDULED: 'Scheduled',
+  PUBLISHING: 'Publishing',
+  PUBLISHED: 'Published',
+  FAILED: 'Failed',
+  ARCHIVED: 'Archived',
+};
+
+/**
+ * Workflow actions available from a given content status. Each maps to a
+ * backend endpoint on the content controller (`POST /contents/:id/<action>`).
+ * `needsNote` surfaces an inline text field (reason / comment) before submit.
+ */
+export interface StatusAction {
+  action: 'submit' | 'approve' | 'reject' | 'archive' | 'retry';
+  label: string;
+  variant: 'primary' | 'secondary' | 'danger' | 'ghost';
+  needsNote?: boolean;
+}
+
+export const STATUS_ACTIONS: Record<ContentStatus, StatusAction[]> = {
+  DRAFT: [{ action: 'submit', label: 'Submit for review', variant: 'primary' }],
+  IN_REVIEW: [
+    { action: 'approve', label: 'Approve', variant: 'primary', needsNote: true },
+    { action: 'reject', label: 'Reject', variant: 'danger', needsNote: true },
+  ],
+  APPROVED: [{ action: 'archive', label: 'Archive', variant: 'ghost' }],
+  SCHEDULED: [{ action: 'archive', label: 'Archive', variant: 'ghost' }],
+  PUBLISHING: [],
+  PUBLISHED: [{ action: 'archive', label: 'Archive', variant: 'ghost' }],
+  FAILED: [
+    { action: 'retry', label: 'Retry', variant: 'primary' },
+    { action: 'archive', label: 'Archive', variant: 'ghost' },
+  ],
+  ARCHIVED: [],
+};
 
 export interface SocialAccount {
   id: string;
@@ -119,4 +196,6 @@ export const PLATFORMS: PlatformOption[] = [
   { value: 'YOUTUBE', label: 'YouTube' },
 ];
 
-export const CONTENT_TYPES = ['TEXT', 'IMAGE', 'VIDEO', 'CAROUSEL', 'THREAD', 'ARTICLE'];
+export const CONTENT_TYPES = ['TEXT', 'IMAGE', 'VIDEO', 'CAROUSEL', 'THREAD', 'ARTICLE'] as const;
+
+export type ContentType = (typeof CONTENT_TYPES)[number];
