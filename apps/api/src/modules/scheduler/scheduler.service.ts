@@ -80,14 +80,18 @@ export class SchedulerService {
       throw new Error('PlatformSdkService is not available');
     }
 
-    await this.markRunning(jobId);
+    // Conditional mark: only one worker may claim a QUEUED/RETRYING job. If
+    // another worker already moved it to RUNNING/COMPLETED, this update matches
+    // zero rows and we bail out instead of double-publishing.
+    const claimed = await this.markRunning(jobId);
+    if (!claimed) return;
 
     let outcome: PublishOutcome;
     try {
       outcome = await this.platformSdk.publish(
         job.contentId,
         job.platform,
-        { title: (job as Record<string, unknown>)._title as string },
+        {},
         job.accountId ?? undefined,
       );
     } catch (err) {
@@ -105,12 +109,20 @@ export class SchedulerService {
     });
   }
 
-  /** Mark a job as RUNNING and stamp the start time. */
-  async markRunning(jobId: string) {
-    return this.prisma.publishJob.update({
-      where: { id: jobId },
+  /**
+   * Atomically claim a job for execution by moving it QUEUED/RETRYING → RUNNING.
+   * Returns true if this call claimed the job, false if it was already claimed
+   * or completed (status had changed), so the caller can skip double execution.
+   */
+  async markRunning(jobId: string): Promise<boolean> {
+    const res = await this.prisma.publishJob.updateMany({
+      where: {
+        id: jobId,
+        status: { in: [JobStatus.QUEUED, JobStatus.RETRYING] },
+      },
       data: { status: JobStatus.RUNNING, startedAt: new Date() },
     });
+    return res.count > 0;
   }
 
   /**

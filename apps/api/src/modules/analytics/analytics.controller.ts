@@ -1,10 +1,12 @@
-import { Controller, Get, Header, Param, Post, Body, Query, Res } from '@nestjs/common';
+import { Controller, Get, Header, Param, Post, Body, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { AnalyticsService } from './analytics.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AnalyticsQueryDto, HistoryQueryDto, TopContentQueryDto } from './dto/analytics-query.dto';
 import { SnapshotCreateDto } from './dto/snapshot-create.dto';
 
 @Controller('analytics')
+@UseGuards(JwtAuthGuard)
 export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
 

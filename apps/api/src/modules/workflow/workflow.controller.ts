@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { WorkflowService } from './workflow.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   CreateWorkflowDto,
   ListWorkflowQueryDto,
@@ -7,6 +8,7 @@ import {
 } from './dto/workflow.dto';
 
 @Controller('workflow')
+@UseGuards(JwtAuthGuard)
 export class WorkflowController {
   constructor(private readonly workflow: WorkflowService) {}
 

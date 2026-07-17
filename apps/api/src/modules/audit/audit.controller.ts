@@ -6,11 +6,14 @@ import {
   Post,
   Query,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { AuditService } from './audit.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateAuditDto, ListAuditQueryDto } from './dto/audit.dto';
 
 @Controller('audit')
+@UseGuards(JwtAuthGuard)
 export class AuditController {
   constructor(private readonly audit: AuditService) {}
 

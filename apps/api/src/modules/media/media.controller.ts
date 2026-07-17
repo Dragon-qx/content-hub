@@ -14,6 +14,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MediaService, UploadedMultipartFile } from './media.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { MediaQueryDto } from './dto/media-query.dto';
 
 @Controller('media')
 @UseGuards(JwtAuthGuard)
@@ -29,8 +30,14 @@ export class MediaController {
     return this.media.upload(file, contentId);
   }
 
-  @Get() findAll(@Query('contentId') contentId?: string, @Query('type') type?: string, @Query('q') q?: string) {
-    return this.media.findAll({ contentId, type, q });
+  @Get() findAll(@Query() query: MediaQueryDto) {
+    return this.media.findAll({
+      contentId: query.contentId,
+      type: query.type,
+      q: query.q,
+      skip: query.skip,
+      take: query.take,
+    });
   }
 
   @Get(':id') findOne(@Param('id') id: string) { return this.media.findOne(id); }

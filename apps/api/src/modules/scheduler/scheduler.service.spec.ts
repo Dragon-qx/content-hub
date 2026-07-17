@@ -19,6 +19,7 @@ describe('SchedulerService', () => {
         findUnique: jest.fn().mockResolvedValue({ id: 'job-1', status: JobStatus.QUEUED, retryCount: 0, contentId: 'c1', platform: 'WECHAT_OFFICIAL', accountId: 'acc-1' }),
         findMany: jest.fn().mockResolvedValue([{ id: 'job-1' }]),
         update: jest.fn().mockResolvedValue({ id: 'job-1' }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         count: jest.fn().mockResolvedValue(0),
       },
     };
@@ -67,14 +68,29 @@ describe('SchedulerService', () => {
     it('publishes via SDK, marks COMPLETED and links the post', async () => {
       const ok = jest.spyOn(platformSdk, 'publish');
       await service.executeJob('job-1');
-      expect(ok).toHaveBeenCalledWith('c1', 'WECHAT_OFFICIAL', expect.any(Object), 'acc-1');
-      // markRunning + final update
+      expect(ok).toHaveBeenCalledWith('c1', 'WECHAT_OFFICIAL', {}, 'acc-1');
+      // markRunning (updateMany) + final update
+      expect(prisma.publishJob.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            id: 'job-1',
+            status: { in: [JobStatus.QUEUED, JobStatus.RETRYING] },
+          },
+          data: expect.objectContaining({ status: JobStatus.RUNNING }),
+        }),
+      );
       expect(prisma.publishJob.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'job-1' },
           data: expect.objectContaining({ status: JobStatus.COMPLETED }),
         }),
       );
+    });
+
+    it('skips execution when the job was already claimed by another worker', async () => {
+      prisma.publishJob.updateMany.mockResolvedValueOnce({ count: 0 });
+      await service.executeJob('job-1');
+      expect(platformSdk.publish).not.toHaveBeenCalled();
     });
 
     it('no-op if job already completed', async () => {
@@ -163,10 +179,22 @@ describe('SchedulerService', () => {
     expect(result).toHaveLength(1);
   });
 
-  it('should mark job as running', async () => {
-    prisma.publishJob.update.mockResolvedValueOnce({ id: 'job-1', status: JobStatus.RUNNING });
+  it('claims a QUEUED job for execution and reports true', async () => {
+    prisma.publishJob.updateMany.mockResolvedValueOnce({ count: 1 });
     const result = await service.markRunning('job-1');
-    expect(result.status).toBe(JobStatus.RUNNING);
+    expect(result).toBe(true);
+    expect(prisma.publishJob.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'job-1', status: { in: [JobStatus.QUEUED, JobStatus.RETRYING] } },
+        data: expect.objectContaining({ status: JobStatus.RUNNING }),
+      }),
+    );
+  });
+
+  it('returns false when the job is no longer claimable', async () => {
+    prisma.publishJob.updateMany.mockResolvedValueOnce({ count: 0 });
+    const result = await service.markRunning('job-1');
+    expect(result).toBe(false);
   });
 
   it('should mark job as completed', async () => {

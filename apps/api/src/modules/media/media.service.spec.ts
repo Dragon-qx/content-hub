@@ -61,6 +61,16 @@ describe('MediaService', () => {
       const arg = prisma.mediaAsset.findMany.mock.calls[0][0];
       expect(arg.where).toEqual({ contentId: 'c1', type: 'AUDIO' });
     });
+
+    it('forwards skip and take to the query', async () => {
+      prisma.mediaAsset.findMany.mockResolvedValue([]);
+      prisma.mediaAsset.count.mockResolvedValue(0);
+      const result = await service.findAll({ skip: 10, take: 25 });
+      expect(result).toEqual({ items: [], total: 0, skip: 10, take: 25 });
+      const arg = prisma.mediaAsset.findMany.mock.calls[0][0];
+      expect(arg.skip).toBe(10);
+      expect(arg.take).toBe(25);
+    });
   });
 
   describe('findOne', () => {

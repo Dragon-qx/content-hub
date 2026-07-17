@@ -220,24 +220,33 @@ describe('ContentHub API (e2e)', () => {
   // ── Audit ─────────────────────────────────────────────
   describe('POST /api/v1/audit', () => {
     it('should create audit log', async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'e2e-user', isActive: true });
       prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'u1' });
       prismaMock.auditLog.create.mockResolvedValueOnce({ id: 'log-1' });
 
-      return req()
+      return auth(req()
         .post(`${PREFIX}/audit`)
         .send({
           action: 'test',
           userId: 'u1',
           resourceType: 'Content',
           resourceId: 'c1',
-        })
+        }))
         .expect(201);
+    });
+
+    it('should reject unauthenticated requests', async () => {
+      return req()
+        .post(`${PREFIX}/audit`)
+        .send({ action: 'test', userId: 'u1', resourceType: 'Content', resourceId: 'c1' })
+        .expect(401);
     });
   });
 
   // ── Workflow ──────────────────────────────────────────
   describe('POST /api/v1/workflow/approval', () => {
     it('should create workflow', async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'e2e-user', isActive: true });
       prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'u1' });
       prismaMock.content.findUnique.mockResolvedValueOnce({ id: 'c1' });
       prismaMock.workflow.findFirst.mockResolvedValue(null);
@@ -246,10 +255,17 @@ describe('ContentHub API (e2e)', () => {
         status: 'PENDING',
       });
 
+      return auth(req()
+        .post(`${PREFIX}/workflow/approval`)
+        .send({ contentId: 'c1', approverId: 'u1' }))
+        .expect(201);
+    });
+
+    it('should reject unauthenticated requests', async () => {
       return req()
         .post(`${PREFIX}/workflow/approval`)
         .send({ contentId: 'c1', approverId: 'u1' })
-        .expect(201);
+        .expect(401);
     });
   });
 
@@ -346,8 +362,8 @@ describe('ContentHub API (e2e)', () => {
     it('should handle invalid account id', async () => {
       prismaMock.socialAccount.findUnique.mockResolvedValueOnce(null);
 
-      return req()
-        .get(`${PREFIX}/analytics/dashboard/nonexistent`)
+      return auth(req()
+        .get(`${PREFIX}/analytics/dashboard/nonexistent`))
         .expect(404);
     });
   });
