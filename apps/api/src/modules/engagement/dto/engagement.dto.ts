@@ -73,3 +73,18 @@ export class CreateTemplateDto {
   @MaxLength(2000)
   body: string;
 }
+
+/** Add a watch keyword for sentiment alerts. */
+export class CreateKeywordDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  keyword: string;
+}
+
+/** Manually trigger a comment sync for the acting team. */
+export class SyncTeamDto {
+  @IsOptional()
+  @IsString()
+  teamId?: string;
+}

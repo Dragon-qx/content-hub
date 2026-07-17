@@ -196,7 +196,46 @@ notification to every member (and the owner) of a team.
 
 ---
 
-## 12. Platform SDK (publish federation)
+## 12. Engagement Hub (comments & sentiment)
+
+All endpoints require `Authorization: Bearer <jwt>`.
+
+### Inbox
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| GET | `/engagement/stats` | `?teamId` — totals + per-platform breakdown |
+| GET | `/engagement/comments` | `?teamId&platform&sentiment&unreplied&skip&take` — paginated inbox |
+| POST | `/engagement/ingest` | `{ accountId, postExternalId? }` — pull fresh comments for one account |
+| POST | `/engagement/sync` | `{ teamId? }` — pull fresh comments for **every** active account in the acting team (the worker also does this on a timer) |
+| PATCH | `/engagement/comments/:id/reply` | `{ content }` — reply and mark replied |
+
+### Quick-reply templates
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| GET | `/engagement/templates` | List the caller's templates |
+| POST | `/engagement/templates` | `{ title, body }` |
+| DELETE | `/engagement/templates/:id` | Delete own template |
+
+### Sentiment alerts
+
+Team-owned watch keywords. When an ingested comment contains a keyword, or is
+strongly negative (sentiment score ≤ -0.5), the whole team is notified.
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| GET | `/engagement/keywords` | `?teamId` — list the team's watch keywords |
+| POST | `/engagement/keywords` | `?teamId` to scope, `{ keyword }` in the body |
+| DELETE | `/engagement/keywords/:id` | `?teamId` — remove a keyword |
+
+`POST /engagement/keywords` returns `400` if the keyword is empty and a
+`Error: "Keyword ... already exists for this team"` (HTTP mapped by NestJS)
+on a duplicate.
+
+---
+
+## 13. Platform SDK (publish federation)
 
 | Method | Path                      | Notes                                  |
 | ------ | ------------------------- | -------------------------------------- |

@@ -363,6 +363,15 @@ export interface EngagementStats {
   byPlatform: { platform: Platform; total: number; unreplied: number }[];
 }
 
+/** A team-owned watch keyword that triggers a sentiment alert. */
+export interface SentimentKeyword {
+  id: string;
+  teamId: string;
+  keyword: string;
+  createdBy: string;
+  createdAt: string;
+}
+
 export interface CommentTemplate {
   id: string;
   title: string;

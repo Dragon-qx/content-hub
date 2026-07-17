@@ -13,10 +13,12 @@ import { AuthUser, CurrentUser } from '../auth/decorators/current-user.decorator
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { EngagementService } from './engagement.service';
 import {
+  CreateKeywordDto,
   CreateTemplateDto,
   IngestCommentsDto,
   ListCommentsQueryDto,
   ReplyCommentDto,
+  SyncTeamDto,
 } from './dto/engagement.dto';
 
 @Controller('engagement')
@@ -74,6 +76,57 @@ export class EngagementController {
     @Body() dto: ReplyCommentDto,
   ) {
     return this.engagement.reply(id, dto.content);
+  }
+
+  /**
+   * Manually trigger a comment sync for the acting team (resolved from the
+   * caller if not supplied). The background worker also does this on a timer.
+   */
+  @Post('sync')
+  async sync(@CurrentUser() user: AuthUser, @Body() dto: SyncTeamDto) {
+    const teamId =
+      dto.teamId && dto.teamId.trim()
+        ? dto.teamId.trim()
+        : await this.teamIdFor(user, undefined);
+    return this.engagement.syncTeam(teamId);
+  }
+
+  // ── Sentiment keyword alerts ────────────────────────────────────────
+
+  /** List the team's watch keywords. */
+  @Get('keywords')
+  async listKeywords(
+    @CurrentUser() user: AuthUser,
+    @Query('teamId') teamId?: string,
+  ) {
+    return this.engagement.listKeywords(await this.teamIdFor(user, teamId));
+  }
+
+  /** Add a watch keyword for sentiment alerts. */
+  @Post('keywords')
+  async createKeyword(
+    @CurrentUser() user: AuthUser,
+    @Query('teamId') teamId: string,
+    @Body() dto: CreateKeywordDto,
+  ) {
+    return this.engagement.createKeyword(
+      await this.teamIdFor(user, teamId),
+      user.userId,
+      dto.keyword,
+    );
+  }
+
+  /** Remove a watch keyword. */
+  @Delete('keywords/:id')
+  async deleteKeyword(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @Query('teamId') teamId?: string,
+  ) {
+    return this.engagement.deleteKeyword(
+      id,
+      await this.teamIdFor(user, teamId),
+    );
   }
 
   // ── Quick-reply templates ─────────────────────────────────────────

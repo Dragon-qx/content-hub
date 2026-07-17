@@ -5,6 +5,11 @@ import {
   PlatformSdkService,
   FetchCommentsResult,
 } from '../platform-sdk/platform-sdk.service';
+import { NotificationService } from '../notification/notification.service';
+
+/** Sentiment score at or below this is "strongly negative" → triggers an alert
+ *  even without a keyword match. Mirrors the heuristic's [-1, 1] scale. */
+const STRONG_NEGATIVE_THRESHOLD = -0.5;
 
 /** A list query for the engagement inbox. */
 export interface ListCommentsParams {
@@ -72,6 +77,7 @@ export class EngagementService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly platformSdk: PlatformSdkService,
+    private readonly notifications: NotificationService,
   ) {}
 
   /**
@@ -100,9 +106,26 @@ export class EngagementService {
       return { stored: 0, unsupported: true, platform: account.platform };
     }
 
+    // Load the team's watch keywords once per ingest so each comment can be
+    // checked for an alert. Cached; empty list when none are configured.
+    const keywords = await this.prisma.sentimentKeyword.findMany({
+      where: { teamId: account.teamId },
+      select: { keyword: true },
+    });
+    const patterns = keywords.map((k) => k.keyword.trim().toLowerCase());
+
     let stored = 0;
     for (const c of result.items) {
       const { score, sentiment } = analyzeSentiment(c.content);
+
+      // A comment is "alarming" the first time we see it: strongly negative, or
+      // it contains one of the team's watch keywords. Upsert first so we know
+      // whether it already existed (and was already alerted).
+      const existing = await this.prisma.engagementComment.findUnique({
+        where: { accountId_externalId: { accountId, externalId: c.id } },
+        select: { id: true, alerted: true, content: true },
+      });
+
       await this.prisma.engagementComment.upsert({
         where: {
           accountId_externalId: { accountId, externalId: c.id },
@@ -131,6 +154,19 @@ export class EngagementService {
         },
       });
       stored += 1;
+
+      // Only alert on genuinely new comments, and never twice for the same one.
+      const matchesKeyword = patterns.some((p) =>
+        c.content.toLowerCase().includes(p),
+      );
+      const stronglyNegative = score <= STRONG_NEGATIVE_THRESHOLD;
+      if (!existing && (matchesKeyword || stronglyNegative)) {
+        await this.raiseAlert(account, c, score, sentiment);
+        await this.prisma.engagementComment.update({
+          where: { accountId_externalId: { accountId, externalId: c.id } },
+          data: { alerted: true },
+        });
+      }
     }
 
     // Touch the account so its sync staleness can be reported.
@@ -140,6 +176,42 @@ export class EngagementService {
     });
 
     return { stored, unsupported: false, platform: account.platform };
+  }
+
+  /**
+   * Broadcast a sentiment alert to every member of the account's team. Includes
+   * a short snippet of the offending comment and a direct link to the inbox.
+   */
+  private async raiseAlert(
+    account: { teamId: string; platform: Platform | string; accountName: string },
+    comment: { id: string; authorName: string; content: string },
+    score: number,
+    sentiment: Sentiment,
+  ): Promise<void> {
+    const snippet = comment.content.replace(/\s+/g, ' ').slice(0, 120);
+    const reason =
+      sentiment === Sentiment.NEGATIVE ? 'strongly negative' : 'keyword match';
+    try {
+      await this.notifications.broadcastToTeam(account.teamId, {
+        type: 'warning',
+        title: `Sentiment alert on ${account.platform}`,
+        body: `${comment.authorName || 'Someone'} left a ${reason} comment on ${account.accountName}: "${snippet}"`,
+        link: '/engagement',
+        metadata: {
+          platform: account.platform,
+          sentiment,
+          score,
+          commentExternalId: comment.id,
+        },
+      });
+    } catch (err) {
+      // Alerting must never break the ingest pipeline.
+      this.logger.warn(
+        `Failed to broadcast sentiment alert: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    }
   }
 
   /** List inbox comments for a team with filters + pagination. */
@@ -259,6 +331,109 @@ export class EngagementService {
     if (owned) return owned.id;
 
     throw new Error(`User ${userId} is not a member of any team`);
+  }
+
+  // ── Comment polling (worker) ───────────────────────────────────────
+
+  /**
+   * Ingest fresh comments for every active social account in a team. Used by
+   * the polling worker to keep inboxes fresh without a manual trigger.
+   * Accounts whose adapter doesn't expose comments are skipped gracefully.
+   *
+   * Returns a per-account summary so callers can log/surface progress.
+   */
+  async syncTeam(
+    teamId: string,
+  ): Promise<{ teamId: string; accounts: number; stored: number }> {
+    const accounts = await this.prisma.socialAccount.findMany({
+      where: { teamId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+
+    let stored = 0;
+    for (const acc of accounts) {
+      try {
+        const res = await this.ingest(acc.id);
+        stored += res.stored;
+      } catch (err) {
+        // One broken account must not stop the rest of the sync.
+        this.logger.warn(
+          `Sync skipped account ${acc.id}: ${
+            err instanceof Error ? err.message : err
+          }`,
+        );
+      }
+    }
+
+    return { teamId, accounts: accounts.length, stored };
+  }
+
+  /**
+   * Ingest comments for every active account across all teams. Returns one
+   * summary per team that had at least one account. Convenience wrapper the
+   * worker calls on its tick.
+   */
+  async syncAllTeams(): Promise<
+    { teamId: string; accounts: number; stored: number }[]
+  > {
+    const teams = await this.prisma.socialAccount.findMany({
+      where: { status: 'ACTIVE' },
+      select: { teamId: true },
+      distinct: ['teamId'],
+    });
+
+    const results = [];
+    for (const t of teams) {
+      results.push(await this.syncTeam(t.teamId));
+    }
+    return results;
+  }
+
+  // ── Sentiment keyword alerts ────────────────────────────────────────
+
+  async listKeywords(teamId: string) {
+    return this.prisma.sentimentKeyword.findMany({
+      where: { teamId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async createKeyword(
+    teamId: string,
+    userId: string,
+    keyword: string,
+  ): Promise<{ id: string; teamId: string; keyword: string }> {
+    const cleaned = String(keyword ?? '').trim();
+    if (!cleaned) {
+      throw new Error('Keyword must not be empty');
+    }
+    try {
+      const row = await this.prisma.sentimentKeyword.create({
+        data: { teamId, keyword: cleaned, createdBy: userId },
+      });
+      return { id: row.id, teamId: row.teamId, keyword: row.keyword };
+    } catch (err) {
+      // @@unique([teamId, keyword]) race — surface a friendly message.
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new Error(`Keyword "${cleaned}" already exists for this team`);
+      }
+      throw err;
+    }
+  }
+
+  async deleteKeyword(id: string, teamId: string) {
+    // Ensure the keyword belongs to the caller's team before deleting.
+    const row = await this.prisma.sentimentKeyword.findFirst({
+      where: { id, teamId },
+    });
+    if (!row) {
+      throw new Error(`Keyword ${id} not found`);
+    }
+    await this.prisma.sentimentKeyword.delete({ where: { id } });
+    return { deleted: true };
   }
 
   // ── Quick-reply templates ─────────────────────────────────────────

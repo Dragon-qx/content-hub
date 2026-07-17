@@ -13,6 +13,7 @@ import {
   EngagementComment,
   EngagementStats,
   CommentTemplate,
+  SentimentKeyword,
 } from '@/lib/types';
 
 interface Filters {
@@ -65,6 +66,15 @@ export default function EngagementPage() {
   const [tplBody, setTplBody] = useState('');
   const [tplSaving, setTplSaving] = useState(false);
 
+  // Sentiment alert keywords.
+  const [keywords, setKeywords] = useState<SentimentKeyword[]>([]);
+  const [kwInput, setKwInput] = useState('');
+  const [kwSaving, setKwSaving] = useState(false);
+
+  // Comment sync.
+  const [syncing, setSyncing] = useState(false);
+  const [syncInfo, setSyncInfo] = useState<string | null>(null);
+
   const loadStats = useCallback(async () => {
     try {
       setStats(await api.get<EngagementStats>('/engagement/stats'));
@@ -105,9 +115,18 @@ export default function EngagementPage() {
     }
   }, []);
 
+  const loadKeywords = useCallback(async () => {
+    try {
+      setKeywords(await api.get<SentimentKeyword[]>('/engagement/keywords'));
+    } catch {
+      setKeywords([]);
+    }
+  }, []);
+
   useEffect(() => {
     loadStats();
     loadTemplates();
+    loadKeywords();
     // Initial load only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -158,6 +177,50 @@ export default function EngagementPage() {
     }
   };
 
+  const runSync = async () => {
+    setSyncing(true);
+    setSyncInfo(null);
+    try {
+      const res = await api.post<{ accounts: number; stored: number }>(
+        '/engagement/sync',
+        {},
+      );
+      setSyncInfo(
+        `Synced ${res.accounts} account(s), ${res.stored} new comment(s) ingested.`,
+      );
+      await Promise.all([loadComments(skip), loadStats()]);
+    } catch (err: any) {
+      setSyncInfo(err?.message ?? 'Sync failed.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const addKeyword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const value = kwInput.trim();
+    if (!value) return;
+    setKwSaving(true);
+    try {
+      await api.post('/engagement/keywords', { keyword: value });
+      setKwInput('');
+      await loadKeywords();
+    } catch (err: any) {
+      window.alert(err?.message ?? 'Could not add keyword.');
+    } finally {
+      setKwSaving(false);
+    }
+  };
+
+  const removeKeyword = async (id: string) => {
+    try {
+      await api.del(`/engagement/keywords/${id}`);
+      await loadKeywords();
+    } catch (err: any) {
+      window.alert(err?.message ?? 'Could not remove keyword.');
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Engagement" subtitle="Unified inbox for comments across platforms" />
@@ -197,9 +260,18 @@ export default function EngagementPage() {
             />
             Unreplied only
           </label>
+          {syncInfo && (
+            <span className="text-xs text-emerald-600">{syncInfo}</span>
+          )}
           <div className="flex-1" />
-          <Button variant="secondary" onClick={() => { loadStats(); loadComments(skip); }}>
+          <Button
+            variant="secondary"
+            onClick={() => { loadStats(); loadComments(skip); }}
+          >
             Refresh
+          </Button>
+          <Button variant="primary" disabled={syncing} onClick={runSync}>
+            {syncing ? 'Syncing…' : 'Sync now'}
           </Button>
         </div>
       </Card>
@@ -362,6 +434,56 @@ export default function EngagementPage() {
                     {t.title}
                   </button>
                   <p className="line-clamp-2 text-xs text-slate-500">{t.body}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        {/* Sentiment alerts */}
+        <Card>
+          <div className="mb-1 flex items-center justify-between">
+            <h2 className="text-base font-semibold">Sentiment alerts</h2>
+            <Badge tone={keywords.length > 0 ? 'warning' : 'neutral'}>
+              {keywords.length} keyword{keywords.length === 1 ? '' : 's'}
+            </Badge>
+          </div>
+          <p className="mb-3 text-xs text-slate-500">
+            Get notified when a new comment contains one of these keywords or is
+            strongly negative. Comments are also auto-ingested periodically.
+          </p>
+
+          <form onSubmit={addKeyword} className="mb-3 flex gap-2">
+            <Input
+              value={kwInput}
+              onChange={(e) => setKwInput(e.target.value)}
+              placeholder="e.g. refund, 垃圾"
+            />
+            <Button type="submit" disabled={kwSaving || !kwInput.trim()}>
+              {kwSaving ? 'Adding…' : 'Add'}
+            </Button>
+          </form>
+
+          {keywords.length === 0 ? (
+            <p className="text-sm text-slate-400">
+              No watch keywords yet. Add one to start monitoring sentiment.
+            </p>
+          ) : (
+            <ul className="flex flex-wrap gap-2">
+              {keywords.map((k) => (
+                <li
+                  key={k.id}
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs text-amber-800 ring-1 ring-amber-200"
+                >
+                  <span>{k.keyword}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeKeyword(k.id)}
+                    className="text-amber-600 hover:text-amber-900"
+                    aria-label={`Remove ${k.keyword}`}
+                  >
+                    ×
+                  </button>
                 </li>
               ))}
             </ul>

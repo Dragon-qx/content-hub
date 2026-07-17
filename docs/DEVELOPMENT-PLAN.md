@@ -2,9 +2,9 @@
 
 > 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18
 
-> **当前进度（2026-07-18）**: M1–M19 全部完成 + V1.1 首项落地。14 个后端模块（新增 Engagement Hub 互动管理），前端 14 个核心页面（新增 /engagement）；platform-sdk 补齐评论/回复 seam（适配器中 Bilibili 已原生实现，其余降级到 unsupported 优雅路径）。测试 **231 通过 / 27 套件**，全部构建通过。
+> **当前进度（2026-07-18）**: M1–M19 全部完成 + M20 Engagement Hub 基本落地。14 个后端模块（Engagement Hub 含评论摄入/回复/统计/快捷模板/关键词告警/定时轮询），前端 15 个核心页面（/engagement 新增关键词面板 + 手动同步按钮）。测试 **251 通过 / 28 套件**，全部构建通过。
 >
-> **本轮新增（M-OAuth）**: OAuth2 授权码绑定流程。所有适配器已实现 `getAuthUrl`/`handleCallback`，但此前无 API 暴露——绑定仅为"粘贴原始凭证"，不满足 PRD P0 的 OAuth2 绑定要求。新增无状态 state-token 回调（state 加密携带上下文，回调无需 JWT）、授权页/回调控制器、前端 OAuth 连接表单与结果横幅。
+> **本轮新增（M20 续）**: 评论轮询调度 + 舆情关键词告警。(1) `EngagementService.syncTeam`/`syncAllTeams` + worker 定时摄入 tick（复用 Prisma-polling worker 模式，默认 10 分钟一次）；(2) `SentimentKeyword` 模型（team 级 watch keywords），蕴含关键词或强负面（score ≤ -0.5）的新评论自动 `broadcastToTeam` 告警（已评论去重，`alerted` 标记）；(3) `GET/POST/DELETE /engagement/keywords` + DTO 校验；(4) 前端关键词管理面板与 `Sync now` 按钮。
 
 ---
 
@@ -103,9 +103,9 @@
 - [x] PlatformSdkService seam: `fetchComments()` / `replyToComment()` with graceful unsupported-adapter degradation
 - [x] EngagementModule: service (ingest/list/reply/stats/sentiment heuristic) + JwtAuthGuard-protected controller + DTO validation + unit specs
 - [x] 前端 /engagement 页面：收件箱（平台/情感/未回复筛选 + 分页）、回复编辑器、快捷回复模板、统计卡片
-- [ ] 评论轮询调度（定时摄入，接 BullMQ cron worker）
-- [ ] 舆情监控关键词告警
-- [ ] 私信聚合
+- [x] 评论轮询调度：`EngagementService.syncTeam`/`syncAllTeams` + worker 定时摄入 tick（复用 Prisma-polling worker 模式，ENGAGEMENT_SYNC_INTERVAL_MS 默认 10 分钟），前端 `Sync now` 按钮
+- [x] 舆情监控关键词告警：`SentimentKeyword` 模型（team 级关注词）+ 蕴含关键词/强负面（score ≤ -0.5）评论自动 `broadcastToTeam` 通知；`GET/POST/DELETE /engagement/keywords` + DTO 校验；前端关键词管理面板
+- [ ] 私信聚合（需新增 adapter fetchMessages seam，待后续）
 
 ### M13: 测试 + 部署 + 文档
 **目标：** 生产就绪
