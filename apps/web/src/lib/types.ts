@@ -113,6 +113,43 @@ export interface SocialAccount {
   lastSyncedAt?: string;
 }
 
+/** Overall health of a social account — mirrors HealthService rollup. */
+export type AccountHealthStatus = 'HEALTHY' | 'WARNING' | 'CRITICAL';
+
+export interface AccountHealthSignal {
+  signal: string;
+  severity: 'warning' | 'critical';
+  message: string;
+}
+
+/** Per-account health report returned by the health-monitor API. */
+export interface AccountHealth {
+  accountId: string;
+  accountName: string;
+  platform: string;
+  status: string;
+  health: AccountHealthStatus;
+  signals: AccountHealthSignal[];
+  lastSyncedAt?: string | null;
+  tokenExpiresAt?: string | null;
+  evaluatedAt: string;
+}
+
+/** Team-wide rollup. */
+export interface TeamHealthSummary {
+  teamId: string;
+  evaluatedAt: string;
+  totals: { total: number; healthy: number; warning: number; critical: number };
+  accounts: AccountHealth[];
+}
+
+/** Map a health status to the UI tone used by <StatusBadge />. */
+export const HEALTH_TONE: Record<AccountHealthStatus, 'success' | 'warning' | 'danger'> = {
+  HEALTHY: 'success',
+  WARNING: 'warning',
+  CRITICAL: 'danger',
+};
+
 export interface Workflow {
   id: string;
   contentId?: string;

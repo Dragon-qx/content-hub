@@ -18,6 +18,7 @@ import { NotificationModule } from './modules/notification/notification.module';
 import { TeamModule } from './modules/team/team.module';
 import { WorkflowModule } from './modules/workflow/workflow.module';
 import { UserModule } from './modules/user/user.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { UserModule } from './modules/user/user.module';
     WorkflowModule,
     AuditModule,
     NotificationModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [
