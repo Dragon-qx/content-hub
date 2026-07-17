@@ -76,6 +76,7 @@ describe('ContentHub API (e2e)', () => {
       workflow: {
         create: jest.fn().mockResolvedValue({ id: 'wf-1', status: 'PENDING' }),
         findUnique: jest.fn().mockResolvedValue({ id: 'wf-1', status: 'PENDING' }),
+        findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
         update: jest.fn().mockResolvedValue({ id: 'wf-1' }),
         delete: jest.fn().mockResolvedValue({ id: 'wf-1' }),
@@ -165,6 +166,7 @@ describe('ContentHub API (e2e)', () => {
   // ── Audit ─────────────────────────────────────────────
   describe('POST /api/v1/audit', () => {
     it('should create audit log', async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'u1' });
       prismaMock.auditLog.create.mockResolvedValueOnce({ id: 'log-1' });
 
       return req()
@@ -172,8 +174,8 @@ describe('ContentHub API (e2e)', () => {
         .send({
           action: 'test',
           userId: 'u1',
-          entityType: 'Content',
-          entityId: 'c1',
+          resourceType: 'Content',
+          resourceId: 'c1',
         })
         .expect(201);
     });
@@ -182,9 +184,13 @@ describe('ContentHub API (e2e)', () => {
   // ── Workflow ──────────────────────────────────────────
   describe('POST /api/v1/workflow/approval', () => {
     it('should create workflow', async () => {
-      prismaMock.content.findUnique.mockResolvedValue({ id: 'c1' });
       prismaMock.user.findUnique.mockResolvedValue({ id: 'u1' });
-      prismaMock.workflow.create.mockResolvedValue({ id: 'wf-1', status: 'PENDING' });
+      prismaMock.content.findUnique.mockResolvedValue({ id: 'c1' });
+      prismaMock.workflow.findFirst.mockResolvedValue(null);
+      prismaMock.workflow.create.mockResolvedValue({
+        id: 'wf-1',
+        status: 'PENDING',
+      });
 
       return req()
         .post(`${PREFIX}/workflow/approval`)
@@ -205,7 +211,7 @@ describe('ContentHub API (e2e)', () => {
 
       return req()
         .post(`${PREFIX}/contents`)
-        .send({ title: 'Test', body: 'Body' })
+        .send({ title: 'Test', body: 'Body', teamId: 'team-1' })
         .expect(201);
     });
   });

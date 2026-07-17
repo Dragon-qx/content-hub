@@ -1,16 +1,48 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { AuditService } from './audit.service';
-import { PaginationQueryDto } from '../../common/dto/pagination.dto';
+import { CreateAuditDto, ListAuditQueryDto } from './dto/audit.dto';
 
 @Controller('audit')
 export class AuditController {
   constructor(private readonly audit: AuditService) {}
 
-  @Post() log(@Body() dto: any) {
-    return this.audit.log(dto);
+  @Post()
+  log(@Body() dto: CreateAuditDto, @Req() req: any) {
+    return this.audit.log(
+      dto.action,
+      dto.userId,
+      dto.resourceType,
+      dto.resourceId,
+      dto.details,
+      dto.ipAddress ?? req?.ip,
+    );
   }
-  @Get() findAll(@Query() query: PaginationQueryDto) { return this.audit.findAll({ skip: query.skip, take: query.take }); }
-  @Get(':resourceType/:resourceId') findByResource(@Param('resourceType') rt: string, @Param('resourceId') ri: string) {
-    return this.audit.findByResource(rt, ri);
+
+  @Get()
+  findAll(@Query() query: ListAuditQueryDto) {
+    return this.audit.findAll({
+      skip: query.skip,
+      take: query.take,
+      userId: query.userId,
+      action: query.action,
+      entityType: query.resourceType,
+      entityId: query.resourceId,
+    });
+  }
+
+  @Get(':resourceType/:resourceId')
+  findByResource(
+    @Param('resourceType') resourceType: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    return this.audit.findByResource(resourceType, resourceId);
   }
 }

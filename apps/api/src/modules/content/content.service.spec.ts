@@ -36,7 +36,13 @@ describe('ContentService', () => {
 
   describe('create', () => {
     it('should create content with version tracking', async () => {
-      const dto = { title: 'Test', body: 'Body', tags: ['a', 'b'] };
+      const dto = {
+        title: 'Test',
+        body: 'Body',
+        tags: ['a', 'b'],
+        teamId: 'team-1',
+        createdBy: 'user-1',
+      };
       prisma.content.create.mockResolvedValue({ id: '1', ...dto, version: 1 });
 
       const result = await service.create(dto, 'user-1');

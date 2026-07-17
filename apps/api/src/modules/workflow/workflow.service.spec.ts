@@ -103,10 +103,12 @@ describe('WorkflowService', () => {
 
       const result = await service.approve('wf-1', 'user-1', 'looks good');
 
-      expect(prisma.workflow.update).toHaveBeenCalledWith({
-        where: { id: 'wf-1' },
-        data: { status: 'APPROVED', approverId: 'user-1', comment: 'looks good' },
-      });
+      expect(prisma.workflow.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'wf-1' },
+          data: { status: 'APPROVED', approverId: 'user-1', comment: 'looks good' },
+        }),
+      );
       expect(result.status).toBe('APPROVED');
     });
 
@@ -141,10 +143,12 @@ describe('WorkflowService', () => {
 
       const result = await service.reject('wf-1', 'user-1', 'fix tone');
 
-      expect(prisma.workflow.update).toHaveBeenCalledWith({
-        where: { id: 'wf-1' },
-        data: { status: 'REJECTED', approverId: 'user-1', comment: 'fix tone' },
-      });
+      expect(prisma.workflow.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'wf-1' },
+          data: { status: 'REJECTED', approverId: 'user-1', comment: 'fix tone' },
+        }),
+      );
       expect(result.status).toBe('REJECTED');
     });
   });

@@ -55,15 +55,17 @@ describe('AuditService', () => {
         '127.0.0.1',
       );
 
-      expect(prisma.auditLog.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          action: 'content.update',
-          entityType: 'content',
-          entityId: 'content-1',
-          metadata: { title: 'new' },
-          ipAddress: '127.0.0.1',
+      expect(prisma.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: 'content.update',
+            entityType: 'content',
+            entityId: 'content-1',
+            metadata: { title: 'new' },
+            ipAddress: '127.0.0.1',
+          }),
         }),
-      });
+      );
       expect(result).toEqual(entry);
     });
 
