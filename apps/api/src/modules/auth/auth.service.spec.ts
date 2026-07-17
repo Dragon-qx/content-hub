@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { AuditService } from '../audit/audit.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -24,6 +25,7 @@ describe('AuthService', () => {
   let prisma: ReturnType<typeof createMockPrisma>;
   let jwt: any;
   let config: any;
+  let audit: any;
 
   beforeEach(async () => {
     prisma = createMockPrisma();
@@ -34,6 +36,7 @@ describe('AuthService', () => {
     config = {
       get: jest.fn((key: string, def?: string) => def),
     };
+    audit = { log: jest.fn().mockResolvedValue({ id: 'log-1' }) };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -41,6 +44,7 @@ describe('AuthService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: JwtService, useValue: jwt },
         { provide: ConfigService, useValue: config },
+        { provide: AuditService, useValue: audit },
       ],
     }).compile();
 
@@ -117,6 +121,31 @@ describe('AuthService', () => {
       // For a unit test, we mock at the service level, not testing argon2
       await expect(service.login({ email: 'test@example.com', password: 'wrong' }))
         .rejects.toThrow(UnauthorizedException);
+    });
+
+    it('records a LOGIN audit entry on successful authentication', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: '1',
+        isActive: true,
+        passwordHash: 'hashed_correct',
+        email: 'test@example.com',
+        role: 'OWNER',
+      });
+      // argon2.verify returns false by default in this suite, so flip it true
+      // for this single happy-path assertion.
+      const argon2Mock = jest.requireMock('argon2');
+      argon2Mock.verify.mockResolvedValueOnce(true);
+
+      const result = await service.login({ email: 'test@example.com', password: 'correct' });
+
+      expect(result).toHaveProperty('accessToken');
+      expect(audit.log).toHaveBeenCalledWith(
+        'LOGIN',
+        '1',
+        'User',
+        '1',
+        { email: 'test@example.com' },
+      );
     });
   });
 

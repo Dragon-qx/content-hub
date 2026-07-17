@@ -82,3 +82,30 @@ export const api = {
     request<T>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
   del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
+
+/**
+ * Fetch an authenticated endpoint that returns a file and trigger a browser
+ * download. The JWT is attached as a Bearer header (it is not present on a
+ * plain navigation request, so we cannot just point the browser at the URL).
+ */
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const headers = new Headers();
+  const token = getAuthToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  const res = await fetch(`${API_BASE}${path}`, { headers });
+  if (!res.ok) {
+    const message = await res.text().catch(() => `Download failed (${res.status})`);
+    throw new ApiError(res.status, message);
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

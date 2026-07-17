@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -13,17 +14,34 @@ import {
   CurrentUser,
 } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AuditService } from '../audit/audit.service';
 import { AddMemberDto, CreateTeamDto, UpdateTeamDto } from './dto/team.dto';
 import { TeamService } from './team.service';
 
 @Controller('teams')
 @UseGuards(JwtAuthGuard)
 export class TeamController {
-  constructor(private readonly teamService: TeamService) {}
+  constructor(
+    private readonly teamService: TeamService,
+    private readonly audit: AuditService,
+  ) {}
 
   @Post()
-  create(@CurrentUser() user: AuthUser, @Body() dto: CreateTeamDto) {
-    return this.teamService.create(user.userId, dto);
+  async create(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: CreateTeamDto,
+    @Req() req: { ip?: string },
+  ) {
+    const team = await this.teamService.create(user.userId, dto);
+    await this.audit.log(
+      'CREATE',
+      user.userId,
+      'Team',
+      team.id,
+      { name: dto.name },
+      req.ip,
+    );
+    return team;
   }
 
   @Get()
@@ -37,17 +55,33 @@ export class TeamController {
   }
 
   @Put(':id')
-  update(
+  async update(
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
     @Body() dto: UpdateTeamDto,
+    @Req() req: { ip?: string },
   ) {
-    return this.teamService.update(id, user.userId, dto);
+    const updated = await this.teamService.update(id, user.userId, dto);
+    await this.audit.log(
+      'UPDATE',
+      user.userId,
+      'Team',
+      id,
+      { changed: dto },
+      req.ip,
+    );
+    return updated;
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.teamService.remove(id, user.userId);
+  async remove(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @Req() req: { ip?: string },
+  ) {
+    const result = await this.teamService.remove(id, user.userId);
+    await this.audit.log('DELETE', user.userId, 'Team', id, null, req.ip);
+    return result;
   }
 
   @Get(':id/members')
@@ -56,20 +90,44 @@ export class TeamController {
   }
 
   @Post(':id/members')
-  addMember(
+  async addMember(
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
     @Body() dto: AddMemberDto,
+    @Req() req: { ip?: string },
   ) {
-    return this.teamService.addMember(id, user.userId, dto);
+    const member = await this.teamService.addMember(id, user.userId, dto);
+    await this.audit.log(
+      'ADD_MEMBER',
+      user.userId,
+      'Team',
+      id,
+      { memberUserId: dto.userId, memberId: member.id },
+      req.ip,
+    );
+    return member;
   }
 
   @Delete(':id/members/:memberId')
-  removeMember(
+  async removeMember(
     @Param('id') id: string,
     @Param('memberId') memberId: string,
     @CurrentUser() user: AuthUser,
+    @Req() req: { ip?: string },
   ) {
-    return this.teamService.removeMember(id, user.userId, memberId);
+    const result = await this.teamService.removeMember(
+      id,
+      user.userId,
+      memberId,
+    );
+    await this.audit.log(
+      'REMOVE_MEMBER',
+      user.userId,
+      'Team',
+      id,
+      { memberId },
+      req.ip,
+    );
+    return result;
   }
 }

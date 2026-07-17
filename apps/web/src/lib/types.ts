@@ -56,6 +56,12 @@ export interface PublishJob {
   retryCount: number;
 }
 
+export interface AuditLogUser {
+  id: string;
+  name: string;
+  email: string;
+}
+
 export interface AuditLog {
   id: string;
   userId: string;
@@ -65,6 +71,7 @@ export interface AuditLog {
   metadata?: unknown;
   ipAddress?: string;
   createdAt: string;
+  user?: AuditLogUser;
 }
 
 export interface MediaAsset {

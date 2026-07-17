@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { UserRole } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto, RefreshTokenDto } from './dto/login.dto';
 import { AuthTokens, JwtPayload } from './dto/auth.dto';
@@ -18,6 +19,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    private readonly audit: AuditService,
   ) {}
 
   private accessExpiresIn(): string {
@@ -97,7 +99,15 @@ export class AuthService {
       data: { lastLoginAt: new Date() },
     });
 
-    return this.signTokens(user.id, user.email, user.role);
+    const tokens = await this.signTokens(user.id, user.email, user.role);
+
+    // Record the login once tokens are successfully issued. The acting user is
+    // the resource itself; the public auth endpoint carries no client IP.
+    await this.audit.log('LOGIN', user.id, 'User', user.id, {
+      email: user.email,
+    });
+
+    return tokens;
   }
 
   async refresh(dto: RefreshTokenDto): Promise<AuthTokens> {

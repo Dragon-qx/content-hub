@@ -1,7 +1,10 @@
 import {
+  IsInt,
   IsObject,
   IsOptional,
   IsString,
+  Max,
+  Min,
   MinLength,
 } from 'class-validator';
 import { Platform } from '@content-hub/platform-sdk';
@@ -102,4 +105,15 @@ export class ListAccountsQuery {
   @IsOptional()
   @IsString()
   teamId?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  skip?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  take?: number;
 }

@@ -22,6 +22,7 @@ const mockPrisma = () => ({
   socialAccount: {
     findUnique: jest.fn(),
     findMany: jest.fn(),
+    count: jest.fn().mockResolvedValue(0),
     create: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
@@ -104,16 +105,42 @@ describe('AccountService', () => {
   });
 
   describe('listForTeam / listForUser', () => {
-    it('returns accounts for a team', async () => {
+    it('returns a paged envelope for a team', async () => {
       prisma.socialAccount.findMany.mockResolvedValue([{ id: 'a1' }]);
+      prisma.socialAccount.count.mockResolvedValue(1);
       const result = await service.listForTeam('team-1');
-      expect(result).toHaveLength(1);
+      expect(result.items).toHaveLength(1);
+      expect(result.total).toBe(1);
+      expect(result.skip).toBe(0);
+      expect(result.take).toBe(20);
     });
 
-    it('returns an empty list when the user has no teams', async () => {
+    it('applies skip/take to the team query', async () => {
+      prisma.socialAccount.findMany.mockResolvedValue([]);
+      prisma.socialAccount.count.mockResolvedValue(0);
+      const result = await service.listForTeam('team-1', { skip: 10, take: 5 });
+      expect(result.skip).toBe(10);
+      expect(result.take).toBe(5);
+      const findManyArg = prisma.socialAccount.findMany.mock.calls[0][0];
+      expect(findManyArg.skip).toBe(10);
+      expect(findManyArg.take).toBe(5);
+    });
+
+    it('returns an empty envelope when the user has no teams', async () => {
       prisma.member.findMany.mockResolvedValue([]);
       const result = await service.listForUser('lonely');
-      expect(result).toEqual([]);
+      expect(result).toEqual({ items: [], total: 0, skip: 0, take: 20 });
+    });
+
+    it('pages accounts across all of a user\'s teams', async () => {
+      prisma.member.findMany.mockResolvedValue([{ teamId: 't1' }, { teamId: 't2' }]);
+      prisma.socialAccount.findMany.mockResolvedValue([{ id: 'a1' }, { id: 'a2' }]);
+      prisma.socialAccount.count.mockResolvedValue(2);
+      const result = await service.listForUser('u1', { skip: 0, take: 10 });
+      expect(result.items).toHaveLength(2);
+      expect(result.total).toBe(2);
+      const findManyArg = prisma.socialAccount.findMany.mock.calls[0][0];
+      expect(findManyArg.where).toEqual({ teamId: { in: ['t1', 't2'] } });
     });
   });
 

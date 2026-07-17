@@ -2,12 +2,15 @@ import { Test } from '@nestjs/testing';
 import { Reflector } from '@nestjs/core';
 import { ContentController } from './content.controller';
 import { ContentService } from './content.service';
+import { AuditService } from '../audit/audit.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
 describe('ContentController', () => {
   let controller: ContentController;
   let service: any;
+
+  let audit: any;
 
   beforeEach(async () => {
     service = {
@@ -17,19 +20,21 @@ describe('ContentController', () => {
       update: jest.fn().mockResolvedValue({ id: 'c1' }),
       remove: jest.fn().mockResolvedValue({ success: true, id: 'c1' }),
     };
+    audit = { log: jest.fn().mockResolvedValue({ id: 'log-1' }) };
 
-    const module = await Test.createTestingModule({
+    const moduleRef = await Test.createTestingModule({
       controllers: [ContentController],
       providers: [
         { provide: ContentService, useValue: service },
         { provide: PrismaService, useValue: {} },
+        { provide: AuditService, useValue: audit },
       ],
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: () => true })
       .compile();
 
-    controller = module.get(ContentController);
+    controller = moduleRef.get(ContentController);
     jest.clearAllMocks();
   });
 
@@ -41,15 +46,26 @@ describe('ContentController', () => {
   });
 
   it('create delegates to service with user id from request', async () => {
-    const req: any = { user: { userId: 'u1' } };
-    await controller.create(req.user, {
-      title: 'T',
-      body: 'B',
-      teamId: 'team-1',
-    });
+    const user: any = { userId: 'u1' };
+    const req: any = { ip: '127.0.0.1' };
+    await controller.create(user, { title: 'T', body: 'B', teamId: 'team-1' }, req);
     expect(service.create).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'T', teamId: 'team-1' }),
       'u1',
+    );
+  });
+
+  it('create writes an audit log with the new resource id and request ip', async () => {
+    const user: any = { userId: 'u1' };
+    const req: any = { ip: '127.0.0.1' };
+    await controller.create(user, { title: 'T', teamId: 'team-1' }, req);
+    expect(audit.log).toHaveBeenCalledWith(
+      'CREATE',
+      'u1',
+      'Content',
+      'c1',
+      expect.objectContaining({ title: 'T' }),
+      '127.0.0.1',
     );
   });
 
@@ -67,8 +83,8 @@ describe('ContentController', () => {
   });
 
   it('update passes user id from request', async () => {
-    const req: any = { user: { userId: 'u1' } };
-    await controller.update('c1', req.user, { title: 'New' });
+    const user: any = { userId: 'u1' };
+    await controller.update('c1', user, { title: 'New' }, { ip: '127.0.0.1' });
     expect(service.update).toHaveBeenCalledWith('c1', { title: 'New' }, 'u1');
   });
 });

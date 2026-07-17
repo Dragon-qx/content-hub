@@ -56,26 +56,53 @@ export class AccountService {
     }
   }
 
-  async listForTeam(teamId: string): Promise<PublicAccount[]> {
-    return this.prisma.socialAccount.findMany({
-      where: { teamId },
-      select: PUBLIC_SELECT,
-    });
+  /**
+   * List accounts for a team, paged. Returns a `Paginated` envelope so the
+   * frontend can render the list and total without a second request.
+   */
+  async listForTeam(
+    teamId: string,
+    { skip, take }: { skip?: number; take?: number } = {},
+  ) {
+    const where = { teamId };
+    const [items, total] = await Promise.all([
+      this.prisma.socialAccount.findMany({
+        where,
+        select: PUBLIC_SELECT,
+        skip: skip ?? 0,
+        take: take ?? 20,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.socialAccount.count({ where }),
+    ]);
+    return { items, total, skip: skip ?? 0, take: take ?? 20 };
   }
 
-  async listForUser(userId: string): Promise<PublicAccount[]> {
+  /** List accounts across all of a user's teams, paged. */
+  async listForUser(
+    userId: string,
+    { skip, take }: { skip?: number; take?: number } = {},
+  ) {
     const memberships = await this.prisma.member.findMany({
       where: { userId },
       select: { teamId: true },
     });
     const teamIds = memberships.map((m) => m.teamId);
     if (teamIds.length === 0) {
-      return [];
+      return { items: [], total: 0, skip: skip ?? 0, take: take ?? 20 };
     }
-    return this.prisma.socialAccount.findMany({
-      where: { teamId: { in: teamIds } },
-      select: PUBLIC_SELECT,
-    });
+    const where = { teamId: { in: teamIds } };
+    const [items, total] = await Promise.all([
+      this.prisma.socialAccount.findMany({
+        where,
+        select: PUBLIC_SELECT,
+        skip: skip ?? 0,
+        take: take ?? 20,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.socialAccount.count({ where }),
+    ]);
+    return { items, total, skip: skip ?? 0, take: take ?? 20 };
   }
 
   async get(id: string): Promise<PublicAccount> {

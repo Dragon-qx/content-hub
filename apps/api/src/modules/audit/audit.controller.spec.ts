@@ -73,4 +73,46 @@ describe('AuditController', () => {
       }),
     );
   });
+
+  it('findAll forwards date range and operator search', async () => {
+    await controller.findAll({
+      from: '2026-01-01',
+      to: '2026-02-01',
+      operator: '小林',
+    } as any);
+    expect(service.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: '2026-01-01',
+        to: '2026-02-01',
+        operator: '小林',
+      }),
+    );
+  });
+
+  it('export streams a CSV with a header and one row per log', async () => {
+    const res: any = { send: jest.fn() };
+    const log = {
+      id: 'log-1',
+      userId: 'u1',
+      user: { id: 'u1', name: '林', email: 'lin@x.com' },
+      action: 'CREATE',
+      entityType: 'Content',
+      entityId: 'c1',
+      ipAddress: '127.0.0.1',
+      metadata: { title: 'T' },
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    };
+    service.exportAll = jest.fn().mockResolvedValue([log]);
+
+    await controller.export({ action: 'CREATE' } as any, res);
+
+    expect(service.exportAll).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'CREATE' }),
+    );
+    const out = res.send.mock.calls[0][0];
+    const lines = out.split('\n');
+    expect(lines[0]).toContain('operatorName');
+    expect(lines[1]).toContain('林');
+    expect(lines[1]).toContain('CREATE');
+  });
 });

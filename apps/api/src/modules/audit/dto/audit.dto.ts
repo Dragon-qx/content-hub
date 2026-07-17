@@ -1,8 +1,8 @@
 import { Prisma } from '@prisma/client';
 import { Transform } from 'class-transformer';
 import {
+  IsDateString,
   IsJSON,
-  IsObject,
   IsOptional,
   IsString,
   MaxLength,
@@ -57,4 +57,19 @@ export class ListAuditQueryDto {
   @IsOptional()
   @IsString()
   resourceId?: string;
+
+  /** Lower bound (inclusive) of thecreatedAt timestamp, ISO 8601. */
+  @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  /** Upper bound (inclusive) of the createdAt timestamp, ISO 8601. */
+  @IsOptional()
+  @IsDateString()
+  to?: string;
+
+  /** Free-text search matched against the acting user's name or email. */
+  @IsOptional()
+  @IsString()
+  operator?: string;
 }
