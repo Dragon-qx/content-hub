@@ -306,3 +306,66 @@ export const NOTIFICATION_TONE: Record<NotificationType, 'neutral' | 'success' |
   warning: 'warning',
   error: 'danger',
 };
+
+// ── Engagement Hub ─────────────────────────────────────────────────
+
+/** Platform identifiers — mirrors the backend Platform enum. */
+export type Platform =
+  | 'WECHAT_OFFICIAL'
+  | 'WECHAT_VIDEO'
+  | 'DOUYIN'
+  | 'XIAOHONGSHU'
+  | 'BILIBILI'
+  | 'WEIBO'
+  | 'TWITTER'
+  | 'YOUTUBE';
+
+export type Sentiment = 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE';
+
+export const SENTIMENT_TONE: Record<Sentiment, 'success' | 'neutral' | 'danger'> = {
+  POSITIVE: 'success',
+  NEUTRAL: 'neutral',
+  NEGATIVE: 'danger',
+};
+
+export const SENTIMENT_LABELS: Record<Sentiment, string> = {
+  POSITIVE: 'Positive',
+  NEUTRAL: 'Neutral',
+  NEGATIVE: 'Negative',
+};
+
+export interface EngagementComment {
+  id: string;
+  externalId: string;
+  platform: Platform;
+  postExternalId?: string | null;
+  authorName: string;
+  authorId?: string | null;
+  content: string;
+  likeCount: number;
+  parentId?: string | null;
+  sentiment: Sentiment;
+  sentimentScore: number;
+  replied: boolean;
+  replyContent?: string | null;
+  repliedAt?: string | null;
+  commentDate: string;
+  fetchedAt: string;
+  account?: { platform: Platform; accountName: string };
+}
+
+export interface EngagementStats {
+  total: number;
+  unreplied: number;
+  positive: number;
+  neutral: number;
+  negative: number;
+  byPlatform: { platform: Platform; total: number; unreplied: number }[];
+}
+
+export interface CommentTemplate {
+  id: string;
+  title: string;
+  body: string;
+  createdAt: string;
+}

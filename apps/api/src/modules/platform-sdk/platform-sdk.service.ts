@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { Platform, ContentStatus, Prisma } from '@prisma/client';
-import { PublishRequest } from '@content-hub/platform-sdk';
+import { Comment, PublishRequest } from '@content-hub/platform-sdk';
 import { PlatformAdapterFactory } from '@content-hub/platform-sdk';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
@@ -19,6 +19,33 @@ export interface PublishOutcome {
   status: 'PUBLISHED' | 'FAILED';
   publishedAt: Date | null;
   error?: string;
+}
+
+/** A normalised comment as returned by the adapter seam. */
+export interface PlatformComment {
+  id: string;
+  authorName: string;
+  authorId?: string;
+  content: string;
+  createdAt: Date;
+  likeCount?: number;
+  parentId?: string;
+  postExternalId?: string;
+}
+
+/** Result of ingesting comments from a platform adapter. */
+export interface FetchCommentsResult {
+  accountId: string;
+  platform: Platform | string;
+  /** True when the adapter does not expose a comments API at all. */
+  unsupported: boolean;
+  items: PlatformComment[];
+}
+
+/** Outcome of an attempted comment reply. */
+export interface ReplyOutcome {
+  ok: boolean;
+  reason?: string;
 }
 
 @Injectable()
@@ -148,6 +175,129 @@ export class PlatformSdkService {
       where: { teamId, platform: platform as Platform, status: 'ACTIVE' },
       orderBy: { lastSyncedAt: 'desc' },
     });
+  }
+
+  /**
+   * Fetch recent comments for a social account from its platform adapter and
+   * normalise them into PlatformComment objects.
+   *
+   * Resolve the account and active post, build the seeded adapter, then call
+   * adapter.fetchComments(). If the adapter declares it does not expose a
+   * comments API, we return `unsupported: true` with an empty list so the
+   * caller can distinguish "no API yet" from "API returned nothing".
+   */
+  async fetchComments(
+    accountId: string,
+    platform: Platform | string,
+    postId?: string,
+  ): Promise<FetchCommentsResult> {
+    const account = await this.prisma.socialAccount.findUnique({
+      where: { id: accountId },
+    });
+    if (!account) {
+      throw new NotFoundException(`Social account ${accountId} not found`);
+    }
+
+    const credentials = this.decryptCredentials(account.credentials);
+    const adapter = PlatformAdapterFactory.create(
+      platform as Platform,
+      credentials,
+    );
+    if (!adapter) {
+      throw new BadRequestException(`Platform ${platform} is not supported`);
+    }
+    adapter.setCredentials({
+      accessToken: credentials.accessToken as string | null,
+      refreshToken: credentials.refreshToken as string | null,
+      expiresAt: credentials.expiresAt as string | number | Date | null,
+    });
+
+    // Pick the latest post to fetch comments for, if the caller didn't name one.
+    let targetPostId = postId;
+    if (!targetPostId) {
+      const lastPost = await this.prisma.platformPost.findFirst({
+        where: {
+          content: { teamId: account.teamId },
+          platform: platform as Platform,
+        },
+        orderBy: { publishedAt: 'desc' },
+        select: { externalId: true },
+      });
+      targetPostId = lastPost?.externalId ?? 'latest';
+    }
+
+    try {
+      const comments: Comment[] = await adapter.fetchComments(
+        account.accountId,
+        targetPostId,
+      );
+      return {
+        accountId,
+        platform,
+        unsupported: false,
+        items: comments.map((c) => ({
+          id: c.id,
+          authorName: c.authorName,
+          authorId: c.authorId,
+          content: c.content,
+          createdAt: c.createdAt,
+          parentId: c.replyToId,
+          postExternalId: targetPostId,
+        })),
+      };
+    } catch (err) {
+      // Adapter does not implement comment fetching — signal unsupported so the
+      // engagement layer can record a no-op rather than a hard failure.
+      this.logger.debug(
+        `Comment fetch not supported for ${platform} account ${accountId}: ${
+          (err as Error).message ?? err
+        }`,
+      );
+      return { accountId, platform, unsupported: true, items: [] };
+    }
+  }
+
+  /**
+   * Reply to a comment via the platform adapter.
+   *
+   * Resolves the account, builds the seeded adapter and calls
+   * adapter.replyToComment(). Returns ok:false with a reason when the adapter
+   * has no reply surface, rather than throwing, so the engagement layer can
+   * present a graceful UX fallback.
+   */
+  async replyToComment(
+    accountId: string,
+    platform: Platform | string,
+    commentId: string,
+    content: string,
+  ): Promise<ReplyOutcome> {
+    const account = await this.prisma.socialAccount.findUnique({
+      where: { id: accountId },
+    });
+    if (!account) {
+      throw new NotFoundException(`Social account ${accountId} not found`);
+    }
+
+    const credentials = this.decryptCredentials(account.credentials);
+    const adapter = PlatformAdapterFactory.create(
+      platform as Platform,
+      credentials,
+    );
+    if (!adapter) {
+      throw new BadRequestException(`Platform ${platform} is not supported`);
+    }
+    adapter.setCredentials({
+      accessToken: credentials.accessToken as string | null,
+      refreshToken: credentials.refreshToken as string | null,
+      expiresAt: credentials.expiresAt as string | number | Date | null,
+    });
+
+    try {
+      await adapter.replyToComment(account.accountId, commentId, content);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, reason: (err as Error).message ?? 'Reply failed' };
+    }
   }
 
   /** Fetch the latest status for an external post via its platform adapter. */

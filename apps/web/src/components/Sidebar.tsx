@@ -13,6 +13,7 @@ const NAV = [
   { key: 'accounts', label: 'Accounts', icon: '🔗', href: '/accounts' },
   { key: 'teams', label: 'Teams', icon: '👥', href: '/teams' },
   { key: 'notifications', label: 'Notifications', icon: '🔔', href: '/notifications' },
+  { key: 'engagement', label: 'Engagement', icon: '💬', href: '/engagement' },
   { key: 'audit', label: 'Audit log', icon: '🛡️', href: '/audit' },
   { key: 'settings', label: 'Settings', icon: '⚙️', href: '/settings' },
 ];

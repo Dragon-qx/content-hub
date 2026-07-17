@@ -18,6 +18,7 @@ import { NotificationModule } from './modules/notification/notification.module';
 import { TeamModule } from './modules/team/team.module';
 import { WorkflowModule } from './modules/workflow/workflow.module';
 import { UserModule } from './modules/user/user.module';
+import { EngagementModule } from './modules/engagement/engagement.module';
 import { HealthModule } from './modules/health/health.module';
 
 @Module({
@@ -60,6 +61,7 @@ import { HealthModule } from './modules/health/health.module';
     AuditModule,
     NotificationModule,
     HealthModule,
+    EngagementModule,
   ],
   controllers: [AppController],
   providers: [

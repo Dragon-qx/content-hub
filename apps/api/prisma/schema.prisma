@@ -68,6 +68,7 @@ model SocialAccount {
   updatedAt       DateTime        @updatedAt
   analytics       AnalyticsSnapshot[]
   publishJobs     PublishJob[]
+  comments        EngagementComment[]
 
   @@unique([platform, accountId])
 }
@@ -309,4 +310,53 @@ model Workflow {
   status      String   @default("PENDING") // PENDING / APPROVED / REJECTED
   comment     String?
   createdAt   DateTime @default(now())
+}
+
+// ── Engagement Hub ─────────────────────────────────────────────────
+
+// An aggregated social comment ingested for a social account. Keyed by
+// (accountId, externalId) so re-ingesting the same platform comment is
+// idempotent. Sentiment is derived locally at ingest time.
+model EngagementComment {
+  id           String        @id @default(cuid())
+  accountId    String
+  account      SocialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  externalId   String        // platform-side comment id
+  platform     Platform
+  postExternalId String?     // originating post, if the adapter supplies it
+  authorName   String
+  authorId     String?
+  content      String
+  likeCount    Int           @default(0)
+  parentId     String?       // thread parent, if supplied
+  sentiment    Sentiment     @default(NEUTRAL)
+  sentimentScore Float       @default(0) // -1 … +1 heuristic
+  replied      Boolean       @default(false)
+  replyContent String?
+  repliedAt    DateTime?
+  commentDate  DateTime      // the platform's creation time
+  fetchedAt    DateTime      @default(now())
+  metadata     Json?
+
+  @@unique([accountId, externalId])
+  @@index([accountId, sentiment])
+  @@index([accountId, replied])
+}
+
+// Sentiment label derived from content at ingest time.
+enum Sentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+// User-authored quick-reply templates for the engagement inbox.
+model CommentTemplate {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }

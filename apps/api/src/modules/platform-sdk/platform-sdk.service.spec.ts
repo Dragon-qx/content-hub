@@ -31,6 +31,7 @@ describe('PlatformSdkService', () => {
       },
       socialAccount: {
         findFirst: jest.fn().mockResolvedValue(account),
+        findUnique: jest.fn(),
       },
       platformPost: {
         create: jest.fn().mockResolvedValue({ id: 'post-1' }),
@@ -107,5 +108,39 @@ describe('PlatformSdkService', () => {
   it('reports an unsupported platform as invalid', async () => {
     const result = await service.validate('NOPE' as Platform, {});
     expect(result).toHaveProperty('valid', false);
+  });
+
+  it('fetchComments resolves to a conformant shape for every platform', async () => {
+    prisma.socialAccount.findUnique.mockResolvedValue({
+      id: 'acc-2',
+      platform: Platform.BILIBILI,
+      accountId: 'ext-2',
+      credentials: {},
+    });
+    const result = await service.fetchComments('acc-2', Platform.BILIBILI);
+    expect(result).toMatchObject({
+      accountId: 'acc-2',
+      platform: Platform.BILIBILI,
+    });
+    expect(Array.isArray(result.items)).toBe(true);
+    expect(typeof result.unsupported).toBe('boolean');
+  });
+
+  it('replyToComment resolves to a conformant outcome', async () => {
+    prisma.socialAccount.findUnique.mockResolvedValue({
+      id: 'acc-2',
+      platform: Platform.XIAOHONGSHU,
+      accountId: 'ext-2',
+      credentials: {},
+    });
+    const result = await service.replyToComment(
+      'acc-2',
+      Platform.XIAOHONGSHU,
+      'c1',
+      'thanks',
+    );
+    // XHS throws from the base adapter → ok:false with a reason.
+    expect(result.ok).toBe(false);
+    expect(typeof result.reason).toBe('string');
   });
 });

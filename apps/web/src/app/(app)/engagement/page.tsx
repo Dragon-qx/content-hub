@@ -1,0 +1,373 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { api, Paginated } from '@/lib/api';
+import { Badge, Button, Card, Field, Input, Select, Textarea } from '@/lib/ui';
+import PageHeader from '@/components/PageHeader';
+import {
+  PLATFORMS,
+  Platform,
+  Sentiment,
+  SENTIMENT_TONE,
+  SENTIMENT_LABELS,
+  EngagementComment,
+  EngagementStats,
+  CommentTemplate,
+} from '@/lib/types';
+
+interface Filters {
+  platform: Platform | '';
+  sentiment: Sentiment | '';
+  unreplied: boolean;
+}
+
+const INITIAL: Filters = { platform: '', sentiment: '', unreplied: false };
+
+const TAKE = 20;
+
+function Stats({ stats }: { stats: EngagementStats | null }) {
+  if (!stats) return null;
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+      {[
+        { label: 'Total', value: stats.total },
+        { label: 'Unreplied', value: stats.unreplied },
+        { label: 'Positive', value: stats.positive },
+        { label: 'Neutral', value: stats.neutral },
+        { label: 'Negative', value: stats.negative },
+      ].map((s) => (
+        <Card key={s.label}>
+          <div className="text-sm text-slate-500">{s.label}</div>
+          <div className="mt-1 text-2xl font-semibold">{s.value.toLocaleString()}</div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+export default function EngagementPage() {
+  const [stats, setStats] = useState<EngagementStats | null>(null);
+  const [items, setItems] = useState<EngagementComment[]>([]);
+  const [total, setTotal] = useState(0);
+  const [skip, setSkip] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState<Filters>(INITIAL);
+
+  // Reply draft keyed by comment id.
+  const [replying, setReplying] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState<string | null>(null);
+
+  // Quick templates.
+  const [templates, setTemplates] = useState<CommentTemplate[]>([]);
+  const [showTplForm, setShowTplForm] = useState(false);
+  const [tplTitle, setTplTitle] = useState('');
+  const [tplBody, setTplBody] = useState('');
+  const [tplSaving, setTplSaving] = useState(false);
+
+  const loadStats = useCallback(async () => {
+    try {
+      setStats(await api.get<EngagementStats>('/engagement/stats'));
+    } catch {
+      setStats(null);
+    }
+  }, []);
+
+  const loadComments = useCallback(async (start = 0) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('skip', String(start));
+      params.set('take', String(TAKE));
+      if (filters.platform) params.set('platform', filters.platform);
+      if (filters.sentiment) params.set('sentiment', filters.sentiment);
+      if (filters.unreplied) params.set('unreplied', 'true');
+
+      const res = await api.get<Paginated<EngagementComment>>(
+        `/engagement/comments?${params.toString()}`,
+      );
+      setItems(res.items);
+      setTotal(res.total);
+      setSkip(res.skip);
+    } catch {
+      setItems([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
+
+  const loadTemplates = useCallback(async () => {
+    try {
+      setTemplates(await api.get<CommentTemplate[]>('/engagement/templates'));
+    } catch {
+      setTemplates([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadStats();
+    loadTemplates();
+    // Initial load only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    loadComments(0);
+    // Reload the inbox when filters change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
+
+  const page = Math.floor(skip / TAKE) + 1;
+  const pageCount = Math.max(1, Math.ceil(total / TAKE));
+
+  const applyTemplate = (body: string) => {
+    setDraft(body);
+    setTemplates((t) => t); // no-op to keep state stable
+    setReplying((id) => id);
+  };
+
+  const sendReply = async (comment: EngagementComment) => {
+    if (!draft.trim()) return;
+    setSaving(comment.id);
+    try {
+      await api.patch(`/engagement/comments/${comment.id}/reply`, { content: draft.trim() });
+      setDraft('');
+      setReplying(null);
+      await Promise.all([loadComments(skip), loadStats()]);
+    } catch (err: any) {
+      // Surface the adapter reason (e.g. "XHS does not support comment replies").
+      window.alert(err?.message ?? 'Reply failed.');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const saveTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tplTitle.trim() || !tplBody.trim()) return;
+    setTplSaving(true);
+    try {
+      await api.post('/engagement/templates', { title: tplTitle.trim(), body: tplBody.trim() });
+      setTplTitle('');
+      setTplBody('');
+      setShowTplForm(false);
+      await loadTemplates();
+    } finally {
+      setTplSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Engagement" subtitle="Unified inbox for comments across platforms" />
+
+      <Stats stats={stats} />
+
+      {/* Filters */}
+      <Card>
+        <div className="flex flex-wrap items-center gap-3">
+          <Select
+            value={filters.platform}
+            onChange={(e) => setFilters((f) => ({ ...f, platform: e.target.value as Platform }))}
+            className="max-w-[180px]"
+          >
+            <option value="">All platforms</option>
+            {PLATFORMS.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </Select>
+          <Select
+            value={filters.sentiment}
+            onChange={(e) =>
+              setFilters((f) => ({ ...f, sentiment: e.target.value as Sentiment }))
+            }
+            className="max-w-[160px]"
+          >
+            <option value="">All sentiment</option>
+            {(['POSITIVE', 'NEUTRAL', 'NEGATIVE'] as Sentiment[]).map((s) => (
+              <option key={s} value={s}>{SENTIMENT_LABELS[s]}</option>
+            ))}
+          </Select>
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={filters.unreplied}
+              onChange={(e) => setFilters((f) => ({ ...f, unreplied: e.target.checked }))}
+            />
+            Unreplied only
+          </label>
+          <div className="flex-1" />
+          <Button variant="secondary" onClick={() => { loadStats(); loadComments(skip); }}>
+            Refresh
+          </Button>
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Inbox */}
+        <div className="lg:col-span-2">
+          <Card className="flex min-h-[400px] flex-col">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-semibold">
+                <span className="text-slate-700">Inbox</span>
+                <span className="ml-2 text-xs text-slate-400">{total} comments</span>
+              </h2>
+            </div>
+
+            {loading ? (
+              <div className="text-sm text-slate-400">Loading…</div>
+            ) : items.length === 0 ? (
+              <div className="flex flex-1 items-center justify-center text-sm text-slate-400">
+                No comments yet. Connect an account and publish to start gathering comments.
+              </div>
+            ) : (
+              <ul className="flex flex-col divide-y divide-slate-100">
+                {items.map((c) => (
+                  <li key={c.id} className="py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge tone="neutral">{c.account?.platform ?? c.platform}</Badge>
+                          <Badge tone={SENTIMENT_TONE[c.sentiment]}>{SENTIMENT_LABELS[c.sentiment]}</Badge>
+                          <span className="text-xs text-slate-400">
+                            by {c.authorName || 'anonymous'}
+                            {c.likeCount > 0 && ` · ${c.likeCount} likes`}
+                          </span>
+                        </div>
+                        <p className="mt-1 break-words text-sm text-slate-700">{c.content}</p>
+                        {c.replied && (
+                          <p className="mt-1 text-xs text-emerald-700">
+                            Replied: {c.replyContent}
+                          </p>
+                        )}
+                      </div>
+                      {!c.replied && (
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setReplying(c.id);
+                            setDraft('');
+                          }}
+                        >
+                          Reply
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Reply composer */}
+                    {replying === c.id && (
+                      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <Textarea
+                          value={draft}
+                          onChange={(e) => setDraft(e.target.value)}
+                          placeholder="Write a reply…"
+                          className="min-h-[80px]"
+                        />
+                        {templates.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            <span className="text-xs text-slate-500">Templates:</span>
+                            {templates.map((t) => (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => applyTemplate(t.body)}
+                                className="rounded bg-white px-2 py-0.5 text-xs text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"
+                              >
+                                {t.title}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <div className="mt-2 flex justify-end gap-2">
+                          <Button variant="secondary" onClick={() => setReplying(null)}>
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={() => sendReply(c)}
+                            disabled={saving === c.id || !draft.trim()}
+                          >
+                            {saving === c.id ? 'Sending…' : 'Send reply'}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* Pagination */}
+            {total > TAKE && (
+              <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
+                <span>
+                  Page {page} of {pageCount}
+                </span>
+                <div className="flex gap-2">
+                  <Button variant="secondary" disabled={page <= 1} onClick={() => loadComments(skip - TAKE)}>
+                    Prev
+                  </Button>
+                  <Button variant="secondary" disabled={page >= pageCount} onClick={() => loadComments(skip + TAKE)}>
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* Quick-reply templates */}
+        <Card>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-base font-semibold">Quick reply templates</h2>
+            <Button variant="secondary" onClick={() => setShowTplForm((s) => !s)}>
+              {showTplForm ? 'Close' : 'New template'}
+            </Button>
+          </div>
+
+          {showTplForm && (
+            <form onSubmit={saveTemplate} className="mb-4 flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <Field label="Title">
+                <Input value={tplTitle} onChange={(e) => setTplTitle(e.target.value)} placeholder="e.g. Thanks" />
+              </Field>
+              <Field label="Body">
+                <Textarea
+                  value={tplBody}
+                  onChange={(e) => setTplBody(e.target.value)}
+                  placeholder="Reply text…"
+                  className="min-h-[80px]"
+                />
+              </Field>
+              <div className="flex justify-end">
+                <Button type="submit" disabled={tplSaving || !tplTitle.trim() || !tplBody.trim()}>
+                  {tplSaving ? 'Saving…' : 'Save'}
+                </Button>
+              </div>
+            </form>
+          )}
+
+          {templates.length === 0 ? (
+            <p className="text-sm text-slate-400">
+              No templates yet. Create one to speed up replies.
+            </p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-slate-100">
+              {templates.map((t) => (
+                <li key={t.id} className="py-2">
+                  <button
+                    type="button"
+                    onClick={() => applyTemplate(t.body)}
+                    className="text-left text-sm font-medium text-slate-700 hover:text-primary"
+                  >
+                    {t.title}
+                  </button>
+                  <p className="line-clamp-2 text-xs text-slate-500">{t.body}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
