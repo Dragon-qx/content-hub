@@ -14,6 +14,7 @@
 - M12: ✅ notifications, CSV export, Swagger, CI/CD, deploy config
 - M13: ✅ API docs, coverage
 - M14: ✅ publish execution pipeline: real PlatformSdkService, scheduler executeJob + retry/worker, token-injection adapter seam, PublishJob schema extension, migration
+- M15: ✅ security hardening: JwtAuthGuard on analytics/audit/workflow, Media query DTO + pagination, scheduler _title fix + conditional markRunning (no double-execution), frontend 401 handler seam, rate limiting (@nestjs/throttler)
 
 ## 当前任务
 
