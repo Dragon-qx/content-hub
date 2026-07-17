@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CryptoModule } from './common/crypto/crypto.module';
@@ -20,6 +22,28 @@ import { UserModule } from './modules/user/user.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Global rate limiting: in-memory sliding window, keyed by authenticated
+    // user id (falls back to client IP). Limits are env-tunable. Replace the
+    // storage with a Redis-backed one (ThrottlerStorageRedisService) for a
+    // multi-instance deployment.
+    ThrottlerModule.forRoot([
+      {
+        ttl: Number(process.env.RATE_LIMIT_TTL_MS ?? 60_000),
+        limit: Number(process.env.RATE_LIMIT_MAX ?? 100),
+        // Skip the health probe so orchestrators aren't throttled.
+        skipIf: (ctx) => {
+          const req = ctx.switchToHttp().getRequest();
+          return req?.url?.includes('/health') ?? false;
+        },
+        getTracker: (req: Record<string, any>) => {
+          const user = req?.user as { userId?: string } | undefined;
+          if (user?.userId) return user.userId;
+          const fwd = req?.headers?.['x-forwarded-for'];
+          if (typeof fwd === 'string' && fwd.length > 0) return fwd.split(',')[0].trim();
+          return req?.ip ?? req?.socket?.remoteAddress ?? 'unknown';
+        },
+      },
+    ]),
     PrismaModule,
     CryptoModule,
     AuthModule,
@@ -36,6 +60,10 @@ import { UserModule } from './modules/user/user.module';
     NotificationModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // Register the throttler guard globally so every route is rate-limited.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}
