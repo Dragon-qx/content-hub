@@ -2,6 +2,7 @@ import { Platform } from './types';
 import { DouyinAdapter } from './adapters/douyin';
 import { XiaoHongShuAdapter } from './adapters/xiaohongshu';
 import { BilibiliAdapter } from './adapters/bilibili';
+import { WeiboAdapter } from './adapters/weibo';
 import { WechatVideoAdapter } from './adapters/wechat-video';
 import { WechatOfficialAdapter } from './wechat-official';
 
@@ -44,6 +45,12 @@ export class PlatformAdapterFactory {
           accessKey: String(config.accessKey ?? config.appKey ?? ''),
           secretKey: String(config.secretKey ?? config.appSecret ?? config.secret ?? ''),
           accountId: String(config.accountId ?? ''),
+        });
+      case Platform.WEIBO:
+        return new WeiboAdapter({
+          appKey: String(config.appKey ?? config.appid ?? ''),
+          appSecret: String(config.appSecret ?? config.secret ?? ''),
+          uid: String(config.uid ?? config.accountId ?? ''),
         });
       default:
         return null;

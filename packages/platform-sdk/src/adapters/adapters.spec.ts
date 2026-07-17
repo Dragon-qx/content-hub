@@ -4,6 +4,7 @@ import { WechatVideoAdapter } from './wechat-video';
 import { DouyinAdapter } from './douyin';
 import { XiaoHongShuAdapter } from './xiaohongshu';
 import { BilibiliAdapter } from './bilibili';
+import { WeiboAdapter } from './weibo';
 
 // Minimal global.fetch mock so adapters can be exercised without IO.
 const jsonResponse = (body: unknown): Response =>
@@ -22,7 +23,7 @@ afterEach(() => {
 
 describe('PlatformAdapterFactory', () => {
   it('creates an adapter for every supported platform', () => {
-    for (const p of [Platform.WECHAT_VIDEO, Platform.DOUYIN, Platform.XIAOHONGSHU, Platform.BILIBILI]) {
+    for (const p of [Platform.WECHAT_VIDEO, Platform.DOUYIN, Platform.XIAOHONGSHU, Platform.BILIBILI, Platform.WEIBO]) {
       const adapter = PlatformAdapterFactory.create(p, { clientKey: 'k', clientSecret: 's', accountId: 'a' });
       expect(adapter).not.toBeNull();
       expect(adapter!.platform).toBe(p);
@@ -142,6 +143,49 @@ describe('BilibiliAdapter', () => {
     expect(messages[0].sentByMe).toBe(false);
     expect(messages[1].sentByMe).toBe(true);
     expect(messages[0].conversationId).toBe('99');
+    spy.mockRestore();
+  });
+});
+
+describe('WeiboAdapter', () => {
+  it('builds an OAuth URL containing the app key', () => {
+    const adapter = new WeiboAdapter({ appKey: 'KEY', appSecret: 'SEC', uid: 'u1' });
+    const url = adapter.getAuthUrl('xyz');
+    expect(url).toContain('KEY');
+    expect(url).toContain('xyz');
+  });
+
+  it('exchanges a code for tokens and captures the uid', async () => {
+    const spy = jest.spyOn(global, 'fetch').mockResolvedValue(
+      jsonResponse({ access_token: 'AT', refresh_token: 'RT', expires_in: 7200, uid: 'uid-9' }),
+    );
+    const adapter = new WeiboAdapter({ appKey: 'KEY', appSecret: 'SEC', uid: 'tmp' });
+    const creds = await adapter.handleCallback('code-123');
+    expect(creds.accessToken).toBe('AT');
+    expect((adapter as unknown as { uid: string }).uid).toBe('uid-9');
+    spy.mockRestore();
+  });
+
+  it('publishes a status and returns the post id + url', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'AT', refresh_token: 'RT', expires_in: 3600, uid: 'u1' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 100, idstr: 's100', url: 'https://weibo.com/u1/s100' }));
+    const adapter = new WeiboAdapter({ appKey: 'KEY', appSecret: 'SEC', uid: 'u1' });
+    await adapter.handleCallback('code');
+    const result = await adapter.publish({ content: 'hello world' });
+    expect(result.externalId).toBe('s100');
+    expect(result.externalUrl).toBe('https://weibo.com/u1/s100');
+    spy.mockRestore();
+  });
+
+  it('fetches user metrics (follower count)', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'AT', refresh_token: 'RT', expires_in: 3600, uid: 'u1' }))
+      .mockResolvedValueOnce(jsonResponse({ followers_count: 1234, friends_count: 56, statuses_count: 78 }));
+    const adapter = new WeiboAdapter({ appKey: 'KEY', appSecret: 'SEC', uid: 'u1' });
+    await adapter.handleCallback('code');
+    const metrics = await adapter.fetchMetrics('u1', { start: new Date(), end: new Date() });
+    expect(metrics.followerCount).toBe(1234);
     spy.mockRestore();
   });
 });

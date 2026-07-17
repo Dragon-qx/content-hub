@@ -250,7 +250,7 @@ on a duplicate.
 | POST   | `/platform-sdk/validate`  | `{ platform, credentials }`             |
 
 The SDK layer is backed by `PlatformAdapterFactory`, which returns an adapter
-for WECHAT_OFFICIAL, WECHAT_VIDEO, DOUYIN, XIAOHONGSHU, and BILIBILI.
+for WECHAT_OFFICIAL, WECHAT_VIDEO, DOUYIN, XIAOHONGSHU, BILIBILI, and WEIBO.
 
 ---
 
