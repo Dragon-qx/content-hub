@@ -15,6 +15,22 @@ import {
 /** Max retries before a job is considered permanently failed. */
 export const MAX_RETRY = 3;
 
+/**
+ * Exponential retry backoff. Failed jobs are pushed into the future by
+ * `RETRY_BACKOFF_BASE_MS * 2^attempt` (capped at RETRY_BACKOFF_MAX_MS) so a
+ * broken platform is not hammered on every poll tick. The worker only re-claims
+ * jobs whose `scheduledAt` has elapsed, so delaying here is all that's needed.
+ */
+const RETRY_BACKOFF_BASE_MS = 1_000;
+const RETRY_BACKOFF_MAX_MS = 60_000;
+
+function retryDelayMs(attempt: number): number {
+  return Math.min(
+    RETRY_BACKOFF_BASE_MS * 2 ** Math.max(0, attempt),
+    RETRY_BACKOFF_MAX_MS,
+  );
+}
+
 /** Query params for listing publish jobs. */
 export interface ListJobParams {
   skip?: number;
@@ -140,12 +156,17 @@ export class SchedulerService {
     const nextRetry = job.retryCount + 1;
     const permanent = nextRetry >= MAX_RETRY;
 
+    // Back off: a failed job sits in RETRYING until its advanced scheduledAt
+    // elapses, giving the platform time to recover instead of spinning.
+    const scheduledAt = permanent ? undefined : new Date(Date.now() + retryDelayMs(nextRetry));
+
     await this.prisma.publishJob.update({
       where: { id: job.id },
       data: {
         status: permanent ? JobStatus.FAILED : JobStatus.RETRYING,
         retryCount: nextRetry,
         error: message,
+        ...(scheduledAt ? { scheduledAt } : {}),
       },
     });
   }

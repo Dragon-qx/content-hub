@@ -1,10 +1,10 @@
 # ContentHub — 完整开发计划
 
-> 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18
+> 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18（第2次）
 
-> **当前进度（2026-07-18）**: M1–M19 全部完成 + M20 Engagement Hub **完全落地** + V1.1 平台扩展首项。14 个后端模块（Engagement Hub 含评论/私信摄入、回复、统计、快捷模板、关键词告警、定时轮询），前端 15 个核心页面（/engagement 新增关键词面板 + Messages tab + 手动同步按钮），SDK 新增 Weibo 适配器。测试 **256 通过 / 28 套件** + SDK **16 通过**，全部构建通过。
+> **当前进度（2026-07-18 第2次）**: M1–M20 全部完成 + **V1.1 平台扩展完成**（TWITTER + YOUTUBE）+ **代码审查修复**（调度重试退避、OAuth POST 参数绑定、前端 token 刷新、SDK 凭据解密告警）。8 个平台适配器全部实现（WECHAT_OFFICIAL / WECHAT_VIDEO / DOUYIN / XIAOHONGSHU / BILIBILI / WEIBO / TWITTER / YOUTUBE）。测试 **257 通过 / 28 API 套件** + **SDK 28 通过**，e2e **21 通过**，API + 前端 + SDK 构建全部通过。
 >
-> **本轮新增（M20 闭环 + Weibo）**: (1) **私信聚合** — `Message` type + `fetchMessages` adapter seam（BaseAdapter 默认降级，Bilibili 原生实现）+ `PlatformSdkService.fetchMessages`；`EngagementMessage` 模型 + migration；`ingestMessages`/`listMessages`；`GET /engagement/messages` + `POST /engagement/messages/ingest`；前端 Messages tab。syncTeam 现在同时摄入评论与私信（summary 含 comments/messages 计数）。(2) **Weibo 适配器** — `WeiboAdapter`（OAuth2 授权/发布/粉丝指标）+ 工厂注册 + 4 单元测试。
+> **本轮新增（审查修复 + 平台扩展）**: (1) **审查发现修复** — 调度 `handleFailure` 增加指数退避（`RETRY_BACKOFF_BASE_MS * 2^attempt`，上限 60s），避免轮询器对故障平台紧循环重试；`worker.ts` 移除过时的 `GRACE_MS` 注释；OAuth `@Post(':platform/authorize')` 从 `@Query()` 改为 `@Body()`（前端发送 JSON body，原绑定导致 @MinLength 校验必然 400）；`Media` 上传页改为走共享 api client（统一 401 处理 + 刷新重试）；前端 `api.ts` 新增 refresh token 持久化 + 401 自动刷新一次重试链路（登录/注册/mfaLogin 均持久化 refreshToken，logout 清除）；`decryptCredentials` 解密失败回退时补 debug 日志；治理 `/engagement` 页面无操作的 setter 死代码。(2) **Twitter 适配器** — `TwitterAdapter`（OAuth2 PKCE 授权 / X API v2 发布 / 粉丝指标，评论/私信回退 BaseAdapter 默认抛错）+ 工厂注册 + 5 单元测试。(3) **YouTube 适配器** — `YouTubeAdapter`（OAuth2 授权 / 视频元数据创建 / 频道指标 subs+views / 评论 fetch+reply，私信回退默认抛错）+ 工厂注册 + 7 单元测试。
 
 ---
 
@@ -21,20 +21,19 @@
 
 ### 1.2 缺失/不完善
 - ❌ 大部分 Service 只有基础 CRUD，缺少核心业务逻辑
-- ✅ 前端全部核心页面（内容/账号/审批/发布/数据/媒体/团队/通知/审计/设置/仪表盘）
+- ✅ 前端全部核心页面（内容/账号/审批/发布/数据/媒体/团队/通知/审计/设置/仪表盘）+ Engagement Hub + OAuth 绑定
 - ✅ Content Studio：Markdown 编辑器（Write/Preview 双栏、格式工具栏、XSS 安全预览）、图片拖拽上传、媒体库选取
-- ❌ 审批流（Workflow）和审计日志（Audit）在 worktree 分支未合并到 master
-- ❌ 发布调度（Scheduler）缺少 BullMQ 集成
-- ❌ 数据分析（Analytics）缺少真实数据抓取逻辑
-- ❌ 平台 SDK 只有微信公众号，缺少抖音/小红书/B站
-- ❌ 前端缺少路由、状态管理、API 客户端
-- ❌ 缺少 CI/CD 配置
-- ❌ 缺少监控告警模块
+- ✅ 审批流（Workflow）和审计日志（Audit）（已合并到 master）
+- ✅ 发布调度（Scheduler）：Prisma 轮询 worker + 指数退避重试 + 条件 markRunning 防双发
+- ✅ 平台 SDK 8 个适配器（WECHAT_OFFICIAL / WECHAT_VIDEO / DOUYIN / XIAOHONGSHU / BILIBILI / WEIBO / TWITTER / YOUTUBE）+ 工厂
+- ✅ 前端路由、布局、API 客户端（含 refresh token 自动刷新、401 登出）
+- ✅ Engagement Hub：评论/私信摄入、回复、统计、模板、关键词告警、定时轮询
+- ⚠️ BullMQ 未集成（Prisma 轮询 worker 替代）
+- ⚠️ CI/CD 配置（GitHub Actions）、用户手册待补
 
 ### 1.3 分支状况
-- `master`: 主分支，有 M1-M7 提交
-- `worktree-content-hub-m5`: 有 M5/M6 的 Workflow + Audit 实现（未合并）
-- **需要合并 worktree 分支到 master**
+- `master`: 主分支，M1–M20 + V1.1 平台扩展 + 审查修复均已合并
+- 无悬空 worktree / 特性分支
 
 ---
 
@@ -89,12 +88,12 @@
 ### M12: 高级功能
 **目标：** V1.1 功能
 
-- [ ] 评论聚合（互动管理）
+- [x] 评论聚合（互动管理）— 纳入 M20 Engagement Hub
 - [ ] AI 辅助写作集成
 - [ ] 智能排期推荐
 - [ ] 自定义报表
-- [ ] 通知系统（站内/邮件/Webhook）
-- [ ] 数据导出
+- [x] 通知系统（站内 + 团队广播）
+- [x] 数据导出（CSV）
 
 ### M20: V1.1 — Engagement Hub（互动管理）
 **目标：** 统一评论收件箱 + 情感分析 + 快捷回复（PRD §3.6）
@@ -106,6 +105,19 @@
 - [x] 评论轮询调度：`EngagementService.syncTeam`/`syncAllTeams` + worker 定时摄入 tick（复用 Prisma-polling worker 模式，ENGAGEMENT_SYNC_INTERVAL_MS 默认 10 分钟），前端 `Sync now` 按钮
 - [x] 舆情监控关键词告警：`SentimentKeyword` 模型（team 级关注词）+ 蕴含关键词/强负面（score ≤ -0.5）评论自动 `broadcastToTeam` 通知；`GET/POST/DELETE /engagement/keywords` + DTO 校验；前端关键词管理面板
 - [x] 私信聚合：`Message` type + `fetchMessages` adapter seam（BaseAdapter 默认抛错降级，Bilibili 原生实现）+ `PlatformSdkService.fetchMessages`；`EngagementMessage` Prisma 模型（unique [accountId,externalId]，含 conversationId/sentByMe）+ 定时摄入 tick；`GET /engagement/messages` + `POST /engagement/messages/ingest` + DTO；前端 Messages tab
+
+### M21: V1.1 — 平台扩展（8 适配器完整覆盖）+ 代码审查修复
+**目标：** 补齐 Platform 枚举中声明但未实现的适配器，并在此轮代码审查中修复发现的问题
+
+- [x] **Twitter 适配器** — `TwitterAdapter`（OAuth2 PKCE 授权 / X API v2 `2/tweets` 发布 / 用户指标 followers_count；评论/私信回退 BaseAdapter 默认抛错降级）+ 工厂注册 + 5 单元测试
+- [x] **YouTube 适配器** — `YouTubeAdapter`（OAuth2 授权 / 视频元数据创建 / 频道指标 subs+views / `commentThreads` fetch + `comments` reply；私信回退默认抛错）+ 工厂注册 + 7 单元测试
+- [x] **调度重试退避** — `handleFailure` 增加指数退避 `RETRY_BACKOFF_BASE_MS * 2^attempt`（上限 60s），避免轮询器对故障平台紧循环重试；新增测试验证重试任务 scheduledAt 推进到未来
+- [x] **OAuth POST 参数绑定** — `@Post(':platform/authorize')` 从 `@Query()` 改为 `@Body()`，修复前端 JSON body 发送时 @MinLength 校验必然 400 的 bug
+- [x] **前端 token 刷新** — `api.ts` 新增 refresh token 持久化 + 401 自动刷新一次后重试链路（含 multipart upload 路径）；`auth.tsx` 登录/注册/mfaLogin 持久化 refreshToken，logout 清除
+- [x] **Media 上传统一客户端** — /media 页改为走共享 `api.upload`，享用统一 401 处理与刷新重试
+- [x] **SDK 凭据解密告警** — `decryptCredentials` 解密失败回退时补 debug 日志
+- [x] **worker.ts 过时注释** — 移除不存在的 `GRACE_MS` 引用，改为准确描述条件 markRunning 防双发
+- [x] **治理** — 清理 `/engagement` 页面无操作 setter 死代码
 
 ### M13: 测试 + 部署 + 文档
 **目标：** 生产就绪

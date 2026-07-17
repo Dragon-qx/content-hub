@@ -66,20 +66,21 @@ export default function MediaPage() {
     setUploading(true);
     setMsg(null);
     try {
-      const form = new FormData();
-      form.append('file', file);
-      if (contentId.trim()) form.append('contentId', contentId.trim());
-      await fetch('/api/v1/media/upload', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('accessToken') ?? ''}` },
-        body: form,
-      });
+      // Use the shared API client so uploads share the auth header handling
+      // (including the refresh-once seam) with the rest of the app.
+      if (contentId.trim()) {
+        await api.upload<{ id: string }>('/media/upload', file, {
+          contentId: contentId.trim(),
+        });
+      } else {
+        await api.upload<{ id: string }>('/media/upload', file);
+      }
       if (fileRef.current) fileRef.current.value = '';
       setContentId('');
       setMsg('Upload complete.');
       await load();
-    } catch {
-      setMsg('Upload failed.');
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Upload failed.');
     } finally {
       setUploading(false);
     }

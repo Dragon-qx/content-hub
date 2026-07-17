@@ -171,8 +171,6 @@ export default function EngagementPage() {
 
   const applyTemplate = (body: string) => {
     setDraft(body);
-    setTemplates((t) => t); // no-op to keep state stable
-    setReplying((id) => id);
   };
 
   const sendReply = async (comment: EngagementComment) => {

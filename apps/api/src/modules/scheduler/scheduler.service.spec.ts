@@ -132,6 +132,27 @@ describe('SchedulerService', () => {
       expect(last.data.status).toBe(JobStatus.RETRYING);
       expect(last.data.retryCount).toBe(1);
     });
+
+    it('backs off: a RETRYING job is pushed into the future, not retried immediately', async () => {
+      prisma.publishJob.findUnique.mockResolvedValue({
+        id: 'job-1',
+        status: JobStatus.QUEUED,
+        retryCount: 0,
+        contentId: 'c1',
+        platform: 'WECHAT_OFFICIAL',
+        accountId: 'acc-1',
+      });
+      platformSdk.publish.mockRejectedValueOnce(new Error('boom'));
+      const before = Date.now();
+      await service.executeJob('job-1');
+      const updateCalls = prisma.publishJob.update.mock.calls;
+      const last = updateCalls[updateCalls.length - 1][0];
+      expect(last.data.status).toBe(JobStatus.RETRYING);
+      // The next retry must be scheduled strictly after now — otherwise the
+      // worker would re-pick it up on the same loop and hammer the platform.
+      const scheduled = new Date(last.data.scheduledAt).getTime();
+      expect(scheduled).toBeGreaterThan(before);
+    });
   });
 
   describe('getDueJobs', () => {

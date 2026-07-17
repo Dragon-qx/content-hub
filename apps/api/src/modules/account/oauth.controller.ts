@@ -1,4 +1,4 @@
-import { BadRequestException, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Controller } from '@nestjs/common';
 import { Response } from 'express';
@@ -43,13 +43,17 @@ export class OAuthAuthorizeController {
     private readonly config: ConfigService,
   ) {}
 
-  /** Build the provider authorize URL; accept POST or a plain GET link. */
+  /**
+   * Build the provider authorize URL. Accepts the binding context (teamId, app
+   * credentials) as a JSON body — these are sensitive values that don't belong
+   * in a query string. (A GET variant also exists for a plain link-based flow.)
+   */
   @UseGuards(JwtAuthGuard)
   @Post(':platform/authorize')
-  authorize(
+  async authorize(
     @CurrentUser() user: AuthUser,
     @Param('platform') platform: string,
-    @Query() dto: OAuthAuthorizeDto,
+    @Body() dto: OAuthAuthorizeDto,
   ) {
     // `platform` is also a validated path param; align it with the DTO so a
     // mismatch between path and body can't be smuggled through.

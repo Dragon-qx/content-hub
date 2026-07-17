@@ -173,8 +173,15 @@ export class PlatformSdkService {
     }
     try {
       return this.crypto.decrypt<Record<string, unknown>>(raw);
-    } catch {
-      // Legacy/unencrypted records stored as plain JSON — return as-is.
+    } catch (err) {
+      // Legacy/unencrypted records were once stored as plain JSON. Returning
+      // them as-is keeps migration working, but log so a genuine decrypt
+      // failure (e.g. key rotation) isn't swallowed silently.
+      this.logger.debug(
+        `Credentials could not be decrypted (legacy/plain-JSON fallback): ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
       return (raw as unknown as Record<string, unknown>) ?? {};
     }
   }

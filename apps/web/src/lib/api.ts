@@ -21,10 +21,16 @@ export interface Paginated<T> {
 }
 
 let authToken: string | null = null;
+let refreshToken: string | null = null;
+
+// In-flight refresh promise shared by concurrent 401s so we issue at most one
+// refresh request while several requests are awaiting the new access token.
+let pendingRefresh: Promise<boolean> | null = null;
 
 /**
- * Invoked when a request fails with HTTP 401. The auth layer registers a
- * handler that logs the user out so the AuthGuard redirects to /login.
+ * Invoked when a request fails with HTTP 401 and cannot be refreshed. The auth
+ * layer registers a handler that logs the user out so the AuthGuard redirects
+ * to /login.
  */
 let onUnauthorized: (() => void) | null = null;
 
@@ -48,16 +54,78 @@ export function getAuthToken(): string | null {
   return authToken;
 }
 
+/** Persist the refresh token (call alongside setAuthToken after login). */
+export function setRefreshToken(token: string | null) {
+  refreshToken = token;
+  if (typeof window !== 'undefined') {
+    if (token) localStorage.setItem('refreshToken', token);
+    else localStorage.removeItem('refreshToken');
+  }
+}
+
+export function getRefreshToken(): string | null {
+  if (refreshToken) return refreshToken;
+  if (typeof window !== 'undefined') {
+    refreshToken = localStorage.getItem('refreshToken');
+  }
+  return refreshToken;
+}
+
+/**
+ * Swap the stored refresh token for a fresh access token. Returns true on
+ * success. Concurrent callers share a single request.
+ */
+async function refreshTokens(): Promise<boolean> {
+  if (pendingRefresh) return pendingRefresh;
+  pendingRefresh = (async () => {
+    try {
+      const rt = getRefreshToken();
+      if (!rt) return false;
+      const res = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: rt }),
+      });
+      if (!res.ok) return false;
+      const data = (await res.json()) as {
+        accessToken?: string;
+        refreshToken?: string;
+      };
+      setAuthToken(data.accessToken ?? null);
+      if (data.refreshToken) setRefreshToken(data.refreshToken);
+      return Boolean(data.accessToken);
+    } catch {
+      return false;
+    } finally {
+      pendingRefresh = null;
+    }
+  })();
+  return pendingRefresh;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
   const token = getAuthToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  let res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+
+  // Refresh-once seam: if the access token has expired, trade the refresh
+  // token for a new pair and retry before giving up. Skipped for the refresh
+  // endpoint itself to avoid an infinite loop.
+  if (res.status === 401 && path !== '/auth/refresh') {
+    if (await refreshTokens()) {
+      const retry = new Headers(init.headers);
+      retry.set('Content-Type', 'application/json');
+      const next = getAuthToken();
+      if (next) retry.set('Authorization', `Bearer ${next}`);
+      res = await fetch(`${API_BASE}${path}`, { ...init, headers: retry });
+    }
+  }
 
   if (res.status === 401) {
-    // The auth layer reacts via setUnauthorizedHandler (logout + redirect).
+    // (Possibly after a failed refresh.) Log out + redirect.
     onUnauthorized?.();
     throw new ApiError(401, 'Unauthorized');
   }
@@ -98,11 +166,20 @@ export const api = {
     const token = getAuthToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
 
-    const res = await fetch(`${API_BASE}${path}`, { method: 'POST', body: form, headers });
+    let res = await fetch(`${API_BASE}${path}`, { method: 'POST', body: form, headers });
 
+    // Same refresh-once seam as the JSON path above.
     if (res.status === 401) {
-      onUnauthorized?.();
-      throw new ApiError(401, 'Unauthorized');
+      if (await refreshTokens()) {
+        const retry = new Headers();
+        const next = getAuthToken();
+        if (next) retry.set('Authorization', `Bearer ${next}`);
+        res = await fetch(`${API_BASE}${path}`, { method: 'POST', body: form, headers: retry });
+      }
+      if (res.status === 401) {
+        onUnauthorized?.();
+        throw new ApiError(401, 'Unauthorized');
+      }
     }
 
     const text = await res.text();

@@ -22,9 +22,10 @@ const ENGAGEMENT_SYNC_INTERVAL_MS = Number(
  * Prisma queuing has no BullMQ/Redis dependency in this environment, so the
  * worker polls PublishJob for due (QUEUED / RETRYING) rows and executes them
  * through SchedulerService. A single poll tick:
- *   1. fetch up to BATCH_SIZE due jobs (scheduledAt <= now, buffered into the
- *      past by GRACE_MS to avoid racing just-scheduled jobs)
- *   2. execute each job (concurrency-safe on status)
+ *   1. fetch up to BATCH_SIZE due jobs (QUEUED/RETRYING with scheduledAt <= now)
+ *      — failed jobs are pushed into the future by an exponential backoff, so a
+ *      broken platform is not hammered on every tick
+ *   2. execute each job (concurrency-safe: markRunning atomically claims it)
  *   3. on a slower cadence, ingest fresh comments for every active account
  *   4. sleep POLL_INTERVAL_MS, repeat.
  *
