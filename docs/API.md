@@ -218,6 +218,13 @@ All endpoints require `Authorization: Bearer <jwt>`.
 | POST | `/engagement/templates` | `{ title, body }` |
 | DELETE | `/engagement/templates/:id` | Delete own template |
 
+### Private messages
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| GET | `/engagement/messages` | `?teamId&platform&conversationId&sentByMe&skip&take` — paginated message inbox |
+| POST | `/engagement/messages/ingest` | `{ accountId }` — pull fresh private messages for one account |
+
 ### Sentiment alerts
 
 Team-owned watch keywords. When an ingested comment contains a keyword, or is

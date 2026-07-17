@@ -88,3 +88,41 @@ export class SyncTeamDto {
   @IsString()
   teamId?: string;
 }
+
+/** Query filters for GET /engagement/messages. */
+export class ListMessagesQueryDto {
+  @IsOptional()
+  @IsString()
+  teamId?: string;
+
+  @IsOptional()
+  @IsEnum(Platform)
+  platform?: Platform;
+
+  @IsOptional()
+  @IsString()
+  conversationId?: string;
+
+  @IsOptional()
+  @Type(() => Boolean)
+  sentByMe?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Type(() => Number)
+  skip?: number = 0;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  take?: number = 20;
+}
+
+/** Ingest messages for a single social account. */
+export class IngestMessagesDto {
+  @IsString()
+  @MinLength(1)
+  accountId: string;
+}

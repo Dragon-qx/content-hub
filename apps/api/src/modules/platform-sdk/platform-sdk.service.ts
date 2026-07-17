@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { Platform, ContentStatus, Prisma } from '@prisma/client';
-import { Comment, PublishRequest } from '@content-hub/platform-sdk';
+import { Comment, Message, PublishRequest } from '@content-hub/platform-sdk';
 import { PlatformAdapterFactory } from '@content-hub/platform-sdk';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
@@ -46,6 +46,26 @@ export interface FetchCommentsResult {
 export interface ReplyOutcome {
   ok: boolean;
   reason?: string;
+}
+
+/** A normalised private message as returned by the adapter seam. */
+export interface PlatformMessage {
+  id: string;
+  authorName: string;
+  authorId?: string;
+  content: string;
+  createdAt: Date;
+  conversationId?: string;
+  sentByMe?: boolean;
+}
+
+/** Result of ingesting private messages from a platform adapter. */
+export interface FetchMessagesResult {
+  accountId: string;
+  platform: Platform | string;
+  /** True when the adapter does not expose a messages API at all. */
+  unsupported: boolean;
+  items: PlatformMessage[];
 }
 
 @Injectable()
@@ -297,6 +317,70 @@ export class PlatformSdkService {
       return { ok: true };
     } catch (err) {
       return { ok: false, reason: (err as Error).message ?? 'Reply failed' };
+    }
+  }
+
+  /**
+   * Fetch recent private messages for a social account from its platform
+   * adapter and normalise them into PlatformMessage objects.
+   *
+   * Resolves the account, builds the seeded adapter, then calls
+   * adapter.fetchMessages(). If the adapter declares it does not expose a
+   * messages API, we return `unsupported: true` with an empty list so the
+   * caller can distinguish "no API yet" from "API returned nothing".
+   */
+  async fetchMessages(
+    accountId: string,
+    platform: Platform | string,
+  ): Promise<FetchMessagesResult> {
+    const account = await this.prisma.socialAccount.findUnique({
+      where: { id: accountId },
+    });
+    if (!account) {
+      throw new NotFoundException(`Social account ${accountId} not found`);
+    }
+
+    const credentials = this.decryptCredentials(account.credentials);
+    const adapter = PlatformAdapterFactory.create(
+      platform as Platform,
+      credentials,
+    );
+    if (!adapter) {
+      throw new BadRequestException(`Platform ${platform} is not supported`);
+    }
+    adapter.setCredentials({
+      accessToken: credentials.accessToken as string | null,
+      refreshToken: credentials.refreshToken as string | null,
+      expiresAt: credentials.expiresAt as string | number | Date | null,
+    });
+
+    try {
+      const messages: Message[] = await adapter.fetchMessages(
+        account.accountId,
+      );
+      return {
+        accountId,
+        platform,
+        unsupported: false,
+        items: messages.map((m) => ({
+          id: m.id,
+          authorName: m.authorName,
+          authorId: m.authorId,
+          content: m.content,
+          createdAt: m.createdAt,
+          conversationId: m.conversationId,
+          sentByMe: m.sentByMe,
+        })),
+      };
+    } catch (err) {
+      // Adapter does not implement private messaging — signal unsupported so the
+      // engagement layer can record a no-op rather than a hard failure.
+      this.logger.debug(
+        `Message fetch not supported for ${platform} account ${accountId}: ${
+          (err as Error).message ?? err
+        }`,
+      );
+      return { accountId, platform, unsupported: true, items: [] };
     }
   }
 

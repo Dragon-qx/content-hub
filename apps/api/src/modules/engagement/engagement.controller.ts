@@ -16,7 +16,9 @@ import {
   CreateKeywordDto,
   CreateTemplateDto,
   IngestCommentsDto,
+  IngestMessagesDto,
   ListCommentsQueryDto,
+  ListMessagesQueryDto,
   ReplyCommentDto,
   SyncTeamDto,
 } from './dto/engagement.dto';
@@ -78,9 +80,32 @@ export class EngagementController {
     return this.engagement.reply(id, dto.content);
   }
 
+  /** Unified message inbox with filters + pagination. */
+  @Get('messages')
+  async listMessages(
+    @CurrentUser() user: AuthUser,
+    @Query() query: ListMessagesQueryDto,
+  ) {
+    return this.engagement.listMessages({
+      teamId: await this.teamIdFor(user, query.teamId),
+      platform: query.platform,
+      conversationId: query.conversationId,
+      sentByMe: query.sentByMe,
+      skip: query.skip,
+      take: query.take,
+    });
+  }
+
+  /** Pull fresh private messages for a social account from its adapter. */
+  @Post('messages/ingest')
+  ingestMessages(@Body() dto: IngestMessagesDto) {
+    return this.engagement.ingestMessages(dto.accountId);
+  }
+
   /**
-   * Manually trigger a comment sync for the acting team (resolved from the
-   * caller if not supplied). The background worker also does this on a timer.
+   * Manually trigger a comment + message sync for the acting team (resolved
+   * from the caller if not supplied). The background worker also does this
+   * on a timer.
    */
   @Post('sync')
   async sync(@CurrentUser() user: AuthUser, @Body() dto: SyncTeamDto) {

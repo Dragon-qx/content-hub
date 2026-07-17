@@ -26,6 +26,13 @@ const mockPrisma = () => ({
     update: jest.fn().mockResolvedValue({ id: 'ec1', replied: true }),
     groupBy: jest.fn(),
   },
+  engagementMessage: {
+    upsert: jest.fn().mockResolvedValue({ id: 'em1' }),
+    findMany: jest.fn(),
+    count: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn().mockResolvedValue({ id: 'em1' }),
+  },
   member: {
     findFirst: jest.fn(),
   },
@@ -49,7 +56,11 @@ const mockPrisma = () => ({
 describe('EngagementService', () => {
   let service: EngagementService;
   let prisma: ReturnType<typeof mockPrisma>;
-  let sdk: { fetchComments: jest.Mock; replyToComment: jest.Mock };
+  let sdk: {
+    fetchComments: jest.Mock;
+    replyToComment: jest.Mock;
+    fetchMessages: jest.Mock;
+  };
   let notifications: { broadcastToTeam: jest.Mock };
 
   beforeEach(async () => {
@@ -57,6 +68,7 @@ describe('EngagementService', () => {
     sdk = {
       fetchComments: jest.fn(),
       replyToComment: jest.fn(),
+      fetchMessages: jest.fn(),
     };
     notifications = {
       broadcastToTeam: jest.fn().mockResolvedValue({ count: 2 }),
@@ -345,37 +357,44 @@ describe('EngagementService', () => {
   });
 
   describe('syncTeam', () => {
-    it('ingests comments for every active account in a team', async () => {
+    it('ingests comments and messages for every active account in a team', async () => {
       prisma.socialAccount.findMany.mockResolvedValue([
         { id: 'acc1' },
         { id: 'acc2' },
       ]);
       prisma.sentimentKeyword.findMany.mockResolvedValue([]);
-      prisma.socialAccount.findUnique
-        .mockResolvedValueOnce({
-          id: 'acc1',
-          platform: Platform.DOUYIN,
-          teamId: 'team1',
-          credentials: '{}',
-        })
-        .mockResolvedValueOnce({
-          id: 'acc2',
-          platform: Platform.BILIBILI,
-          teamId: 'team1',
-          credentials: '{}',
-        });
+      // Each account triggers two ingests (comments + messages), so every
+      // findUnique must resolve to a valid account.
+      prisma.socialAccount.findUnique.mockResolvedValue({
+        id: 'acc',
+        platform: Platform.DOUYIN,
+        teamId: 'team1',
+        credentials: '{}',
+      });
       prisma.engagementComment.findUnique.mockResolvedValue(null);
       sdk.fetchComments.mockResolvedValue({
-        accountId: 'acc1',
+        accountId: 'acc',
         platform: Platform.DOUYIN,
         unsupported: false,
         items: [{ id: 'c1', authorName: 'fan', content: 'nice', createdAt: new Date() }],
       });
+      sdk.fetchMessages.mockResolvedValue({
+        accountId: 'acc',
+        platform: Platform.DOUYIN,
+        unsupported: false,
+        items: [{ id: 'm1', authorName: 'fan', content: 'hi', createdAt: new Date() }],
+      });
 
       const out = await service.syncTeam('team1');
 
-      expect(out).toEqual({ teamId: 'team1', accounts: 2, stored: 2 });
+      expect(out).toEqual({
+        teamId: 'team1',
+        accounts: 2,
+        comments: 2,
+        messages: 2,
+      });
       expect(sdk.fetchComments).toHaveBeenCalledTimes(2);
+      expect(sdk.fetchMessages).toHaveBeenCalledTimes(2);
     });
 
     it('skips accounts that throw and continues the rest', async () => {
@@ -387,10 +406,16 @@ describe('EngagementService', () => {
         credentials: '{}',
       });
       sdk.fetchComments.mockRejectedValueOnce(new Error('network down'));
+      sdk.fetchMessages.mockResolvedValue({
+        accountId: 'acc1',
+        platform: Platform.DOUYIN,
+        unsupported: true,
+        items: [],
+      });
 
       const out = await service.syncTeam('team1');
 
-      expect(out).toEqual({ teamId: 'team1', accounts: 1, stored: 0 });
+      expect(out).toEqual({ teamId: 'team1', accounts: 1, comments: 0, messages: 0 });
     });
   });
 
@@ -411,10 +436,95 @@ describe('EngagementService', () => {
         unsupported: false,
         items: [{ id: 'c1', authorName: 'fan', content: 'nice', createdAt: new Date() }],
       });
+      sdk.fetchMessages.mockResolvedValue({
+        accountId: 'acc1',
+        platform: Platform.DOUYIN,
+        unsupported: true,
+        items: [],
+      });
 
       const out = await service.syncAllTeams();
 
-      expect(out).toEqual([{ teamId: 'team1', accounts: 1, stored: 1 }]);
+      expect(out).toEqual([
+        { teamId: 'team1', accounts: 1, comments: 1, messages: 0 },
+      ]);
+    });
+  });
+
+  describe('ingestMessages', () => {
+    it('upserts each message and returns the stored count', async () => {
+      prisma.socialAccount.findUnique.mockResolvedValue({
+        id: 'acc1',
+        platform: Platform.BILIBILI,
+        accountId: 'ext',
+        credentials: '{}',
+      });
+      sdk.fetchMessages.mockResolvedValue({
+        accountId: 'acc1',
+        platform: Platform.BILIBILI,
+        unsupported: false,
+        items: [
+          { id: 'm1', authorName: 'fan', content: 'hello', createdAt: new Date(), sentByMe: false },
+          { id: 'm2', authorName: 'me', content: 'reply', createdAt: new Date(), sentByMe: true },
+        ],
+      });
+
+      const out = await service.ingestMessages('acc1');
+
+      expect(out.stored).toBe(2);
+      expect(out.unsupported).toBe(false);
+      expect(prisma.engagementMessage.upsert).toHaveBeenCalledTimes(2);
+      const firstCall = prisma.engagementMessage.upsert.mock.calls[0][0];
+      expect(firstCall.create.sentByMe).toBe(false);
+      const secondCall = prisma.engagementMessage.upsert.mock.calls[1][0];
+      expect(secondCall.create.sentByMe).toBe(true);
+    });
+
+    it('treats an unsupported adapter as a no-op', async () => {
+      prisma.socialAccount.findUnique.mockResolvedValue({
+        id: 'acc1',
+        platform: Platform.DOUYIN,
+        accountId: 'ext',
+        credentials: '{}',
+      });
+      sdk.fetchMessages.mockResolvedValue({
+        accountId: 'acc1',
+        platform: Platform.DOUYIN,
+        unsupported: true,
+        items: [],
+      });
+
+      const out = await service.ingestMessages('acc1');
+
+      expect(out.stored).toBe(0);
+      expect(out.unsupported).toBe(true);
+      expect(prisma.engagementMessage.upsert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listMessages', () => {
+    it('filters by team with optional conversation + sentByMe, paginates', async () => {
+      prisma.engagementMessage.findMany.mockResolvedValue([{ id: 'em1' }]);
+      prisma.engagementMessage.count.mockResolvedValue(1);
+
+      const out = await service.listMessages({
+        teamId: 'team1',
+        conversationId: 'conv1',
+        sentByMe: false,
+        skip: 0,
+        take: 20,
+      });
+
+      expect(out.items).toHaveLength(1);
+      expect(out.total).toBe(1);
+      expect(prisma.engagementMessage.findMany.mock.calls[0][0]).toMatchObject({
+        where: {
+          account: { teamId: 'team1' },
+          conversationId: 'conv1',
+          sentByMe: false,
+        },
+        take: 20,
+      });
     });
   });
 

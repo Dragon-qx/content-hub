@@ -80,10 +80,12 @@ async function bootstrap() {
         lastEngagementSync = now;
         try {
           const summary = await engagement.syncAllTeams();
-          const totalStored = summary.reduce((acc, s) => acc + s.stored, 0);
-          if (totalStored > 0) {
+          const totalComments = summary.reduce((acc, s) => acc + s.comments, 0);
+          const totalMessages = summary.reduce((acc, s) => acc + s.messages, 0);
+          if (totalComments > 0 || totalMessages > 0) {
             logger.log(
-              `Engagement sync: ${summary.length} team(s), ${totalStored} new comment(s)`,
+              `Engagement sync: ${summary.length} team(s), ` +
+                `${totalComments} comment(s), ${totalMessages} message(s)`,
             );
           }
         } catch (err) {

@@ -17,6 +17,9 @@ export interface PlatformAdapter {
   // 互动管理
   fetchComments(accountId: string, postId: string): Promise<Comment[]>;
   replyToComment(accountId: string, commentId: string, content: string): Promise<void>;
+
+  // 私信聚合
+  fetchMessages(accountId: string): Promise<Message[]>;
 }
 
 export interface PublishRequest {
@@ -60,6 +63,18 @@ export interface Comment {
   content: string;
   createdAt: Date;
   replyToId?: string;
+}
+
+export interface Message {
+  id: string;
+  authorId: string;
+  authorName: string;
+  content: string;
+  createdAt: Date;
+  // Thread/conversation the message belongs to, when the platform supplies it.
+  conversationId?: string;
+  // True when this message was sent by the account owner (an outgoing reply).
+  sentByMe?: boolean;
 }
 
 export enum Platform {

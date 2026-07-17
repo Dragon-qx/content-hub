@@ -4,6 +4,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import {
   PlatformSdkService,
   FetchCommentsResult,
+  FetchMessagesResult,
 } from '../platform-sdk/platform-sdk.service';
 import { NotificationService } from '../notification/notification.service';
 
@@ -29,6 +30,16 @@ export interface EngagementStats {
   neutral: number;
   negative: number;
   byPlatform: { platform: string; total: number; unreplied: number }[];
+}
+
+/** A list query for the message inbox. */
+export interface MessageListParams {
+  teamId: string;
+  platform?: Platform;
+  conversationId?: string;
+  sentByMe?: boolean;
+  skip?: number;
+  take?: number;
 }
 
 const DEFAULT_TAKE = 20;
@@ -336,45 +347,57 @@ export class EngagementService {
   // ── Comment polling (worker) ───────────────────────────────────────
 
   /**
-   * Ingest fresh comments for every active social account in a team. Used by
-   * the polling worker to keep inboxes fresh without a manual trigger.
-   * Accounts whose adapter doesn't expose comments are skipped gracefully.
+   * Ingest fresh comments and private messages for every active social account
+   * in a team. Used by the polling worker to keep inboxes fresh without a
+   * manual trigger. Accounts whose adapter doesn't expose a given surface are
+   * skipped gracefully.
    *
-   * Returns a per-account summary so callers can log/surface progress.
+   * Returns a summary so callers can log/surface progress.
    */
   async syncTeam(
     teamId: string,
-  ): Promise<{ teamId: string; accounts: number; stored: number }> {
+  ): Promise<{ teamId: string; accounts: number; comments: number; messages: number }> {
     const accounts = await this.prisma.socialAccount.findMany({
       where: { teamId, status: 'ACTIVE' },
       select: { id: true },
     });
 
-    let stored = 0;
+    let comments = 0;
+    let messages = 0;
     for (const acc of accounts) {
       try {
-        const res = await this.ingest(acc.id);
-        stored += res.stored;
+        const c = await this.ingest(acc.id);
+        comments += c.stored;
       } catch (err) {
         // One broken account must not stop the rest of the sync.
         this.logger.warn(
-          `Sync skipped account ${acc.id}: ${
+          `Comment sync skipped account ${acc.id}: ${
+            err instanceof Error ? err.message : err
+          }`,
+        );
+      }
+      try {
+        const m = await this.ingestMessages(acc.id);
+        messages += m.stored;
+      } catch (err) {
+        this.logger.warn(
+          `Message sync skipped account ${acc.id}: ${
             err instanceof Error ? err.message : err
           }`,
         );
       }
     }
 
-    return { teamId, accounts: accounts.length, stored };
+    return { teamId, accounts: accounts.length, comments, messages };
   }
 
   /**
-   * Ingest comments for every active account across all teams. Returns one
-   * summary per team that had at least one account. Convenience wrapper the
-   * worker calls on its tick.
+   * Ingest comments and messages for every active account across all teams.
+   * Returns one summary per team that had at least one account. Convenience
+   * wrapper the worker calls on its tick.
    */
   async syncAllTeams(): Promise<
-    { teamId: string; accounts: number; stored: number }[]
+    { teamId: string; accounts: number; comments: number; messages: number }[]
   > {
     const teams = await this.prisma.socialAccount.findMany({
       where: { status: 'ACTIVE' },
@@ -434,6 +457,94 @@ export class EngagementService {
     }
     await this.prisma.sentimentKeyword.delete({ where: { id } });
     return { deleted: true };
+  }
+
+  // ── Private messages ───────────────────────────────────────────────
+
+  /**
+   * Fetch private messages for a social account from its platform adapter and
+   * upsert them into EngagementMessage. Idempotent on (accountId, externalId).
+   * Unsupported adapters are recorded as a no-op.
+   */
+  async ingestMessages(accountId: string) {
+    const account = await this.prisma.socialAccount.findUnique({
+      where: { id: accountId },
+    });
+    if (!account) {
+      throw new Error(`Social account ${accountId} not found`);
+    }
+
+    const result: FetchMessagesResult = await this.platformSdk.fetchMessages(
+      accountId,
+      account.platform,
+    );
+
+    if (result.unsupported) {
+      return { stored: 0, unsupported: true, platform: account.platform };
+    }
+
+    let stored = 0;
+    for (const m of result.items) {
+      await this.prisma.engagementMessage.upsert({
+        where: {
+          accountId_externalId: { accountId, externalId: m.id },
+        },
+        create: {
+          accountId,
+          externalId: m.id,
+          platform: account.platform,
+          conversationId: m.conversationId ?? null,
+          authorName: m.authorName,
+          authorId: m.authorId ?? null,
+          content: m.content,
+          sentByMe: m.sentByMe ?? false,
+          messageDate: m.createdAt ?? new Date(),
+        },
+        update: {
+          authorName: m.authorName,
+          content: m.content,
+          conversationId: m.conversationId ?? null,
+          sentByMe: m.sentByMe ?? false,
+          metadata: { reIngestedAt: new Date().toISOString() },
+        },
+      });
+      stored += 1;
+    }
+
+    await this.prisma.socialAccount.update({
+      where: { id: accountId },
+      data: { lastSyncedAt: new Date() },
+    });
+
+    return { stored, unsupported: false, platform: account.platform };
+  }
+
+  /** List inbox messages for a team with filters + pagination. */
+  async listMessages(params: MessageListParams) {
+    const where: Prisma.EngagementMessageWhereInput = {
+      account: { teamId: params.teamId },
+    };
+    if (params.platform) where.platform = params.platform;
+    if (params.conversationId) where.conversationId = params.conversationId;
+    if (params.sentByMe !== undefined) where.sentByMe = params.sentByMe;
+
+    const [items, total] = await Promise.all([
+      this.prisma.engagementMessage.findMany({
+        where,
+        skip: params.skip ?? 0,
+        take: params.take ?? DEFAULT_TAKE,
+        orderBy: { messageDate: 'desc' },
+        include: { account: { select: { platform: true, accountName: true } } },
+      }),
+      this.prisma.engagementMessage.count({ where }),
+    ]);
+
+    return {
+      items,
+      total,
+      skip: params.skip ?? 0,
+      take: params.take ?? DEFAULT_TAKE,
+    };
   }
 
   // ── Quick-reply templates ─────────────────────────────────────────

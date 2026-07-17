@@ -70,6 +70,7 @@ model SocialAccount {
   analytics       AnalyticsSnapshot[]
   publishJobs     PublishJob[]
   comments        EngagementComment[]
+  messages        EngagementMessage[]
 
   @@unique([platform, accountId])
 }
@@ -363,6 +364,29 @@ model CommentTemplate {
   createdAt DateTime @default(now())
 
   @@index([userId])
+}
+
+// An aggregated private message ingested for a social account. Keyed by
+// (accountId, externalId) so re-ingesting the same platform message is
+// idempotent. `sentByMe` marks outgoing replies so the inbox can show history.
+model EngagementMessage {
+  id             String        @id @default(cuid())
+  accountId      String
+  account        SocialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  externalId     String        // platform-side message id
+  platform       Platform
+  conversationId String?       // thread the message belongs to, if supplied
+  authorName     String
+  authorId       String?
+  content        String
+  sentByMe       Boolean       @default(false)
+  messageDate    DateTime      // the platform's creation time
+  fetchedAt      DateTime      @default(now())
+  metadata       Json?
+
+  @@unique([accountId, externalId])
+  @@index([accountId, conversationId])
+  @@index([accountId, messageDate])
 }
 
 // Team-owned watch keywords for the sentiment alerting engine. When an

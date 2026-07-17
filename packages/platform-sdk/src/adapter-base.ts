@@ -2,6 +2,7 @@ import {
   Comment,
   Credentials,
   DateRange,
+  Message,
   MetricsResult,
   Platform,
   PlatformAdapter,
@@ -100,5 +101,9 @@ export abstract class BaseAdapter implements PlatformAdapter {
     _content: string,
   ): Promise<void> {
     throw new Error(`${this.platform} does not support comment replies`);
+  }
+
+  async fetchMessages(_accountId: string): Promise<Message[]> {
+    throw new Error(`${this.platform} does not expose a messages API`);
   }
 }

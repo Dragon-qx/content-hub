@@ -3,6 +3,7 @@ import {
   Comment,
   Credentials,
   DateRange,
+  Message,
   MetricsResult,
   Platform,
   PublishRequest,
@@ -114,5 +115,20 @@ export class BilibiliAdapter extends BaseAdapter {
       headers: { Authorization: `Bearer ${token}` },
       body: JSON.stringify({ type: 1, oid: accountId, rpid: commentId, message }),
     });
+  }
+
+  async fetchMessages(accountId: string): Promise<Message[]> {
+    const data = await this.call<{ data: { messages: Array<{ id: number; talker_id: number; talker_name: string; content: string; session_ts: number; is_sender: number }> } }>(
+      `https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions?session_type=1&mid=${encodeURIComponent(accountId)}`,
+    );
+    return (data.data?.messages ?? []).map((m) => ({
+      id: String(m.id),
+      authorId: String(m.talker_id),
+      authorName: m.talker_name,
+      content: m.content,
+      createdAt: new Date(m.session_ts * 1000),
+      conversationId: String(m.talker_id),
+      sentByMe: m.is_sender === 1,
+    }));
   }
 }

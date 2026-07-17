@@ -12,6 +12,7 @@ import {
   SENTIMENT_LABELS,
   EngagementComment,
   EngagementStats,
+  EngagementMessage,
   CommentTemplate,
   SentimentKeyword,
 } from '@/lib/types';
@@ -75,6 +76,33 @@ export default function EngagementPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncInfo, setSyncInfo] = useState<string | null>(null);
 
+  // Messages inbox.
+  const [messages, setMessages] = useState<EngagementMessage[]>([]);
+  const [msgTotal, setMsgTotal] = useState(0);
+  const [msgSkip, setMsgSkip] = useState(0);
+  const [msgLoading, setMsgLoading] = useState(false);
+  const [tab, setTab] = useState<'comments' | 'messages'>('comments');
+
+  const loadMessages = useCallback(async (start = 0) => {
+    setMsgLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('skip', String(start));
+      params.set('take', String(TAKE));
+      const res = await api.get<Paginated<EngagementMessage>>(
+        `/engagement/messages?${params.toString()}`,
+      );
+      setMessages(res.items);
+      setMsgTotal(res.total);
+      setMsgSkip(res.skip);
+    } catch {
+      setMessages([]);
+      setMsgTotal(0);
+    } finally {
+      setMsgLoading(false);
+    }
+  }, []);
+
   const loadStats = useCallback(async () => {
     try {
       setStats(await api.get<EngagementStats>('/engagement/stats'));
@@ -127,6 +155,7 @@ export default function EngagementPage() {
     loadStats();
     loadTemplates();
     loadKeywords();
+    loadMessages(0);
     // Initial load only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -181,14 +210,20 @@ export default function EngagementPage() {
     setSyncing(true);
     setSyncInfo(null);
     try {
-      const res = await api.post<{ accounts: number; stored: number }>(
-        '/engagement/sync',
-        {},
-      );
+      const res = await api.post<{
+        accounts: number;
+        comments: number;
+        messages: number;
+      }>('/engagement/sync', {});
       setSyncInfo(
-        `Synced ${res.accounts} account(s), ${res.stored} new comment(s) ingested.`,
+        `Synced ${res.accounts} account(s): ${res.comments} comment(s), ` +
+          `${res.messages} message(s).`,
       );
-      await Promise.all([loadComments(skip), loadStats()]);
+      await Promise.all([
+        loadComments(skip),
+        loadMessages(msgSkip),
+        loadStats(),
+      ]);
     } catch (err: any) {
       setSyncInfo(err?.message ?? 'Sync failed.');
     } finally {
@@ -227,7 +262,34 @@ export default function EngagementPage() {
 
       <Stats stats={stats} />
 
-      {/* Filters */}
+      {/* Inbox tabs */}
+      <div className="inline-flex w-fit rounded-lg border border-slate-200 bg-white p-1">
+        <button
+          type="button"
+          onClick={() => setTab('comments')}
+          className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
+            tab === 'comments'
+              ? 'bg-primary text-white'
+              : 'text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          Comments
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('messages')}
+          className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
+            tab === 'messages'
+              ? 'bg-primary text-white'
+              : 'text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          Messages
+        </button>
+      </div>
+
+      {/* Filters — comments tab only */}
+      {tab === 'comments' && (
       <Card>
         <div className="flex flex-wrap items-center gap-3">
           <Select
@@ -275,6 +337,7 @@ export default function EngagementPage() {
           </Button>
         </div>
       </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Inbox */}
@@ -282,108 +345,168 @@ export default function EngagementPage() {
           <Card className="flex min-h-[400px] flex-col">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-base font-semibold">
-                <span className="text-slate-700">Inbox</span>
-                <span className="ml-2 text-xs text-slate-400">{total} comments</span>
+                <span className="text-slate-700">
+                  {tab === 'comments' ? 'Inbox' : 'Messages'}
+                </span>
+                <span className="ml-2 text-xs text-slate-400">
+                  {tab === 'comments' ? `${total} comments` : `${msgTotal} messages`}
+                </span>
               </h2>
             </div>
 
-            {loading ? (
-              <div className="text-sm text-slate-400">Loading…</div>
-            ) : items.length === 0 ? (
-              <div className="flex flex-1 items-center justify-center text-sm text-slate-400">
-                No comments yet. Connect an account and publish to start gathering comments.
-              </div>
-            ) : (
-              <ul className="flex flex-col divide-y divide-slate-100">
-                {items.map((c) => (
-                  <li key={c.id} className="py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge tone="neutral">{c.account?.platform ?? c.platform}</Badge>
-                          <Badge tone={SENTIMENT_TONE[c.sentiment]}>{SENTIMENT_LABELS[c.sentiment]}</Badge>
-                          <span className="text-xs text-slate-400">
-                            by {c.authorName || 'anonymous'}
-                            {c.likeCount > 0 && ` · ${c.likeCount} likes`}
-                          </span>
+            {tab === 'comments' ? (
+              <>
+                {loading ? (
+                  <div className="text-sm text-slate-400">Loading…</div>
+                ) : items.length === 0 ? (
+                  <div className="flex flex-1 items-center justify-center text-sm text-slate-400">
+                    No comments yet. Connect an account and publish to start gathering comments.
+                  </div>
+                ) : (
+                  <ul className="flex flex-col divide-y divide-slate-100">
+                    {items.map((c) => (
+                      <li key={c.id} className="py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge tone="neutral">{c.account?.platform ?? c.platform}</Badge>
+                              <Badge tone={SENTIMENT_TONE[c.sentiment]}>{SENTIMENT_LABELS[c.sentiment]}</Badge>
+                              <span className="text-xs text-slate-400">
+                                by {c.authorName || 'anonymous'}
+                                {c.likeCount > 0 && ` · ${c.likeCount} likes`}
+                              </span>
+                            </div>
+                            <p className="mt-1 break-words text-sm text-slate-700">{c.content}</p>
+                            {c.replied && (
+                              <p className="mt-1 text-xs text-emerald-700">
+                                Replied: {c.replyContent}
+                              </p>
+                            )}
+                          </div>
+                          {!c.replied && (
+                            <Button
+                              variant="secondary"
+                              onClick={() => {
+                                setReplying(c.id);
+                                setDraft('');
+                              }}
+                            >
+                              Reply
+                            </Button>
+                          )}
                         </div>
-                        <p className="mt-1 break-words text-sm text-slate-700">{c.content}</p>
-                        {c.replied && (
-                          <p className="mt-1 text-xs text-emerald-700">
-                            Replied: {c.replyContent}
-                          </p>
-                        )}
-                      </div>
-                      {!c.replied && (
-                        <Button
-                          variant="secondary"
-                          onClick={() => {
-                            setReplying(c.id);
-                            setDraft('');
-                          }}
-                        >
-                          Reply
-                        </Button>
-                      )}
-                    </div>
 
-                    {/* Reply composer */}
-                    {replying === c.id && (
-                      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                        <Textarea
-                          value={draft}
-                          onChange={(e) => setDraft(e.target.value)}
-                          placeholder="Write a reply…"
-                          className="min-h-[80px]"
-                        />
-                        {templates.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            <span className="text-xs text-slate-500">Templates:</span>
-                            {templates.map((t) => (
-                              <button
-                                key={t.id}
-                                type="button"
-                                onClick={() => applyTemplate(t.body)}
-                                className="rounded bg-white px-2 py-0.5 text-xs text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"
+                        {/* Reply composer */}
+                        {replying === c.id && (
+                          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                            <Textarea
+                              value={draft}
+                              onChange={(e) => setDraft(e.target.value)}
+                              placeholder="Write a reply…"
+                              className="min-h-[80px]"
+                            />
+                            {templates.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                <span className="text-xs text-slate-500">Templates:</span>
+                                {templates.map((t) => (
+                                  <button
+                                    key={t.id}
+                                    type="button"
+                                    onClick={() => applyTemplate(t.body)}
+                                    className="rounded bg-white px-2 py-0.5 text-xs text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"
+                                  >
+                                    {t.title}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            <div className="mt-2 flex justify-end gap-2">
+                              <Button variant="secondary" onClick={() => setReplying(null)}>
+                                Cancel
+                              </Button>
+                              <Button
+                                onClick={() => sendReply(c)}
+                                disabled={saving === c.id || !draft.trim()}
                               >
-                                {t.title}
-                              </button>
-                            ))}
+                                {saving === c.id ? 'Sending…' : 'Send reply'}
+                              </Button>
+                            </div>
                           </div>
                         )}
-                        <div className="mt-2 flex justify-end gap-2">
-                          <Button variant="secondary" onClick={() => setReplying(null)}>
-                            Cancel
-                          </Button>
-                          <Button
-                            onClick={() => sendReply(c)}
-                            disabled={saving === c.id || !draft.trim()}
-                          >
-                            {saving === c.id ? 'Sending…' : 'Send reply'}
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
-            {/* Pagination */}
-            {total > TAKE && (
-              <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
-                <span>
-                  Page {page} of {pageCount}
-                </span>
-                <div className="flex gap-2">
-                  <Button variant="secondary" disabled={page <= 1} onClick={() => loadComments(skip - TAKE)}>
-                    Prev
-                  </Button>
-                  <Button variant="secondary" disabled={page >= pageCount} onClick={() => loadComments(skip + TAKE)}>
-                    Next
-                  </Button>
-                </div>
-              </div>
+                {/* Comments pagination */}
+                {total > TAKE && (
+                  <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
+                    <span>
+                      Page {page} of {pageCount}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button variant="secondary" disabled={page <= 1} onClick={() => loadComments(skip - TAKE)}>
+                        Prev
+                      </Button>
+                      <Button variant="secondary" disabled={page >= pageCount} onClick={() => loadComments(skip + TAKE)}>
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {msgLoading ? (
+                  <div className="text-sm text-slate-400">Loading…</div>
+                ) : messages.length === 0 ? (
+                  <div className="flex flex-1 items-center justify-center text-sm text-slate-400">
+                    No messages yet. Sync to start gathering private messages.
+                  </div>
+                ) : (
+                  <ul className="flex flex-col divide-y divide-slate-100">
+                    {messages.map((m) => (
+                      <li key={m.id} className="py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge tone="neutral">{m.account?.platform ?? m.platform}</Badge>
+                              <Badge tone={m.sentByMe ? 'success' : 'neutral'}>
+                                {m.sentByMe ? 'Sent by you' : 'Received'}
+                              </Badge>
+                              <span className="text-xs text-slate-400">
+                                {m.sentByMe ? 'to' : 'from'} {m.authorName || 'anonymous'}
+                              </span>
+                            </div>
+                            <p className="mt-1 break-words text-sm text-slate-700">{m.content}</p>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {/* Messages pagination */}
+                {msgTotal > TAKE && (
+                  <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
+                    <span>
+                      Page {Math.floor(msgSkip / TAKE) + 1} of {Math.max(1, Math.ceil(msgTotal / TAKE))}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button variant="secondary" disabled={msgSkip <= 0} onClick={() => loadMessages(msgSkip - TAKE)}>
+                        Prev
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        disabled={msgSkip + TAKE >= msgTotal}
+                        onClick={() => loadMessages(msgSkip + TAKE)}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </Card>
         </div>

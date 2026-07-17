@@ -14,8 +14,12 @@ describe('EngagementController', () => {
     service = {
       syncTeam: jest
         .fn()
-        .mockResolvedValue({ teamId: 'team1', accounts: 3, stored: 7 }),
+        .mockResolvedValue({ teamId: 'team1', accounts: 3, comments: 7, messages: 2 }),
       firstTeamForUser: jest.fn().mockResolvedValue('team1'),
+      listMessages: jest.fn().mockResolvedValue({ items: [], total: 0 }),
+      ingestMessages: jest
+        .fn()
+        .mockResolvedValue({ stored: 4, unsupported: false, platform: 'BILIBILI' }),
       listKeywords: jest.fn().mockResolvedValue([]),
       createKeyword: jest
         .fn()
@@ -49,7 +53,7 @@ describe('EngagementController', () => {
     const out = await controller.sync({ userId: 'u1' } as any, {});
     expect(service.firstTeamForUser).toHaveBeenCalledWith('u1');
     expect(service.syncTeam).toHaveBeenCalledWith('team1');
-    expect(out).toEqual({ teamId: 'team1', accounts: 3, stored: 7 });
+    expect(out).toEqual({ teamId: 'team1', accounts: 3, comments: 7, messages: 2 });
   });
 
   it('sync uses an explicit teamId when supplied', async () => {
@@ -76,5 +80,27 @@ describe('EngagementController', () => {
   it('deleteKeyword resolves the acting team then deletes', async () => {
     await controller.deleteKeyword('k1', { userId: 'u1' } as any, undefined as any);
     expect(service.deleteKeyword).toHaveBeenCalledWith('k1', 'team1');
+  });
+
+  it('listMessages forwards filters to the service', async () => {
+    await controller.listMessages({ userId: 'u1' } as any, {
+      conversationId: 'conv1',
+      sentByMe: false,
+      skip: 0,
+      take: 10,
+    } as any);
+    expect(service.listMessages).toHaveBeenCalledWith(
+      expect.objectContaining({
+        teamId: 'team1',
+        conversationId: 'conv1',
+        sentByMe: false,
+      }),
+    );
+  });
+
+  it('ingestMessages forwards the account id', async () => {
+    const out = await controller.ingestMessages({ accountId: 'acc1' } as any);
+    expect(service.ingestMessages).toHaveBeenCalledWith('acc1');
+    expect(out).toEqual({ stored: 4, unsupported: false, platform: 'BILIBILI' });
   });
 });

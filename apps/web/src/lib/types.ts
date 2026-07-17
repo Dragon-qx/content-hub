@@ -378,3 +378,17 @@ export interface CommentTemplate {
   body: string;
   createdAt: string;
 }
+
+export interface EngagementMessage {
+  id: string;
+  externalId: string;
+  platform: Platform;
+  conversationId?: string | null;
+  authorName: string;
+  authorId?: string | null;
+  content: string;
+  sentByMe: boolean;
+  messageDate: string;
+  fetchedAt: string;
+  account?: { platform: Platform; accountName: string };
+}

@@ -127,4 +127,28 @@ describe('BilibiliAdapter', () => {
     expect(spy).toHaveBeenCalledTimes(2);
     spy.mockRestore();
   });
+
+  it('fetches private messages and maps them', async () => {
+    const spy = jest.spyOn(global, 'fetch').mockResolvedValue(
+      jsonResponse({ data: { messages: [
+        { id: 10, talker_id: 99, talker_name: 'bob', content: 'hello', session_ts: 1700000000, is_sender: 0 },
+        { id: 11, talker_id: 99, talker_name: 'bob', content: 'my reply', session_ts: 1700000100, is_sender: 1 },
+      ] } }),
+    );
+    const adapter = new BilibiliAdapter({ accessKey: 'AK', secretKey: 'SK', accountId: 'a' });
+    const messages = await adapter.fetchMessages('a');
+    expect(messages).toHaveLength(2);
+    expect(messages[0].authorName).toBe('bob');
+    expect(messages[0].sentByMe).toBe(false);
+    expect(messages[1].sentByMe).toBe(true);
+    expect(messages[0].conversationId).toBe('99');
+    spy.mockRestore();
+  });
+});
+
+describe('fetchMessages unsupported degradation', () => {
+  it('throws a clear error on adapters without a messages API', async () => {
+    const adapter = new DouyinAdapter({ clientKey: 'K', clientSecret: 'S', openId: 'o' });
+    await expect(adapter.fetchMessages('a')).rejects.toThrow(/does not expose a messages API/);
+  });
 });
