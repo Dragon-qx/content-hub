@@ -16,11 +16,7 @@ export interface PlatformAdapter {
 
   // 互动管理
   fetchComments(accountId: string, postId: string): Promise<Comment[]>;
-  replyToComment(
-    accountId: string,
-    commentId: string,
-    content: string,
-  ): Promise<void>;
+  replyToComment(accountId: string, commentId: string, content: string): Promise<void>;
 }
 
 export interface PublishRequest {

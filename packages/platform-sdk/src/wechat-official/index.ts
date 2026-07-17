@@ -42,6 +42,8 @@ export interface WechatMaterialResult {
 }
 
 export class WechatOfficialAdapter {
+  /** Platform identifier — required by the PlatformAdapter contract. */
+  platform = 'WECHAT_OFFICIAL' as const;
   private accessToken: string | null = null;
   private tokenExpireTime: number = 0;
 
