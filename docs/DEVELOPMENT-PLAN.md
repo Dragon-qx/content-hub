@@ -1,16 +1,34 @@
 # ContentHub — 完整开发计划
 
-> 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18（第2次）
+> 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18（第3次）
 
-> **当前进度（2026-07-18 第9次）**: M1–M27 全部完成。剩余收尾：E2E 测试、CI/CD、生产部署配置、Swagger 文档、用户手册。
-> 
-> **测试**: 334 通过 / 31 API 套件。API + web typecheck 与 build 全绿。
+> **当前进度（2026-07-18 第10次）**: M1–M28 全部完成 + **M28 AI 内容助手**（PRD §3.3 V1.1 AI 辅助写作）：后端 `ContentAssistantService` 纯函数引擎（`optimizeTitles` zh/en 模板策略 + `extractTags` 停用词频排名 + `auditContent` 质量启发式 + 平台限制投射 + 评分评级 + `generateVariants` short/long/formal/social 改写）；`ContentAssistantController`（`POST /assistant/{titles,tags,audit/variants}`，`JwtAuthGuard`）；`ContentAssistantModule` 接入 `AppModule`；单元测试 **33**（服务 26 + 控制器 7）；前端 `ContentAssistant` 四 tab 面板（防抖重投射 + "Use" 应用按钮）挂载编辑器与独立 `/assistant` 草稿工作区、Sidebar 导航入口、共享类型。测试 **367 通过 / 33 API 套件**（+33），API + web typecheck（4 包）与 web build（19 路由）全绿。
+
+> **此前（第9次）**: M1–M27 全部完成。剩余收尾：E2E 测试、CI/CD、生产部署配置、Swagger 文档、用户手册。
+>
+> **测试**: 334 通过 / 31 API 套件。
 
 > **此前（第6次）**: M1–M24 全部完成 + **M25 内容模板库**（PRD §3.3 P1 内容模板 · 可复用模板库）：后端新增 `ContentTemplate` Prisma 模型（teamId / title / body / contentType / tags[] / createdBy，关联 `Team.templates`）+ 迁移 `20260718080000_content_templates`；`ContentTemplateModule`（`ContentTemplateService` + `ContentTemplateController`）提供 `POST/GET/PUT/DELETE /templates`（`JwtAuthGuard` + `AuditService` 全操作审计，team 级隔离，自由文本搜索，分页）及 `POST /templates/:id/apply`（返回 `TemplateDraftSeed` 供 `ContentService.create` 复用，跨 team 拒绝）；DTO 校验全覆盖（`class-validator`）；单元测试 **13**（创建/默认值/空 team 拒绝、team 分页列表、搜索 OR、findOne/NotFound、update 部分字段、delete + NotFound、apply 标题覆写与跨 team 拒绝）；`test/prisma.mock.ts` 新增 `contentTemplate` delegate；前端 `TemplatePicker` 组件（防抖搜索 + 加载 + 应用）、`/content` 页 Templates 管理面板（CRUD + "New from template" 种子创建表单）、`/contents/[id]` 编辑器内 "Load template" 种子；`lib/types.ts` 新增 `ContentTemplate / TemplateDraftSeed`。测试 **323 通过 / 31 API 套件**（+13），API + web typecheck 与 build 全绿。
 >
 > **本轮新增（审查修复 + 平台扩展）**: (1) **审查发现修复** — 调度 `handleFailure` 增加指数退避（`RETRY_BACKOFF_BASE_MS * 2^attempt`，上限 60s），避免轮询器对故障平台紧循环重试；`worker.ts` 移除过时的 `GRACE_MS` 注释；OAuth `@Post(':platform/authorize')` 从 `@Query()` 改为 `@Body()`（前端发送 JSON body，原绑定导致 @MinLength 校验必然 400）；`Media` 上传页改为走共享 api client（统一 401 处理 + 刷新重试）；前端 `api.ts` 新增 refresh token 持久化 + 401 自动刷新一次重试链路（登录/注册/mfaLogin 均持久化 refreshToken，logout 清除）；`decryptCredentials` 解密失败回退时补 debug 日志；治理 `/engagement` 页面无操作的 setter 死代码。(2) **Twitter 适配器** — `TwitterAdapter`（OAuth2 PKCE 授权 / X API v2 发布 / 粉丝指标，评论/私信回退 BaseAdapter 默认抛错）+ 工厂注册 + 5 单元测试。(3) **YouTube 适配器** — `YouTubeAdapter`（OAuth2 授权 / 视频元数据创建 / 频道指标 subs+views / 评论 fetch+reply，私信回退默认抛错）+ 工厂注册 + 7 单元测试。
 
 ---
+
+### M28: V1.1 — AI 内容助手 (Content Assistant) (PRD §3.3 V1.1)
+**目标:** 为作者提供确定性、无依赖的 AI 写作辅助：标题优化、关键词提取、内容审核、多平台文案改写——与异常检测引擎/内容适配引擎相同的纯函数形态（后续可替换为真实 LLM 而不动 DTO/控制器）。
+
+- [x] **纯函数引擎** — `ContentAssistantService`：四操作
+  - `optimizeTitles`：zh/en 语言检测 + 策略模板（how-to/list/question/guide/journey/time-box/myth/curiosity），确定性种子生成 N（3..8）并按种子循环取 `count`（1..10）个不重复变体；
+  - `extractTags`：英文小写词频（长度≥3，去停用词）+ CJK 连续词组整词（2-5 字）与长串 bigram，合并排序取 top N（1..20）；
+  - `auditContent`：跨切质量启发式（EMPTY_BODY/BODY_TOO_SHORT/BODY_TOO_LONG/ALL_CAPS/EXCESSIVE_PUNCTUATION/WALL_OF_TEXT，中/英消息）+ 按 `PLATFORM_ORDER` 规范顺序的平台限制投射（正文截断/图片丢弃/视频丢弃/时长下限），返回 0-100 评分与 good/needs-work/poor 评级，及 findings 列表；
+  - `generateVariants`：按风格改写 short（首句截断）/long（追加 CTA）/formal（去 emoji/标签 + 前言）/social（emoji + 话题标签），支持 `all` 返回全部四风格
+- [x] **API 端点** — `POST /assistant/{titles,tags,audit/variants}`（`:id` 路由无冲突），`JwtAuthGuard` 保护，控制器透传 DTO
+- [x] **模块注册** — `ContentAssistantModule`（controller + provider + export）接入 `AppModule`
+- [x] **单元测试** — **33**（服务 26：标题数量/钳制/中英模板/确定性/策略/空回退、标签频序/英文停用词/空/上限/去 markdown、审核空扣分/清洁 good/平台截断/全大写/重复标点/子集顺序/丢图、变体全风格/单风格/short 截断/社交标签/语言检测；控制器 7：守卫 + 四端点透传）
+- [x] **前端面板** — `ContentAssistant` 四 tab 组件（titles/tags/audit/variants），300ms 防抖重投射 + "Use this" 应用按钮（标题/正文回写编辑器；标签为建议展示），错误/加载态
+- [x] **编辑器集成** — `/contents/[id]` 编辑态挂载于 AdaptationPreview 下方，含 markdown 图片/视频计数
+- [x] **独立工作区** — `/assistant` 草稿页（标题/正文/类型 + 助手面板），Sidebar "✨ AI assistant" 入口（Content 与 Calendar 之间）
+- [x] **前端类型** — `TitleVariant/TitleOptimizeResult/TagExtractResult/AuditSeverity/AuditFinding/PlatformAudit/ContentAuditResult/VariantStyle/CopyVariant/VariantGenerateResult/VARIANT_STYLE_LABELS/AUDIT_GRADE_LABELS/AUDIT_GRADE_TONE` 纳入 `lib/types.ts`
 
 ## 一、项目现状评估
 
