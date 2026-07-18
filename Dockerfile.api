@@ -13,6 +13,7 @@ RUN pnpm install --frozen-lockfile
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+ENV PATH="/app/node_modules/.bin:${PATH}"
 RUN pnpm build --filter=@content-hub/api
 RUN pnpm --filter=@content-hub/api prisma generate
 
