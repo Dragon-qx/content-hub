@@ -25,6 +25,7 @@ import { EngagementModule } from './modules/engagement/engagement.module';
 import { HealthModule } from './modules/health/health.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { QueueModule } from './modules/queue/queue.module';
+import { ReceiptModule } from './modules/receipt/receipt.module';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { QueueModule } from './modules/queue/queue.module';
     EngagementModule,
     WalletModule,
     QueueModule,
+    ReceiptModule,
   ],
   controllers: [AppController],
   providers: [

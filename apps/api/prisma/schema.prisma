@@ -92,6 +92,7 @@ model SocialAccount {
   messages        EngagementMessage[]
   anomalyAlerts   AnomalyAlert[]
   transfers       AccountTransfer[]
+  receipts        PublishReceipt[]
 
   @@unique([platform, accountId])
 }
@@ -110,6 +111,7 @@ model Content {
   updatedAt     DateTime       @updatedAt
   mediaAssets   MediaAsset[]
   platformPosts PlatformPost[]
+  receipts      PublishReceipt[]
   tags          ContentTag[]
   workflow      Workflow[]
   versions      ContentVersion[]
@@ -162,6 +164,7 @@ model MediaAsset {
   fileSize    Int       // 字节
   mimeType    String    @default("application/octet-stream")
   uploadedBy  String?
+  receipt     PublishReceipt?
   createdAt   DateTime  @default(now())
 }
 
@@ -180,6 +183,7 @@ model PlatformPost {
   // Owning job, if this post was produced by a PublishJob.
   job             PublishJob?   @relation("JobPost", fields: [jobId], references: [id])
   jobId           String?       @unique
+  receipt         PublishReceipt?
   createdAt       DateTime      @default(now())
 
   @@index([jobId])
@@ -478,6 +482,33 @@ model EngagementComment {
   @@unique([accountId, externalId])
   @@index([accountId, sentiment])
   @@index([accountId, replied])
+}
+
+/// Server-side, tamper-evident record that a given content piece was handed
+/// off to a platform adapter for publication at a specific instant. Holds the
+/// external URL + a retained card image (PNG) generated from the publish
+/// metadata. Tied to its PlatformPost (one receipt per post). `assetId`
+/// optionally references a retained screenshot/media asset; the receipt is
+/// still available as a card-image fallback when no real screenshot is held.
+model PublishReceipt {
+  id             String        @id @default(cuid())
+  contentId      String
+  content        Content       @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  platformPostId String?       @unique
+  platformPost   PlatformPost? @relation(fields: [platformPostId], references: [id], onDelete: SetNull)
+  accountId      String?
+  account        SocialAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  platform       Platform
+  externalId     String?
+  externalUrl    String?
+  assetId        String?       @unique
+  asset          MediaAsset?   @relation(fields: [assetId], references: [id])
+  receiptHash    String        @unique
+  metadata       Json?
+  generatedAt    DateTime      @default(now())
+
+  @@index([contentId])
+  @@index([platformPostId])
 }
 
 // Sentiment label derived from content at ingest time.
