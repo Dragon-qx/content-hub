@@ -33,12 +33,12 @@
 - [x] **适配器单元测试补齐**（M29d） — 补齐 `publish()`、`fetchMetrics()`、`refreshToken()` 单测：微信公众号（publish/fetchMetrics + refreshToken 降级抛错）、微信视频号（publish/fetchMetrics/refreshToken）、小红书（publish/fetchMetrics，refreshToken 在 M29a）、抖音（publish/fetchMetrics，refreshToken 已有）
 
 ### 收尾项
-- [ ] 单元测试覆盖率 ≥ 80%（当前 lines 91.9% / branches 63% / funcs 92.5%，已达目标 ✅）
-- [ ] E2E 测试
-- [ ] CI/CD 配置（GitHub Actions）
-- [ ] 生产环境部署配置
-- [ ] API 文档（Swagger/OpenAPI）
-- [ ] 用户手册
+- [x] 单元测试覆盖率 ≥ 80%（当前 lines 91.9% / branches 63% / funcs 92.5%，376 测试 34 套件 ✅）
+- [x] E2E 测试（新增 `journey.e2e-spec.ts`：注册→登录→创建内容→审批→发布核心用户旅程 ✅）
+- [x] CI/CD 配置（GitHub Actions `.github/workflows/ci.yml`：lint+typecheck→build→test→e2e→openapi→deploy ✅）
+- [x] 生产环境部署配置（`docker-compose.prod.yml` + `Dockerfile.api` + `Dockerfile.web` + `docker-entrypoint.sh` + `nginx.conf` ✅）
+- [x] API 文档（Swagger `deepScanRoutes` + `/api/docs-json` + `scripts/export-openapi.ts` + CI OpenAPI artifact ✅）
+- [ ] 用户手册（docs/USER-GUIDE.md）
 
 ## 🔥 铁律：每次完成必须记录
 

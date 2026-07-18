@@ -129,6 +129,16 @@
 
 ---
 
+## 已完成的收尾项（M30）
+
+- [x] **CI/CD** — GitHub Actions `.github/workflows/ci.yml`（lint+typecheck→build→test→e2e→openapi→deploy）
+- [x] **生产部署** — `docker-compose.prod.yml`（db+redis+api+web+nginx）+ `Dockerfile.api` + `Dockerfile.web` + `docker-entrypoint.sh`
+- [x] **E2E 测试** — `apps/api/test/journey.e2e-spec.ts`（注册→登录→创建内容→审批→发布核心用户旅程）
+- [x] **Swagger/OpenAPI** — `deepScanRoutes` + `/api/docs-json` + `scripts/export-openapi.ts` + CI OpenAPI artifact + 增强的 Swagger 描述
+- [x] **测试覆盖** — 376 测试 / 34 套件全部通过
+
+---
+
 ## 缺失功能清单（2026-07-18 PRD 审查）
 
 > 全面 PRD Review 后识别的缺失项，按优先级排序。对齐 `CLAUDE-TASK.md` 方向 B。
