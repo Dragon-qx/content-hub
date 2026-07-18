@@ -82,6 +82,22 @@ export class CreateContentVersionDto {
   changeNote?: string;
 }
 
+/**
+ * Body for POST /contents/:id/rollback. Restores a prior version's field values
+ * onto the live content and records the restore as a new version snapshot.
+ */
+export class RollbackVersionDto {
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  version: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  changeNote?: string;
+}
+
 /** Body for POST /contents/:id/submit — optional override of the approver. */
 export class SubmitContentDto {
   @IsOptional()

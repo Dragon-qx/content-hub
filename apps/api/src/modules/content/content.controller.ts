@@ -18,6 +18,7 @@ import {
   CreateContentDto,
   UpdateContentDto,
   CreateContentVersionDto,
+  RollbackVersionDto,
   ListContentQueryDto,
   CalendarQueryDto,
   SubmitContentDto,
@@ -118,6 +119,31 @@ export class ContentController {
       'Content',
       id,
       { changeNote: dto.changeNote },
+      req.ip,
+    );
+    return result;
+  }
+
+  /** Roll the live content back to a prior version's field values. */
+  @Post(':id/rollback')
+  async rollback(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @Body() dto: RollbackVersionDto,
+    @Req() req: { ip?: string },
+  ) {
+    const result = await this.content.rollbackVersion(
+      id,
+      dto.version,
+      user.userId,
+      dto.changeNote,
+    );
+    await this.audit.log(
+      'ROLLBACK',
+      user.userId,
+      'Content',
+      id,
+      { toVersion: dto.version, changeNote: dto.changeNote },
       req.ip,
     );
     return result;

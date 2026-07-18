@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
-import { ContentStatus, JobStatus } from '@prisma/client';
+import { ContentStatus, ContentType, JobStatus } from '@prisma/client';
 import { ContentService, CONTENT_TRANSITIONS } from './content.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { WorkflowService } from '../workflow/workflow.service';
@@ -118,6 +118,98 @@ describe('ContentService', () => {
       const result = await service.createVersion('1', { title: 'T2' }, 'user-1');
       expect(prisma.$transaction).toHaveBeenCalled();
       expect(result[1]).toHaveProperty('id', 'v2');
+    });
+  });
+
+  describe('rollbackVersion', () => {
+    it('restores a prior version fields and records the restore as a new version', async () => {
+      prisma.content.findUnique.mockResolvedValue({
+        id: '1',
+        version: 5,
+        title: 'Current',
+        body: 'Current body',
+        contentType: ContentType.TEXT,
+      });
+      prisma.contentVersion.findFirst.mockResolvedValue({
+        id: 'v2',
+        version: 2,
+        title: 'Old title',
+        body: 'Old body',
+        contentType: ContentType.ARTICLE,
+      });
+      prisma.$transaction.mockResolvedValue([
+        { id: '1', version: 6 },
+        { id: 'v6' },
+      ]);
+
+      const result = await service.rollbackVersion('1', 2, 'user-1');
+
+      expect(prisma.contentVersion.findFirst).toHaveBeenCalledWith({
+        where: { contentId: '1', version: 2 },
+      });
+      // Live content is restored to the target version's field values.
+      expect(prisma.content.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            version: 6,
+            title: 'Old title',
+            body: 'Old body',
+            contentType: ContentType.ARTICLE,
+          }),
+        }),
+      );
+      // The rollback is itself recorded as a version snapshot labelled with the
+      // target, so the restore is reversible and audited.
+      expect(prisma.contentVersion.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            contentId: '1',
+            version: 6,
+            changedBy: 'user-1',
+            changeNote: 'Rolled back to v2',
+          }),
+        }),
+      );
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(result[1]).toHaveProperty('id', 'v6');
+    });
+
+    it('uses a custom changeNote when supplied', async () => {
+      prisma.content.findUnique.mockResolvedValue({
+        id: '1',
+        version: 3,
+        title: 'T',
+        body: 'B',
+        contentType: ContentType.TEXT,
+      });
+      prisma.contentVersion.findFirst.mockResolvedValue({
+        id: 'v1',
+        version: 1,
+        title: 'T1',
+        body: 'B1',
+        contentType: ContentType.TEXT,
+      });
+      prisma.$transaction.mockResolvedValue([{ id: '1' }, { id: 'v4' }]);
+
+      await service.rollbackVersion('1', 1, 'user-1', 'Revert for legal');
+
+      const createCall = prisma.contentVersion.create.mock.calls[0][0];
+      expect(createCall.data.changeNote).toBe('Revert for legal');
+    });
+
+    it('throws NotFoundException when the target version does not exist', async () => {
+      prisma.content.findUnique.mockResolvedValue({
+        id: '1',
+        version: 4,
+        title: 'T',
+      });
+      prisma.contentVersion.findFirst.mockResolvedValue(null);
+
+      await expect(service.rollbackVersion('1', 99, 'user-1')).rejects.toThrow(
+        NotFoundException,
+      );
+      // No write should be attempted when the target version is missing.
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
 

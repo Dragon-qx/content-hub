@@ -45,6 +45,7 @@ export const mockPrisma = () => ({
     count: jest.fn(),
   },
   contentVersion: {
+    findFirst: jest.fn(),
     create: jest.fn(),
   },
   contentTemplate: {

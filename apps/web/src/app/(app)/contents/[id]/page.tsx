@@ -74,6 +74,9 @@ function ContentDetail({ id }: { id: string }) {
   // Template picker
   const [showTemplates, setShowTemplates] = useState(false);
 
+  // Version rollback
+  const [rollingBackVersion, setRollingBackVersion] = useState<number | null>(null);
+
   const load = async () => {
     setLoading(true);
     setError(null);
@@ -121,6 +124,22 @@ function ContentDetail({ id }: { id: string }) {
       setError(err?.message ?? 'Failed to save version.');
     } finally {
       setSavingVersion(false);
+    }
+  };
+
+  const rollbackToVersion = async (version: number) => {
+    if (!window.confirm(`Roll back to v${version}? The current edits will be preserved as a new version.`)) {
+      return;
+    }
+    setRollingBackVersion(version);
+    setError(null);
+    try {
+      await api.post(`/contents/${id}/rollback`, { version });
+      await load();
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to roll back.');
+    } finally {
+      setRollingBackVersion(null);
     }
   };
 
@@ -365,7 +384,16 @@ function ContentDetail({ id }: { id: string }) {
                   </div>
                   {v.changeNote && <div className="text-sm text-slate-500">{v.changeNote}</div>}
                 </div>
-                <div className="text-xs text-slate-400">{new Date(v.createdAt).toLocaleString()}</div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-400">{new Date(v.createdAt).toLocaleString()}</span>
+                  <Button
+                    variant="secondary"
+                    disabled={editing || rollingBackVersion !== null}
+                    onClick={() => rollbackToVersion(v.version)}
+                  >
+                    {rollingBackVersion === v.version ? 'Rolling back…' : 'Roll back'}
+                  </Button>
+                </div>
               </li>
             ))}
           </ol>

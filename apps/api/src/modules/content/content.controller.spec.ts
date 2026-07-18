@@ -21,6 +21,7 @@ describe('ContentController', () => {
         .mockResolvedValue({ year: 2026, month: 7, days: [{ date: '2026-07-01', events: [] }] }),
       findOne: jest.fn().mockResolvedValue({ id: 'c1' }),
       update: jest.fn().mockResolvedValue({ id: 'c1' }),
+      rollbackVersion: jest.fn().mockResolvedValue({ id: 'c1' }),
       remove: jest.fn().mockResolvedValue({ success: true, id: 'c1' }),
     };
     audit = { log: jest.fn().mockResolvedValue({ id: 'log-1' }) };
@@ -95,5 +96,26 @@ describe('ContentController', () => {
     const user: any = { userId: 'u1' };
     await controller.update('c1', user, { title: 'New' }, { ip: '127.0.0.1' });
     expect(service.update).toHaveBeenCalledWith('c1', { title: 'New' }, 'u1');
+  });
+
+  it('rollback delegates to service with the target version and audit', async () => {
+    const user: any = { userId: 'u1' };
+    const req: any = { ip: '127.0.0.1' };
+    await controller.rollback('c1', user, { version: 2 }, req);
+    expect(service.rollbackVersion).toHaveBeenCalledWith('c1', 2, 'u1', undefined);
+    expect(audit.log).toHaveBeenCalledWith(
+      'ROLLBACK',
+      'u1',
+      'Content',
+      'c1',
+      { toVersion: 2, changeNote: undefined },
+      '127.0.0.1',
+    );
+  });
+
+  it('rollback forwards a custom changeNote to the service', async () => {
+    const user: any = { userId: 'u1' };
+    await controller.rollback('c1', user, { version: 3, changeNote: 'Revert' }, { ip: '::' });
+    expect(service.rollbackVersion).toHaveBeenCalledWith('c1', 3, 'u1', 'Revert');
   });
 });

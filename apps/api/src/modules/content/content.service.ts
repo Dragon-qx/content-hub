@@ -348,6 +348,61 @@ export class ContentService {
     ]);
   }
 
+  /**
+   * Roll the live content back to a prior version's field values.
+   *
+   * The target version's title/body/contentType are restored onto the content,
+   * the version counter is bumped, and the restore is itself recorded as a new
+   * `ContentVersion` (changeNote defaults to "Rolled back to v{n}"). Recording
+   * the rollback as a version makes it reversible — rolling back never destroys
+   * history, it only appends a new snapshot of the restored state.
+   *
+   * @throws NotFoundException if the content or the target version is missing.
+   */
+  async rollbackVersion(
+    id: string,
+    targetVersion: number,
+    userId: string,
+    changeNote?: string,
+  ) {
+    const content = await this.findOne(id);
+
+    const target = await this.prisma.contentVersion.findFirst({
+      where: { contentId: id, version: targetVersion },
+    });
+    if (!target) {
+      throw new NotFoundException(
+        `Version ${targetVersion} not found for content ${id}`,
+      );
+    }
+
+    const newVersion = content.version + 1;
+    const note = changeNote ?? `Rolled back to v${targetVersion}`;
+
+    return this.prisma.$transaction([
+      this.prisma.content.update({
+        where: { id },
+        data: {
+          version: newVersion,
+          title: target.title,
+          body: target.body,
+          contentType: target.contentType,
+        },
+      }),
+      this.prisma.contentVersion.create({
+        data: {
+          contentId: id,
+          version: newVersion,
+          title: target.title,
+          body: target.body,
+          contentType: target.contentType,
+          changedBy: userId,
+          changeNote: note,
+        },
+      }),
+    ]);
+  }
+
   // ===== Status state machine =====
 
   /** True if `from` may transition to `to`. */
