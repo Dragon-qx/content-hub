@@ -118,6 +118,7 @@
   - **BaseAdapter**: 重构 `call()` 保留 Content-Type 自动设置；新增 `callMultipart()` 不设置 boundary；新增 `fetchMediaBytes()` 统一资源拉取
   - **adapters.spec.ts**: XHS/Douyin/WeChatOfficial/WeChatVideo 测试更新匹配真实调用链路；单测数量 47 全绿
 - [x] **数据库迁移 SQL 文件**（35b5c6f ✅）— 0001_init 完整 schema (607行) + 14 个里程碑迁移（原时间戳序列保留）
+- [x] **最终测试修复**（f4f003b ✅）— 修复真实 API 接入后的 e2e + 单元测试 mock（WeChat cover image / Twitter endpoint），544/544 全绿 / 48 套件
 
 ## 重要约束
 - **每次完成必须按「铁律」更新文档，不得跳过**
@@ -129,6 +130,6 @@
 - 所有 Service 必须有单元测试
 - 保持代码质量，不要为了速度牺牲质量
 
-**测试**: 412 通过 / 38 套件 ✅
+**测试**: 544 通过 / 48 套件 ✅
 
 不要停止，除非遇到真正的阻碍。
