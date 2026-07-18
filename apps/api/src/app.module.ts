@@ -24,6 +24,7 @@ import { UserModule } from './modules/user/user.module';
 import { EngagementModule } from './modules/engagement/engagement.module';
 import { HealthModule } from './modules/health/health.module';
 import { WalletModule } from './modules/wallet/wallet.module';
+import { QueueModule } from './modules/queue/queue.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
     HealthModule,
     EngagementModule,
     WalletModule,
+    QueueModule,
   ],
   controllers: [AppController],
   providers: [

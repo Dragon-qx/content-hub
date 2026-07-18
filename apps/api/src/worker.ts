@@ -1,9 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { SchedulerService } from './modules/scheduler/scheduler.service';
-import { EngagementService } from './modules/engagement/engagement.service';
-import { AnalyticsService } from './modules/analytics/analytics.service';
+import { QueueService } from './modules/queue/queue.service';
 
 const POLL_INTERVAL_MS = Number(process.env.WORKER_POLL_INTERVAL_MS ?? 10_000);
 const BATCH_SIZE = Number(process.env.WORKER_BATCH_SIZE ?? 5);
@@ -27,19 +25,22 @@ const ANOMALY_SCAN_INTERVAL_MS = Number(
 );
 
 /**
- * Standalone publish + engagement worker.
+ * Standalone publish + engagement + anomaly worker.
  *
- * Prisma queuing has no BullMQ/Redis dependency in this environment, so the
- * worker polls PublishJob for due (QUEUED / RETRYING) rows and executes them
- * through SchedulerService. A single poll tick:
- *   1. fetch up to BATCH_SIZE due jobs (QUEUED/RETRYING with scheduledAt <= now)
- *      — failed jobs are pushed into the future by an exponential backoff, so a
- *      broken platform is not hammered on every tick
- *   2. execute each job (concurrency-safe: markRunning atomically claims it)
- *   3. on a slower cadence, ingest fresh comments for every active account
- *   4. sleep POLL_INTERVAL_MS, repeat.
+ * All dispatch goes through QueueService, a pluggable seam. Backed today by the
+ * Prisma-backed implementation (job rows on `PublishJob`), with a reserved
+ * `QueueKind='bullmq'` switch so a Redis-backed implementation can drop in
+ * without touching this file. A single poll tick through the Prisma seam:
+ *   1. runPublishTick — claims up to BATCH_SIZE due jobs (QUEUED/RETRYING with
+ *      scheduledAt <= now) and executes them; markRunning atomically claims each
+ *      job so concurrent workers never double-publish
+ *   2. on a slower cadence, runEngagementSyncTick ingests fresh comments +
+ *      messages for every active account
+ *   3. on a yet slower cadence, runAnomalyScanTick scans every account's series
+ *      and alerts teams when anomalies change
+ *   4. sleep POLL_INTERVAL_MS, repeat
  *
- * Stops gracefully on SIGINT/SIGTERM (enableShutdownHooks in main).
+ * Stops gracefully on SIGINT/SIGTERM.
  */
 async function bootstrap() {
   const logger = new Logger('PublishWorker');
@@ -48,9 +49,7 @@ async function bootstrap() {
   });
   await app.init();
 
-  const scheduler = app.get(SchedulerService);
-  const engagement = app.get(EngagementService);
-  const analytics = app.get(AnalyticsService);
+  const queue = app.get(QueueService);
 
   let running = true;
   let lastEngagementSync = 0;
@@ -65,77 +64,70 @@ async function bootstrap() {
 
   logger.log(
     `Publish worker started (poll ${POLL_INTERVAL_MS}ms, batch ${BATCH_SIZE}, ` +
+      `queue=${queue.kind}, ` +
       `engagement sync every ${ENGAGEMENT_SYNC_INTERVAL_MS}ms, ` +
       `anomaly scan every ${ANOMALY_SCAN_INTERVAL_MS}ms)`,
   );
 
+  // Negative setTimeout are clamped to 1 ms by Node, so toMs guards delay bounds.
+  const toMs = (ms: number) => Math.max(1, ms);
+
   while (running) {
     try {
-      const due = await scheduler.getDueJobs(new Date(), BATCH_SIZE);
-      if (due.length > 0) {
-        logger.log(`Processing ${due.length} due job(s)`);
-      }
-      for (const job of due) {
-        if (!running) break;
-        try {
-          await scheduler.executeJob(job.id);
-        } catch (err) {
-          logger.error(
-            `Job ${job.id} execution error: ${err instanceof Error ? err.message : err}`,
-          );
-        }
+      const pub = await queue.runPublishTick(new Date(), BATCH_SIZE);
+      if (pub.processed > 0) {
+        logger.log(
+          `Publish tick: processed ${pub.processed} job(s) — ` +
+            `${pub.succeeded} ok / ${pub.failed} failed`,
+        );
       }
 
-      // Slower-cadence engagement sync: ingest comments for all active
-      // accounts. Uses a simple elapsed-Time comparison rather thancron;
-      // Date.now() here is fine — it's wall-clock scheduling, not data.
       const now = Date.now();
       if (now - lastEngagementSync >= ENGAGEMENT_SYNC_INTERVAL_MS) {
         lastEngagementSync = now;
         try {
-          const summary = await engagement.syncAllTeams();
-          const totalComments = summary.reduce((acc, s) => acc + s.comments, 0);
-          const totalMessages = summary.reduce((acc, s) => acc + s.messages, 0);
-          if (totalComments > 0 || totalMessages > 0) {
+          const summary = await queue.runEngagementSyncTick();
+          if (summary.comments > 0 || summary.messages > 0) {
             logger.log(
-              `Engagement sync: ${summary.length} team(s), ` +
-                `${totalComments} comment(s), ${totalMessages} message(s)`,
+              `Engagement sync: ${summary.teams} team(s), ` +
+                `${summary.comments} comment(s), ${summary.messages} message(s)`,
             );
           }
         } catch (err) {
           logger.warn(
-            `Engagement sync failed: ${err instanceof Error ? err.message : err}`,
+            `Engagement sync failed: ${
+              err instanceof Error ? err.message : err
+            }`,
           );
         }
       }
 
-      // Analytics anomaly detection: scan every active account and alert teams
-      // when the set of active anomalies changes. Slow cadence — the series
-      // only moves with daily snapshots.
       if (now - lastAnomalyScan >= ANOMALY_SCAN_INTERVAL_MS) {
         lastAnomalyScan = now;
         try {
-          const results = await analytics.scanAllAndAlert();
-          const alerted = results.filter((r) => r.notified).length;
-          const totalAnomalies = results.reduce((acc, r) => acc + r.anomalies, 0);
-          if (alerted > 0 || totalAnomalies > 0) {
+          const results = await queue.runAnomalyScanTick();
+          if (results.anomalies > 0 || results.teamsAlerted > 0) {
             logger.log(
-              `Anomaly scan: ${results.length} account(s), ` +
-                `${totalAnomalies} anomaly(s), ${alerted} team(s) alerted`,
+              `Anomaly scan: ${results.accounts} account(s), ` +
+                `${results.anomalies} anomaly(s), ${results.teamsAlerted} team(s) alerted`,
             );
           }
         } catch (err) {
           logger.warn(
-            `Anomaly scan failed: ${err instanceof Error ? err.message : err}`,
+            `Anomaly scan failed: ${
+              err instanceof Error ? err.message : err
+            }`,
           );
         }
       }
     } catch (err) {
-      logger.error(`Poll tick failed: ${err instanceof Error ? err.message : err}`);
+      logger.error(
+        `Poll tick failed: ${err instanceof Error ? err.message : err}`,
+      );
     }
 
     if (!running) break;
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    await new Promise((resolve) => setTimeout(resolve, toMs(POLL_INTERVAL_MS)));
   }
 
   logger.log('Publish worker stopping...');
