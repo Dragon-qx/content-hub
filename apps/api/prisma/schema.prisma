@@ -36,6 +36,7 @@ model Team {
   accounts          SocialAccount[]
   users             User[]
   sentimentKeywords SentimentKeyword[]
+  templates         ContentTemplate[]
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 }
@@ -109,6 +110,24 @@ model ContentVersion {
   createdAt   DateTime @default(now())
 
   @@index([contentId])
+}
+
+// Reusable content templates scoped to a team. A template captures a body,
+// content type and tags so editors can spin up new content from a proven
+// starting point (PRD §3.3 内容模板, P1).
+model ContentTemplate {
+  id          String   @id @default(cuid())
+  teamId      String
+  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  title       String
+  body        String?
+  contentType ContentType @default(TEXT)
+  tags        String[] @default([])
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([teamId])
 }
 
 model MediaAsset {

@@ -9,11 +9,13 @@ import MarkdownEditor from '@/components/MarkdownEditor';
 import { Table } from '@/components/Table';
 import {
   Content,
+  ContentTemplate,
   Paginated,
   ContentStatus,
   CONTENT_STATUSES,
   CONTENT_TYPES,
   STATUS_LABELS,
+  TemplateDraftSeed,
 } from '@/lib/types';
 
 export default function ContentPage() {
@@ -76,6 +78,76 @@ export default function ContentPage() {
     }
   };
 
+  // ── Content templates (PRD §3.3 内容模板) ───────────────────────────
+  const [templates, setTemplates] = useState<ContentTemplate[]>([]);
+  const [showTemplateForm, setShowTemplateForm] = useState(false);
+  const [tplTitle, setTplTitle] = useState('');
+  const [tplBody, setTplBody] = useState('');
+  const [tplType, setTplType] = useState('TEXT');
+  const [tplTags, setTplTags] = useState('');
+  const [tplSaving, setTplSaving] = useState(false);
+  const [tplError, setTplError] = useState<string | null>(null);
+
+  const loadTemplates = async () => {
+    try {
+      const qs = new URLSearchParams({ teamId, skip: '0', take: '50' });
+      const res = await api.get<Paginated<ContentTemplate>>(`/templates?${qs.toString()}`);
+      setTemplates(res.items);
+    } catch {
+      setTemplates([]);
+    }
+  };
+
+  useEffect(() => {
+    loadTemplates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamId]);
+
+  const saveTemplate = async (e: FormEvent) => {
+    e.preventDefault();
+    setTplSaving(true);
+    setTplError(null);
+    try {
+      const tags = tplTags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      await api.post('/templates', { title: tplTitle, body: tplBody, contentType: tplType, teamId, tags });
+      setTplTitle('');
+      setTplBody('');
+      setTplTags('');
+      setShowTemplateForm(false);
+      await loadTemplates();
+    } catch (err: any) {
+      setTplError(err?.message ?? 'Failed to save template.');
+    } finally {
+      setTplSaving(false);
+    }
+  };
+
+  const deleteTemplate = async (id: string) => {
+    try {
+      await api.del(`/templates/${id}`);
+      await loadTemplates();
+    } catch {
+      // Ignore deletion errors best-effort; list refreshes next interaction.
+    }
+  };
+
+  /** Apply a template to seed the new-content form, then reveal it. */
+  const newFromTemplate = async (t: ContentTemplate) => {
+    try {
+      const seed = await api.post<TemplateDraftSeed>(`/templates/${t.id}/apply`, { teamId });
+      setTitle(seed.title);
+      setBody(seed.body ?? '');
+      setContentType(seed.contentType);
+      setTagsInput(seed.tags.join(', '));
+      setShowForm(true);
+    } catch (err: any) {
+      setTplError(err?.message ?? 'Failed to apply template.');
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -107,6 +179,72 @@ export default function ContentPage() {
             </Select>
           </Field>
         </div>
+      </Card>
+
+      {/* Content templates — reusable starting points for new content. */}
+      <Card className="mb-6">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-900">Templates</h2>
+          <Button variant="secondary" onClick={() => setShowTemplateForm((s) => !s)}>
+            {showTemplateForm ? 'Cancel' : '+ New template'}
+          </Button>
+        </div>
+
+        {tplError && (
+          <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{tplError}</div>
+        )}
+
+        {showTemplateForm && (
+          <form onSubmit={saveTemplate} className="mb-4 flex flex-col gap-3 rounded-lg border border-slate-200 p-4">
+            <Input placeholder="Template title" value={tplTitle} onChange={(e) => setTplTitle(e.target.value)} required />
+            <MarkdownEditor value={tplBody} onChange={setTplBody} placeholder="Template body (Markdown)…" />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <Select value={tplType} onChange={(e) => setTplType(e.target.value)}>
+                {CONTENT_TYPES.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </Select>
+              <Input value={teamId} onChange={(e) => setTeamId(e.target.value)} placeholder="Team ID" />
+              <Input value={tplTags} onChange={(e) => setTplTags(e.target.value)} placeholder="Tags (comma-separated)" />
+            </div>
+            <div className="flex justify-end">
+              <Button type="submit" disabled={tplSaving}>
+                {tplSaving ? 'Saving…' : 'Save template'}
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {templates.length === 0 ? (
+          <p className="text-sm text-slate-400">
+            No templates yet. Save a template to reuse its structure when creating content.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {templates.map((t) => (
+              <li
+                key={t.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-slate-700">{t.title}</div>
+                  <div className="text-xs text-slate-400">
+                    {t.contentType}
+                    {t.tags.length > 0 && <> · {t.tags.join(', ')}</>}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button variant="secondary" onClick={() => newFromTemplate(t)}>
+                    New from template
+                  </Button>
+                  <Button variant="danger" onClick={() => deleteTemplate(t.id)}>
+                    Delete
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
       {showForm && (

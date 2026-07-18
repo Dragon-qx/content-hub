@@ -45,6 +45,28 @@ export interface ContentVersion {
   createdAt: string;
 }
 
+/** A reusable content template scoped to a team (PRD §3.3 内容模板). */
+export interface ContentTemplate {
+  id: string;
+  teamId: string;
+  title: string;
+  body?: string | null;
+  contentType: ContentType;
+  tags: string[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Draft seed returned by POST /templates/:id/apply — input for creating content. */
+export interface TemplateDraftSeed {
+  title: string;
+  body?: string;
+  contentType: ContentType;
+  teamId: string;
+  tags: string[];
+}
+
 /** Statuses a content item may be in — mirrors the backend ContentStatus enum. */
 export type ContentStatus =
   | 'DRAFT'

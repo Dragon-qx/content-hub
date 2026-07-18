@@ -9,6 +9,7 @@ import PageHeader from '@/components/PageHeader';
 import MarkdownEditor, { renderMarkdown } from '@/components/MarkdownEditor';
 import MediaLibrary from '@/components/MediaLibrary';
 import AdaptationPreview from '@/components/AdaptationPreview';
+import TemplatePicker from '@/components/TemplatePicker';
 import {
   Content,
   ContentVersion,
@@ -19,6 +20,7 @@ import {
   StatusAction,
   CONTENT_TYPES,
   MediaAsset,
+  TemplateDraftSeed,
 } from '@/lib/types';
 
 /** Rendered, XSS-sanitized markdown preview. */
@@ -68,6 +70,9 @@ function ContentDetail({ id }: { id: string }) {
 
   // Media library picker
   const [showMedia, setShowMedia] = useState(false);
+
+  // Template picker
+  const [showTemplates, setShowTemplates] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -170,6 +175,14 @@ function ContentDetail({ id }: { id: string }) {
     [],
   );
 
+  /** Seed the editor from an applied template. */
+  const applyTemplate = useCallback((seed: TemplateDraftSeed) => {
+    setTitle(seed.title);
+    setBody(seed.body ?? '');
+    setContentType(seed.contentType);
+    setShowTemplates(false);
+  }, []);
+
   if (loading) return <div className="text-slate-400">Loading…</div>;
   if (error && !content) return <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>;
   if (!content) return null;
@@ -268,13 +281,23 @@ function ContentDetail({ id }: { id: string }) {
       <Card>
         {editing ? (
           <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Select value={contentType} onChange={(e) => setContentType(e.target.value)} className="max-w-xs">
                 {CONTENT_TYPES.map((t) => (
                   <option key={t} value={t}>{t}</option>
                 ))}
               </Select>
+              <Button variant="ghost" onClick={() => setShowTemplates((s) => !s)}>
+                {showTemplates ? 'Hide templates' : 'Load template'}
+              </Button>
             </div>
+            {showTemplates && (
+              <TemplatePicker
+                teamId={content.teamId}
+                onApply={applyTemplate}
+                onCancel={() => setShowTemplates(false)}
+              />
+            )}
             <MarkdownEditor
               value={body}
               onChange={setBody}

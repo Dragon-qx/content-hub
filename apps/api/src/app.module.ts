@@ -10,6 +10,7 @@ import { AccountModule } from './modules/account/account.module';
 import { AdaptationModule } from './modules/adaptation/adaptation.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ContentModule } from './modules/content/content.module';
+import { ContentTemplateModule } from './modules/content-template/content-template.module';
 import { MediaModule } from './modules/media/media.module';
 import { PlatformSdkModule } from './modules/platform-sdk/platform-sdk.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
@@ -51,6 +52,7 @@ import { HealthModule } from './modules/health/health.module';
     CryptoModule,
     AuthModule,
     ContentModule,
+    ContentTemplateModule,
     MediaModule,
     UserModule,
     TeamModule,
