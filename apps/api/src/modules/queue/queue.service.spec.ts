@@ -4,6 +4,7 @@ import { QueueService } from './queue.service';
 import { SchedulerService } from '../scheduler/scheduler.service';
 import { EngagementService } from '../engagement/engagement.service';
 import { AnalyticsService } from '../analytics/analytics.service';
+import { HealthService } from '../health/health.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
 const mockScheduler = () => ({
@@ -20,23 +21,32 @@ const mockAnalytics = () => ({
   scanAllAndAlert: jest.fn().mockResolvedValue([]),
 });
 
+const mockHealth = () => ({
+  checkThresholdAlerts: jest.fn().mockResolvedValue({ alerts: [], notified: 0 }),
+});
+
 describe('QueueService', () => {
   let service: QueueService;
   let scheduler: ReturnType<typeof mockScheduler>;
   let engagement: ReturnType<typeof mockEngagement>;
   let analytics: ReturnType<typeof mockAnalytics>;
+  let health: ReturnType<typeof mockHealth>;
+  let prisma: any;
 
   beforeEach(async () => {
     scheduler = mockScheduler();
     engagement = mockEngagement();
     analytics = mockAnalytics();
+    health = mockHealth();
+    prisma = { team: { findMany: jest.fn().mockResolvedValue([]) } };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         QueueService,
         { provide: SchedulerService, useValue: scheduler },
         { provide: EngagementService, useValue: engagement },
         { provide: AnalyticsService, useValue: analytics },
-        { provide: PrismaService, useValue: {} },
+        { provide: HealthService, useValue: health },
+        { provide: PrismaService, useValue: prisma },
         { provide: 'QUEUE_KIND', useValue: 'prisma' },
       ],
     }).compile();
@@ -103,7 +113,8 @@ describe('QueueService', () => {
           { provide: SchedulerService, useValue: scheduler },
           { provide: EngagementService, useValue: engagement },
           { provide: AnalyticsService, useValue: analytics },
-          { provide: PrismaService, useValue: {} },
+          { provide: HealthService, useValue: health },
+          { provide: PrismaService, useValue: prisma },
           { provide: 'QUEUE_KIND', useValue: 'bullmq' },
         ],
       }).compile();
@@ -140,6 +151,14 @@ describe('QueueService', () => {
       expect(res.accounts).toBe(2);
       expect(res.anomalies).toBe(2);
       expect(res.teamsAlerted).toBe(1);
+    });
+  });
+
+  describe('runThresholdScanTick', () => {
+    it('returns zeroes when no teams', async () => {
+      prisma.team.findMany.mockResolvedValue([]);
+      const res = await service.runThresholdScanTick();
+      expect(res).toEqual({ teams: 0, alerts: 0, teamsNotified: 0 });
     });
   });
 });

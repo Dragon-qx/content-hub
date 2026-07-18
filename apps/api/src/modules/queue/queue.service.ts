@@ -66,7 +66,7 @@ export class QueueService {
     private readonly scheduler: SchedulerService,
     private readonly engagement: EngagementService,
     private readonly analytics: AnalyticsService,
-    private readonly health: HealthService,
+    @Optional() private readonly health?: HealthService,
     @Optional()
     @Inject('QUEUE_KIND')
     readonly kind: QueueKind = 'prisma',
@@ -137,6 +137,7 @@ export class QueueService {
 
   /** Run a threshold health scan across every team and notify teams below the threshold. */
   async runThresholdScanTick(): Promise<ThresholdScanResult> {
+    if (!this.health) return { teams: 0, alerts: 0, teamsNotified: 0 };
     const teams = await this.prisma.team.findMany({ select: { id: true } });
     let teamsNotified = 0;
     let alerts = 0;
