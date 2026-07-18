@@ -6,39 +6,54 @@
 /home/ubuntu/.openclaw/workspace/content-hub
 
 ## 当前进度
-- M1-M7: ✅ 已完成
-- M8: ✅ 合并 worktree M5/M6, fix tests, add audit/workflow DTOs
-- M9: ✅ credential encryption, user search/pagination, team RBAC
-- M10: ✅ full Next.js frontend with auth, dashboard, and management pages
-- M11: ✅ platform adapter abstraction layer with WeChat Video, Douyin, XHS, Bilibili adapters and factory
-- M12: ✅ notifications, CSV export, Swagger, CI/CD, deploy config
-- M13: ✅ API docs, coverage
-- M14: ✅ publish execution pipeline: real PlatformSdkService, scheduler executeJob + retry/worker, token-injection adapter seam, PublishJob schema extension, migration
-- M15: ✅ security hardening: JwtAuthGuard on analytics/audit/workflow, Media query DTO + pagination, scheduler _title fix + conditional markRunning (no double-execution), frontend 401 handler seam, rate limiting (@nestjs/throttler)
+- M1–M15: ✅ 已完成（基础架构 → 安全加固）
+- M18: ✅ 已完成（TOTP 双因素认证）
+- M19: ✅ 已完成（Content Studio Markdown 编辑器增强）
+- M20: ✅ 已完成（Engagement Hub — 评论/私信聚合、情感分析、关键词告警）
+- M21: ✅ 已完成（平台扩展：Twitter + YouTube + 微博适配器 + 审查修复）
+- M22: ✅ 已完成（异常检测引擎 — 5 规则自动检测 + 团队广播）
+- M23: ✅ 已完成（内容日历 — 月视图排期）
+- M24: ✅ 已完成（内容适配引擎 — 8 平台规则自动适配 + 实时预览）
+- M25: ✅ 已完成（内容模板库）
+- M26: ✅ 已完成（内容版本回滚）
+- M27: ✅ 已完成（内容排行榜 Top/Bottom 自动标记）
+
+## 剩余任务
+
+### 收尾项
+- [ ] 单元测试覆盖率 ≥ 80%（当前 lines 91.9% / branches 63% / funcs 92.5%，已达目标 ✅）
+- [ ] E2E 测试
+- [ ] CI/CD 配置（GitHub Actions）
+- [ ] 生产环境部署配置
+- [ ] API 文档（Swagger/OpenAPI）
+- [ ] 用户手册
+
+## 🔥 铁律：每次完成必须记录
+
+**每次完成一个功能点或修复后，你 MUST：**
+
+1. **更新 CLAUDE-TASK.md** — 将对应的 `[ ]` 改为 `[x]`，写明完成内容
+2. **更新 docs/DEVELOPMENT-PLAN.md** — 在对应里程碑下补充完成摘要（参考已有格式）
+3. **更新 docs/BLOCKERS.md**（如有阻塞）— 记录遇到的问题和解决方案
+4. **commit + push** — commit message 包含里程碑编号
 
 ## 当前任务
 
-### 第一步：清理已合并的 worktree
-1. cd /home/ubuntu/.openclaw/workspace/content-hub
-2. git worktree remove .claude/worktrees/content-hub-m5
-3. git branch -d worktree-content-hub-m5
-4. git status 确认工作区干净
+### 方向 A：收尾加固（推荐优先）
+1. E2E 测试（核心用户旅程：登录 → 创建内容 → 审批 → 发布）
+2. GitHub Actions CI/CD（lint + test + build + deploy 流程）
+3. 生产环境部署配置（docker-compose.prod.yml + 环境变量文档）
+4. Swagger/OpenAPI 文档完善
+5. 用户手册（docs/USER-GUIDE.md）
 
-### 第二步：代码审查与完善
-1. 运行完整测试套件：pnpm test（或项目对应的测试命令）
-2. 测试通过后，审查现有代码：
-   - 检查是否有 TODO/FIXME 注释未处理
-   - 验证所有 API 端点正常工作
-   - 检查前端页面是否完整
-3. 处理发现的问题，commit + push
-
-### 第三步：继续开发
-根据项目状态，选择以下方向之一继续：
-- 性能优化（缓存、查询优化）
-- 安全加固（输入验证、权限检查）
-- 新功能开发（由你根据 PRD 判断最需要什么）
+### 方向 B：新功能扩展
+根据 PRD 判断，可选方向：
+- AI 辅助写作集成（PRD §3.3）
+- 智能排期推荐
+- 自定义报表
 
 ## 重要约束
+- **每次完成必须按「铁律」更新文档，不得跳过**
 - 所有 commit message 使用英文
 - 每个重要完成后必须 commit + push
 - 如果遇到无法解决的问题，记录到 docs/BLOCKERS.md 并继续下一项
