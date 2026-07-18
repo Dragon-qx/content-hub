@@ -304,7 +304,7 @@
 - [ ] AI 回复建议（PRD §3.6）
 - [ ] 账号转移/交接（PRD §3.2 P1）
 - [ ] BullMQ 真实集成（PRD §3.4）— 替代当前 Prisma 轮询 mock
-- [ ] 移动端响应式/PWA（PRD §4.5）
+- [x] 移动端响应式/PWA（PRD §4.5）— M40: MobileNav + ServiceWorkerRegistration + manifest.json + sw.js + offline page；Sidebar 抽屉式 + Topbar 汉堡菜单；16 页面 + 12 组件移动响应式适配
 
 ### 🟢 低优先级
 - [ ] 自定义报表拖拽生成（PRD §3.5 P2）
@@ -313,9 +313,25 @@
 ### 🔧 技术债务/质量改进
 - [ ] 真实 AI 接入 — ContentAssistant/适配器/异常检测当前全是确定性启发式
 - [ ] WYSIWYG 编辑器 — PRD §3.3 要求 Markdown + 所见即所得双模式
-- [ ] OAuth callback 硬编码修正 — 写死 `https://your-domain.com/callback`
+- [x] OAuth callback 硬编码修正（M39）— oauth-callback.ts 共享 resolver（OAUTH_CALLBACK_BASE env → per-platform redirect_uri，`AdapterBase.callbackFor(platform)` helper）；7 个适配器全部改用；spec 3 默认宿/路径拼接/小写 slug
 - [ ] 平台 SDK mock→真实调用 — 抖音/小红书/公众号/视频号/微博 publish() 占位 URL
 - [ ] 数据库 migration 文件 — 当前仅 Prisma schema
+
+### M40: V1.1 — 移动端响应式 + PWA (Mobile Responsive + PWA) (PRD §4.5)
+**目标:** 让 ContentHub 前端在手机/平板/桌面全场景可用，PWA 可安装 + 离线缓存。
+
+- [x] **MobileNav** — `apps/web/src/components/MobileNav.tsx`：底部 5 入口 Tab 导航（Home/Content/Media/Schedule/More），`md:hidden` 仅在移动端显示，含 safe-area-inset-bottom 适配
+- [x] **Topbar** — 添加汉堡菜单按钮（`md:hidden`）+ 用户信息文字截断（`truncate max-w-[120px] md:max-w-none`）+ 缩小高度（`h-14 md:h-16`）
+- [x] **Sidebar** — 移动抽屉式：backdrop 遮罩 + `translate-x` 动画过渡 + 关闭按钮；md+ 保持原侧边栏行为
+- [x] **Layout 状态管理** — `(app)/layout.tsx` 控制 sidebar 开关 + 内容区 `pb-20 md:pb-8` 为底部 Tab 留白
+- [x] **globals.css** — safe-area-inset-bottom + `overscroll-beh-y: contain` + 触摸设备优化（min-height 36px + 文本大小调整）
+- [x] **manifest.json** — PWA 独立应用清单（standalone / theme_color / icons）
+- [x] **sw.js** — Service Worker：precache（offline + icons + manifest）+ runtime cache navigations + GET caching + offline fallback
+- [x] **ServiceWorkerRegistration.tsx** — 客户端 SW 注册（load 事件后）
+- [x] **offline/page.tsx** — 断网提示页（重试按钮 + 自动重连说明）
+- [x] **16 页面移动响应式** — dashboard/analytics/assistant/audit/content/calendar/dashboard/engagement/media/notifications/scheduler/settings/teams/workflow/contents/[id]：grid-cols 移动优先、Table 包裹 `overflow-x-auto`、Select `w-full sm:max-w-[180px]`/`max-w-xs`、按钮 `min-h-[44px]` 触摸目标
+- [x] **12 组件移动响应式** — Sidebar/Topbar/LoginForm/Table/MarkdownEditor/MediaLibrary/TemplatePicker/AdaptationPreview/TrendChart/MobileNav/ServiceWorkerRegistration：响应式 padding/文字/触摸目标
+- [x] **测试** — Next.js build 18 条路由静态生成成功，typecheck 全绿
 
 ### M20: V1.1 — Engagement Hub（互动管理）
 **目标：** 统一评论收件箱 + 情感分析 + 快捷回复（PRD §3.6）
