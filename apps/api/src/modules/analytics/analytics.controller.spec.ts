@@ -46,8 +46,13 @@ describe('AnalyticsController', () => {
     expect(service.getHistory).toHaveBeenCalledWith('impressions', '30d');
   });
 
-  it('getTopContent forwards sortBy and limit from the query', async () => {
+  it('getTopContent forwards sortBy, limit and view from the query', async () => {
+    await controller.getTopContent({ sortBy: 'likes', limit: 5, view: 'bottom' } as any);
+    expect(service.getTopContent).toHaveBeenCalledWith('likes', 5, 'bottom');
+  });
+
+  it('getTopContent defaults view to top when omitted', async () => {
     await controller.getTopContent({ sortBy: 'likes', limit: 5 } as any);
-    expect(service.getTopContent).toHaveBeenCalledWith('likes', 5);
+    expect(service.getTopContent).toHaveBeenCalledWith('likes', 5, 'top');
   });
 });

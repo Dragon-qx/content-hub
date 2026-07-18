@@ -1,6 +1,6 @@
 import { IsInt, IsOptional, IsString, Min, Max, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
-import { AnalyticsMetric } from '../analytics.service';
+import { AnalyticsMetric, TopContentView } from '../analytics.service';
 
 /**
  * 时间范围查询 DTO
@@ -36,7 +36,7 @@ export class HistoryQueryDto {
 }
 
 /**
- * 热门内容查询 DTO
+ * 内容排行榜查询 DTO（Top / Bottom 自动标记）
  */
 export class TopContentQueryDto {
   @IsOptional()
@@ -59,4 +59,9 @@ export class TopContentQueryDto {
   @Min(1)
   @Max(100)
   limit?: number = 10;
+
+  /** Which end of the ranking to surface: 'top' (default) or 'bottom'. */
+  @IsOptional()
+  @IsIn(['top', 'bottom'])
+  view?: TopContentView = 'top';
 }

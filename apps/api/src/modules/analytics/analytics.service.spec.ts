@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import { AnalyticsService } from './analytics.service';
+import { AnalyticsService, classifyTier } from './analytics.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 
@@ -253,6 +253,107 @@ describe('AnalyticsService', () => {
 
       const result = await service.getTopContent('impressions', 10);
       expect(result.items).toEqual([]);
+    });
+
+    it('auto-marks TOP / MID / BOTTOM tiers relative to the cohort mean', async () => {
+      const now = new Date();
+      // Mean impressions = 700. High (1200, ratio 1.71) → TOP, Mid (800,
+      // ratio 1.14) → MID, Low (100, ratio 0.14) → BOTTOM.
+      prisma.platformPost.findMany.mockResolvedValue([
+        {
+          contentId: 'c1',
+          platform: 'WECHAT_OFFICIAL',
+          publishedAt: now,
+          content: { title: 'High' },
+          metrics: { impressions: 1200, likes: 120, comments: 0, shares: 0 },
+        },
+        {
+          contentId: 'c2',
+          platform: 'DOUYIN',
+          publishedAt: now,
+          content: { title: 'Mid' },
+          metrics: { impressions: 800, likes: 80, comments: 0, shares: 0 },
+        },
+        {
+          contentId: 'c3',
+          platform: 'BILIBILI',
+          publishedAt: now,
+          content: { title: 'Low' },
+          metrics: { impressions: 100, likes: 1, comments: 0, shares: 0 },
+        },
+      ]);
+
+      const result = await service.getTopContent('impressions', 10);
+
+      const byTitle = (t: string) => result.items.find((i) => i.title === t)!;
+      expect(byTitle('High').tier).toBe('TOP');
+      expect(byTitle('Mid').tier).toBe('MID');
+      expect(byTitle('Low').tier).toBe('BOTTOM');
+    });
+
+    it('summarises the tier distribution across the whole cohort', async () => {
+      const now = new Date();
+      prisma.platformPost.findMany.mockResolvedValue([
+        {
+          contentId: 'c1', platform: 'WECHAT_OFFICIAL', publishedAt: now,
+          content: { title: 'High' }, metrics: { impressions: 1000, likes: 0, comments: 0, shares: 0 },
+        },
+        {
+          contentId: 'c2', platform: 'DOUYIN', publishedAt: now,
+          content: { title: 'Low' }, metrics: { impressions: 10, likes: 0, comments: 0, shares: 0 },
+        },
+      ]);
+
+      const result = await service.getTopContent('impressions', 10);
+      expect(result.view).toBe('top');
+      expect(result.summary.total).toBe(2);
+      expect(result.summary.top).toBe(1);
+      expect(result.summary.bottom).toBe(1);
+      expect(result.summary.mid).toBe(0);
+      // best-first: highest impressions ranked #1
+      expect(result.items[0].rank).toBe(1);
+      expect(result.items[0].title).toBe('High');
+    });
+
+    it('surfaces underperformers first when view is bottom', async () => {
+      const now = new Date();
+      prisma.platformPost.findMany.mockResolvedValue([
+        {
+          contentId: 'c1', platform: 'WECHAT_OFFICIAL', publishedAt: now,
+          content: { title: 'High' }, metrics: { impressions: 1000, likes: 0, comments: 0, shares: 0 },
+        },
+        {
+          contentId: 'c2', platform: 'DOUYIN', publishedAt: now,
+          content: { title: 'Low' }, metrics: { impressions: 50, likes: 0, comments: 0, shares: 0 },
+        },
+        {
+          contentId: 'c3', platform: 'BILIBILI', publishedAt: now,
+          content: { title: 'Mid' }, metrics: { impressions: 200, likes: 0, comments: 0, shares: 0 },
+        },
+      ]);
+
+      const result = await service.getTopContent('impressions', 10, 'bottom');
+      expect(result.view).toBe('bottom');
+      // worst-first: lowest impressions ranked #1
+      expect(result.items[0].title).toBe('Low');
+      expect(result.items[0].rank).toBe(1);
+      expect(result.items[result.items.length - 1].title).toBe('High');
+      result.items.forEach((it) => expect(it.tier).toBeDefined());
+    });
+  });
+
+  describe('classifyTier', () => {
+    it('collapses to MID when there is no signal', () => {
+      expect(classifyTier(0, 0)).toBe('MID');
+      expect(classifyTier(99, 0)).toBe('MID');
+    });
+
+    it('marks TOP at ≥1.2× the mean and BOTTOM at ≤0.5× the mean', () => {
+      expect(classifyTier(120, 100)).toBe('TOP');
+      expect(classifyTier(119, 100)).toBe('MID');
+      expect(classifyTier(50, 100)).toBe('MID');
+      expect(classifyTier(49, 100)).toBe('BOTTOM');
+      expect(classifyTier(80, 100)).toBe('MID');
     });
   });
 

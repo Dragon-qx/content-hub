@@ -32,6 +32,56 @@ const METRIC_KEYS: readonly AnalyticsMetric[] = [
   'views',
 ];
 
+/**
+ * Performance tier auto-marked relative to the cohort mean (PRD §3.5
+ * "排行 Top/Bottom 内容自动标记"). A post is TOP when its ranked metric sits
+ * ≥20% above the mean, BOTTOM when ≤50% of the mean, otherwise MID.
+ */
+export type ContentTier = 'TOP' | 'MID' | 'BOTTOM';
+
+/** Which end of the ranking a caller wants to surface. */
+export type TopContentView = 'top' | 'bottom';
+
+/** A single ranked content item (with tier + rank surfaced to the dashboard). */
+export interface RankedContentItem {
+  contentId: string;
+  title: string;
+  platform: string;
+  publishedAt: Date | null;
+  impressions: number;
+  engagements: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  engagementRate: string;
+  rank: number;
+  tier: ContentTier;
+}
+
+/** Aggregate ranking payload returned to the dashboard. */
+export interface ContentRanking {
+  sortBy: AnalyticsMetric;
+  view: TopContentView;
+  summary: { total: number; top: number; mid: number; bottom: number };
+  items: RankedContentItem[];
+}
+
+/** Metrics that can actually be used to rank content. */
+const RANKABLE_METRICS = ['impressions', 'engagements', 'likes', 'comments', 'shares'] as const;
+
+/**
+ * Mark a value as TOP / MID / BOTTOM relative to the cohort mean. Pure so it is
+ * independently unit-tested. With no signal (mean ≤ 0) everything collapses to
+ * MID.
+ */
+export function classifyTier(value: number, mean: number): ContentTier {
+  if (mean <= 0) return 'MID';
+  const ratio = value / mean;
+  if (ratio >= 1.2) return 'TOP';
+  if (ratio < 0.5) return 'BOTTOM';
+  return 'MID';
+}
+
 /** Optional payload for recording a snapshot manually. */
 export interface SnapshotInput {
   snapshotDate?: string | Date;
@@ -241,9 +291,19 @@ export class AnalyticsService {
     return { metric, period, data };
   }
 
-  // ===== 4. 热门内容榜 =====
+  // ===== 4. 内容排行榜（Top / Bottom 自动标记） =====
 
-  async getTopContent(sortBy: AnalyticsMetric = 'impressions', limit: number = 10) {
+  /**
+   * Rank the most recent content by a metric and auto-mark each item TOP /
+   * MID / BOTTOM relative to the cohort mean (PRD §3.5). `view` selects which
+   * end of the distribution to surface: 'top' (best-first, default) or
+   * 'bottom' (worst-first) — so operators can spot underperformers at a glance.
+   */
+  async getTopContent(
+    sortBy: AnalyticsMetric = 'impressions',
+    limit: number = 10,
+    view: TopContentView = 'top',
+  ): Promise<ContentRanking> {
     const posts = await this.prisma.platformPost.findMany({
       orderBy: { publishedAt: 'desc' },
       take: 100,
@@ -277,16 +337,35 @@ export class AnalyticsService {
       };
     });
 
-    // 排序
-    const sortKey = ['impressions', 'engagements', 'likes', 'comments', 'shares'].includes(sortBy)
+    // Resolve the ranking key (only content-level metrics are rankable).
+    const sortKey = RANKABLE_METRICS.includes(sortBy as typeof RANKABLE_METRICS[number])
       ? sortBy : 'impressions';
-    items.sort((a, b) => {
+
+    // Cohort mean of the ranked metric, used as the tier threshold.
+    const values = items.map(i => i[sortKey as keyof typeof i] as number);
+    const mean = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+
+    // Tag each item with its tier before ordering/slicing.
+    const tagged = items.map(it => ({ ...it, tier: classifyTier(it[sortKey as keyof typeof it] as number, mean) }));
+
+    // Order: best-first for 'top', worst-first for 'bottom'.
+    tagged.sort((a, b) => {
       const aVal = a[sortKey as keyof typeof a] as number;
       const bVal = b[sortKey as keyof typeof b] as number;
-      return bVal - aVal;
+      return view === 'bottom' ? aVal - bVal : bVal - aVal;
     });
 
-    return { sortBy, items: items.slice(0, limit) };
+    // Slice, then stamp a 1-based rank reflecting the displayed order.
+    const ranked = tagged.slice(0, limit).map((it, idx) => ({ ...it, rank: idx + 1 }));
+
+    const summary = {
+      total: items.length,
+      top: items.filter(i => classifyTier(i[sortKey as keyof typeof i] as number, mean) === 'TOP').length,
+      mid: items.filter(i => classifyTier(i[sortKey as keyof typeof i] as number, mean) === 'MID').length,
+      bottom: items.filter(i => classifyTier(i[sortKey as keyof typeof i] as number, mean) === 'BOTTOM').length,
+    };
+
+    return { sortBy: sortKey, view, summary, items: ranked };
   }
 
   // ===== 5. 单账号核心指标 =====

@@ -355,6 +355,55 @@ export const METRIC_LABELS: Record<AnalyticsMetric, string> = {
 export const TREND_PERIODS = ['7d', '30d', '90d'] as const;
 export type TrendPeriod = (typeof TREND_PERIODS)[number];
 
+// ── Content ranking: Top / Bottom auto-marking (PRD §3.5) ──────────────
+
+/** Performance tier a post is auto-assigned relative to the cohort mean. */
+export type ContentTier = 'TOP' | 'MID' | 'BOTTOM';
+
+/** Which end of the ranking a caller requests. */
+export type TopContentView = 'top' | 'bottom';
+
+export interface RankedContentItem {
+  contentId: string;
+  title: string;
+  platform: string;
+  publishedAt: string | null;
+  impressions: number;
+  engagements: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  engagementRate: string;
+  rank: number;
+  tier: ContentTier;
+}
+
+export interface ContentRankingSummary {
+  total: number;
+  top: number;
+  mid: number;
+  bottom: number;
+}
+
+export interface ContentRanking {
+  sortBy: AnalyticsMetric;
+  view: TopContentView;
+  summary: ContentRankingSummary;
+  items: RankedContentItem[];
+}
+
+export const CONTENT_TIER_LABELS: Record<ContentTier, string> = {
+  TOP: 'Top',
+  MID: 'Mid',
+  BOTTOM: 'Bottom',
+};
+
+export const CONTENT_TIER_TONE: Record<ContentTier, 'success' | 'neutral' | 'danger'> = {
+  TOP: 'success',
+  MID: 'neutral',
+  BOTTOM: 'danger',
+};
+
 // ── Anomaly detection (PRD §3.5) ───────────────────────────────────────
 
 /** An anomaly type mirrors the backend Anomaly.type for the dashboard badge. */

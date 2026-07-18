@@ -11,7 +11,11 @@ import {
   Anomaly,
   ANOMALY_SEVERITY_TONE,
   ANOMALY_TYPE_LABELS,
+  ContentRanking,
+  CONTENT_TIER_LABELS,
+  CONTENT_TIER_TONE,
   METRIC_LABELS,
+  TopContentView,
   TrendPeriod,
   TREND_PERIODS,
 } from '@/lib/types';
@@ -21,14 +25,6 @@ interface Overview {
   following: { value: number; change: string };
   impressions: { value: number; change: string };
   engagements: { value: number; change: string };
-  engagementRate: string;
-}
-
-interface TopItem {
-  title: string;
-  platform: string;
-  impressions: number;
-  engagements: number;
   engagementRate: string;
 }
 
@@ -50,7 +46,8 @@ interface HistoryPoint {
 
 export default function AnalyticsPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
-  const [top, setTop] = useState<TopItem[]>([]);
+  const [ranking, setRanking] = useState<ContentRanking | null>(null);
+  const [rankView, setRankView] = useState<TopContentView>('top');
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,17 +93,17 @@ export default function AnalyticsPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const [ov, tp, dash] = await Promise.all([
+        const [ov, rank, dash] = await Promise.all([
           api.get<Overview>('/analytics/overview?days=30'),
-          api.get<{ items: TopItem[] }>('/analytics/top-content?limit=5'),
+          api.get<ContentRanking>('/analytics/top-content?limit=10&view=top'),
           api.get<DashboardData>('/analytics/dashboard'),
         ]);
         setOverview(ov);
-        setTop(tp.items ?? []);
+        setRanking(rank);
         setDashboard(dash);
       } catch {
         setOverview(null);
-        setTop([]);
+        setRanking(null);
         setDashboard(null);
       } finally {
         setLoading(false);
@@ -114,6 +111,21 @@ export default function AnalyticsPage() {
     };
     load();
   }, []);
+
+  // Reload the ranking when the Top/Bottom view toggle changes.
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await api.get<ContentRanking>(
+          `/analytics/top-content?limit=10&view=${rankView}`,
+        );
+        setRanking(res);
+      } catch {
+        setRanking(null);
+      }
+    };
+    load();
+  }, [rankView]);
 
   // Trend data — reloads when the metric or period changes.
   useEffect(() => {
@@ -284,16 +296,49 @@ export default function AnalyticsPage() {
               )}
             </Card>
 
-            {/* Top content */}
+            {/* Content ranking — Top / Bottom auto-marking (PRD §3.5) */}
             <Card>
-              <h2 className="mb-3 text-base font-semibold">Top content</h2>
-              {top.length ? (
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-semibold">Content ranking</h2>
+                  {ranking && (
+                    <Badge tone="neutral">
+                      {ranking.summary.top}/{ranking.summary.mid}/{ranking.summary.bottom} top/mid/low
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex overflow-hidden rounded-lg border border-slate-200">
+                  {(['top', 'bottom'] as TopContentView[]).map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => setRankView(v)}
+                      className={`px-3 py-1.5 text-xs font-medium ${
+                        rankView === v
+                          ? 'bg-primary text-white'
+                          : 'bg-white text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {v === 'top' ? 'Top' : 'Bottom'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {ranking?.items.length ? (
                 <ul className="divide-y divide-slate-100">
-                  {top.map((p, i) => (
-                    <li key={i} className="flex items-center justify-between py-2 text-sm">
-                      <div>
-                        <div className="font-medium text-slate-700">{p.title}</div>
-                        <div className="text-xs text-slate-400">{p.platform}</div>
+                  {ranking.items.map((p) => (
+                    <li
+                      key={p.contentId}
+                      className="flex items-center justify-between gap-3 py-2 text-sm"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 text-right text-xs text-slate-400">#{p.rank}</span>
+                        <Badge tone={CONTENT_TIER_TONE[p.tier]}>
+                          {CONTENT_TIER_LABELS[p.tier]}
+                        </Badge>
+                        <div>
+                          <div className="font-medium text-slate-700">{p.title}</div>
+                          <div className="text-xs text-slate-400">{p.platform}</div>
+                        </div>
                       </div>
                       <div className="text-right">
                         <div>{p.impressions.toLocaleString()} imp</div>

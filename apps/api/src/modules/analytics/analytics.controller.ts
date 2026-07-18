@@ -29,10 +29,10 @@ export class AnalyticsController {
     return this.analytics.getHistory(query.metric, query.period);
   }
 
-  /** 热门内容榜 */
+  /** 内容排行榜（Top / Bottom 自动标记，PRD §3.5） */
   @Get('top-content')
   getTopContent(@Query() query: TopContentQueryDto) {
-    return this.analytics.getTopContent(query.sortBy, query.limit);
+    return this.analytics.getTopContent(query.sortBy, query.limit, query.view ?? 'top');
   }
 
   /** 单账号核心指标 */
