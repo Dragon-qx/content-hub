@@ -20,6 +20,7 @@ export interface PlatformAdapter {
 
   // 私信聚合
   fetchMessages(accountId: string): Promise<Message[]>;
+  replyToMessage(accountId: string, messageId: string, content: string): Promise<void>;
 }
 
 export interface PublishRequest {

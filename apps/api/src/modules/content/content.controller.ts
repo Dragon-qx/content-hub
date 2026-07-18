@@ -10,6 +10,13 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { ContentService } from './content.service';
 import { AuditService } from '../audit/audit.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -27,6 +34,8 @@ import {
 } from './dto/content.dto';
 import { ContentStatus } from '@prisma/client';
 
+@ApiTags('Content')
+@ApiBearerAuth()
 @Controller('contents')
 @UseGuards(JwtAuthGuard)
 export class ContentController {
@@ -35,6 +44,7 @@ export class ContentController {
     private readonly audit: AuditService,
   ) {}
 
+  @ApiOperation({ summary: 'Create content', description: 'Creates a DRAFT piece of content scoped to a team.' })
   @Post()
   async create(
     @CurrentUser() user: AuthUser,
@@ -53,6 +63,7 @@ export class ContentController {
     return created;
   }
 
+  @ApiOperation({ summary: 'List / search content', description: 'Paginated listing with status, team and free-text filters.' })
   @Get()
   findAll(@Query() query: ListContentQueryDto) {
     return this.content.findAll({
@@ -65,16 +76,21 @@ export class ContentController {
   }
 
   /** Month calendar of scheduled content + publish jobs (grid-friendly). */
+  @ApiOperation({ summary: 'Content calendar (month view)', description: 'Returns every day of the month with its scheduled content + publish jobs.' })
   @Get('calendar')
   calendar(@Query() query: CalendarQueryDto) {
     return this.content.calendar(query.year, query.month);
   }
 
+  @ApiOperation({ summary: 'Get content by id' })
+  @ApiParam({ name: 'id', description: 'Content id' })
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.content.findOne(id);
   }
 
+  @ApiOperation({ summary: 'Update content', description: 'Partial update of title, body, type or status.' })
+  @ApiParam({ name: 'id', description: 'Content id' })
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -94,6 +110,8 @@ export class ContentController {
     return updated;
   }
 
+  @ApiOperation({ summary: 'Delete content' })
+  @ApiParam({ name: 'id', description: 'Content id' })
   @Delete(':id')
   async remove(
     @Param('id') id: string,
@@ -105,6 +123,8 @@ export class ContentController {
     return result;
   }
 
+  @ApiOperation({ summary: 'Create a version snapshot', description: 'Snapshots the current field values into the version history.' })
+  @ApiParam({ name: 'id', description: 'Content id' })
   @Post(':id/versions')
   async createVersion(
     @Param('id') id: string,
@@ -125,6 +145,8 @@ export class ContentController {
   }
 
   /** Roll the live content back to a prior version's field values. */
+  @ApiOperation({ summary: 'Roll back to a prior version', description: 'Restores a prior version fields and appends a reversible snapshot.' })
+  @ApiParam({ name: 'id', description: 'Content id' })
   @Post(':id/rollback')
   async rollback(
     @Param('id') id: string,
@@ -150,6 +172,8 @@ export class ContentController {
   }
 
   /** Submit a draft for review (DRAFT → IN_REVIEW). */
+  @ApiOperation({ summary: 'Submit content for review', description: 'Transitions DRAFT → IN_REVIEW and assigns an approver.' })
+  @ApiParam({ name: 'id', description: 'Content id' })
   @Post(':id/submit')
   async submit(
     @Param('id') id: string,
@@ -174,6 +198,8 @@ export class ContentController {
   }
 
   /** Approve content under review (IN_REVIEW → APPROVED). */
+  @ApiOperation({ summary: 'Approve content', description: 'Transitions IN_REVIEW → APPROVED.' })
+  @ApiParam({ name: 'id', description: 'Content id' })
   @Post(':id/approve')
   async approve(
     @Param('id') id: string,
@@ -199,6 +225,8 @@ export class ContentController {
   }
 
   /** Reject content under review (IN_REVIEW → DRAFT). */
+  @ApiOperation({ summary: 'Reject content', description: 'Transitions IN_REVIEW → DRAFT with a reason.' })
+  @ApiParam({ name: 'id', description: 'Content id' })
   @Post(':id/reject')
   async reject(
     @Param('id') id: string,
@@ -220,6 +248,8 @@ export class ContentController {
   }
 
   /** Archive content. */
+  @ApiOperation({ summary: 'Archive content', description: 'Transitions content to ARCHIVED.' })
+  @ApiParam({ name: 'id', description: 'Content id' })
   @Post(':id/archive')
   async archive(
     @Param('id') id: string,

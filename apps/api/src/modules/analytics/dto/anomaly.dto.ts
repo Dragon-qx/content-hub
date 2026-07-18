@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
   IsInt,
@@ -12,14 +13,17 @@ import { Type } from 'class-transformer';
  * Query DTO for listing /anomaly-alerts (admin/audit surface).
  */
 export class AnomalyAlertsQueryDto {
+  @ApiPropertyOptional({ description: 'Filter by team id' })
   @IsOptional()
   @IsString()
   teamId?: string;
 
+  @ApiPropertyOptional({ description: 'Filter by account id' })
   @IsOptional()
   @IsString()
   accountId?: string;
 
+  @ApiPropertyOptional({ description: 'Max records', default: 50 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -54,10 +58,12 @@ export interface ScanAnomalyResponse {
  * On-demand scan request: omit `accountId` to scan every active account.
  */
 export class ScanAnomalyDto {
+  @ApiPropertyOptional({ description: 'Account to scan (omit for all active accounts)' })
   @IsOptional()
   @IsString()
   accountId?: string;
 
+  @ApiPropertyOptional({ description: 'Whether to broadcast alerts (default true)', default: true })
   @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()

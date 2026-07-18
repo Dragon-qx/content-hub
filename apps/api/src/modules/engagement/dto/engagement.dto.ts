@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsEnum,
@@ -12,28 +13,34 @@ import { Platform, Sentiment } from '@prisma/client';
 
 /** Query filters for GET /engagement/comments. */
 export class ListCommentsQueryDto {
+  @ApiPropertyOptional({ description: 'Override the acting team id' })
   @IsOptional()
   @IsString()
   teamId?: string;
 
+  @ApiPropertyOptional({ description: 'Filter by platform', enum: Platform })
   @IsOptional()
   @IsEnum(Platform)
   platform?: Platform;
 
+  @ApiPropertyOptional({ description: 'Filter by sentiment', enum: Sentiment })
   @IsOptional()
   @IsEnum(Sentiment)
   sentiment?: Sentiment;
 
+  @ApiPropertyOptional({ description: 'Only comments with no reply yet' })
   @IsOptional()
   @Type(() => Boolean)
   unreplied?: boolean;
 
+  @ApiPropertyOptional({ default: 0 })
   @IsOptional()
   @IsInt()
   @Min(0)
   @Type(() => Number)
   skip?: number = 0;
 
+  @ApiPropertyOptional({ default: 20 })
   @IsOptional()
   @IsInt()
   @Min(1)
@@ -43,10 +50,12 @@ export class ListCommentsQueryDto {
 
 /** Which account to ingest comments for. */
 export class IngestCommentsDto {
+  @ApiProperty({ description: 'Social account id to pull comments for' })
   @IsString()
   @MinLength(1)
   accountId: string;
 
+  @ApiPropertyOptional({ description: 'Optional post external id to scope the ingest', maxLength: 1000 })
   @IsString()
   @MinLength(1)
   @MaxLength(1000)
@@ -55,6 +64,7 @@ export class IngestCommentsDto {
 
 /** Reply to a single comment. */
 export class ReplyCommentDto {
+  @ApiProperty({ description: 'Reply text', maxLength: 2000 })
   @IsString()
   @MinLength(1)
   @MaxLength(2000)
@@ -63,11 +73,13 @@ export class ReplyCommentDto {
 
 /** Create a quick-reply template. */
 export class CreateTemplateDto {
+  @ApiProperty({ description: 'Template label', maxLength: 80, example: 'Thanks!' })
   @IsString()
   @MinLength(1)
   @MaxLength(80)
   title: string;
 
+  @ApiProperty({ description: 'Template body', maxLength: 2000 })
   @IsString()
   @MinLength(1)
   @MaxLength(2000)
@@ -76,6 +88,7 @@ export class CreateTemplateDto {
 
 /** Add a watch keyword for sentiment alerts. */
 export class CreateKeywordDto {
+  @ApiProperty({ description: 'Keyword to watch for', maxLength: 100, example: 'refund' })
   @IsString()
   @MinLength(1)
   @MaxLength(100)
@@ -84,6 +97,7 @@ export class CreateKeywordDto {
 
 /** Manually trigger a comment sync for the acting team. */
 export class SyncTeamDto {
+  @ApiPropertyOptional({ description: 'Team id (defaults to the caller's first team)' })
   @IsOptional()
   @IsString()
   teamId?: string;
@@ -91,28 +105,34 @@ export class SyncTeamDto {
 
 /** Query filters for GET /engagement/messages. */
 export class ListMessagesQueryDto {
+  @ApiPropertyOptional({ description: 'Override the acting team id' })
   @IsOptional()
   @IsString()
   teamId?: string;
 
+  @ApiPropertyOptional({ description: 'Filter by platform', enum: Platform })
   @IsOptional()
   @IsEnum(Platform)
   platform?: Platform;
 
+  @ApiPropertyOptional({ description: 'Filter by conversation id' })
   @IsOptional()
   @IsString()
   conversationId?: string;
 
+  @ApiPropertyOptional({ description: 'Only messages sent by the team accounts' })
   @IsOptional()
   @Type(() => Boolean)
   sentByMe?: boolean;
 
+  @ApiPropertyOptional({ default: 0 })
   @IsOptional()
   @IsInt()
   @Min(0)
   @Type(() => Number)
   skip?: number = 0;
 
+  @ApiPropertyOptional({ default: 20 })
   @IsOptional()
   @IsInt()
   @Min(1)
@@ -122,6 +142,7 @@ export class ListMessagesQueryDto {
 
 /** Ingest messages for a single social account. */
 export class IngestMessagesDto {
+  @ApiProperty({ description: 'Social account id to pull messages for' })
   @IsString()
   @MinLength(1)
   accountId: string;

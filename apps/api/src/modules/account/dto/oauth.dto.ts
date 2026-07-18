@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsOptional,
   IsString,
@@ -16,24 +17,29 @@ import { Platform } from '@content-hub/platform-sdk';
  * without a JWT, the sealed state is how the callback recovers the context.
  */
 export class OAuthAuthorizeDto {
+  @ApiProperty({ description: 'Team that will own the bound account' })
   @IsString()
   @MinLength(1)
   teamId: string;
 
+  @ApiProperty({ description: 'Target platform', enum: Platform })
   @IsString()
   platform: Platform;
 
   /** OAuth app client key / app key (the developer-registered app). */
+  @ApiProperty({ description: 'OAuth app client key' })
   @IsString()
   @MinLength(1)
   appKey: string;
 
   /** OAuth app client secret / app secret. */
+  @ApiProperty({ description: 'OAuth app client secret' })
   @IsString()
   @MinLength(1)
   appSecret: string;
 
   /** Human-readable label for the account; defaults to the platform name. */
+  @ApiPropertyOptional({ description: 'Display name for the account', example: 'Brand Official' })
   @IsOptional()
   @IsString()
   accountName?: string;
@@ -42,6 +48,7 @@ export class OAuthAuthorizeDto {
    * Optional explicit external account id. When omitted, the id returned by
    * the platform during code exchange drives the binding.
    */
+  @ApiPropertyOptional({ description: 'Pre-known external account id' })
   @IsOptional()
   @IsString()
   accountId?: string;
@@ -50,6 +57,7 @@ export class OAuthAuthorizeDto {
    * Absolute URL the platform should redirect back to with the auth code. When
    * omitted the adapter's built-in redirect is used (handy for local testing).
    */
+  @ApiPropertyOptional({ description: 'Explicit OAuth redirect URI override' })
   @IsOptional()
   @IsString()
   redirectUri?: string;

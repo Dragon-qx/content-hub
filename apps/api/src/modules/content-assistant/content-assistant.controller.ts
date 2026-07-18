@@ -1,4 +1,9 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { ContentAssistantService } from './content-assistant.service';
 import {
   ContentAuditDto,
@@ -17,26 +22,32 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
  * not persist anything and do not call external services, so they are safe to
  * invoke from the editor on every keystroke (debounced by the client).
  */
+@ApiTags('AI Content Assistant')
+@ApiBearerAuth()
 @Controller('assistant')
 @UseGuards(JwtAuthGuard)
 export class ContentAssistantController {
   constructor(private readonly assistant: ContentAssistantService) {}
 
+  @ApiOperation({ summary: 'Optimize titles', description: 'Produces engagement-optimized title variants from the draft.' })
   @Post('titles')
   optimizeTitles(@Body() dto: TitleOptimizeDto) {
     return this.assistant.optimizeTitles(dto);
   }
 
+  @ApiOperation({ summary: 'Extract tags', description: 'Suggests keyword tags extracted from the draft body.' })
   @Post('tags')
   extractTags(@Body() dto: TagExtractDto) {
     return this.assistant.extractTags(dto);
   }
 
+  @ApiOperation({ summary: 'Audit draft', description: 'Audits the draft against platform rules + cross-cutting quality heuristics.' })
   @Post('audit')
   audit(@Body() dto: ContentAuditDto) {
     return this.assistant.audit(dto);
   }
 
+  @ApiOperation({ summary: 'Generate copy variants', description: 'Produces platform-aware copy variants (short/long/formal/social).' })
   @Post('variants')
   generateVariants(@Body() dto: VariantGenerateDto) {
     return this.assistant.generateVariants(dto);

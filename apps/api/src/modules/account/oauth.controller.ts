@@ -2,6 +2,12 @@ import { BadRequestException, Body, Get, Param, Post, Query, Res, UseGuards } fr
 import { ConfigService } from '@nestjs/config';
 import { Controller } from '@nestjs/common';
 import { Response } from 'express';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
 import { AuthUser, CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuditService } from '../audit/audit.service';
@@ -36,6 +42,7 @@ function buildRedirect(config: ConfigService, query: Record<string, string>): st
   return `${frontendOrigin(config)}/accounts?${params}`;
 }
 
+@ApiTags('Accounts / OAuth')
 @Controller('accounts/oauth')
 export class OAuthAuthorizeController {
   constructor(
@@ -48,6 +55,9 @@ export class OAuthAuthorizeController {
    * credentials) as a JSON body — these are sensitive values that don't belong
    * in a query string. (A GET variant also exists for a plain link-based flow.)
    */
+  @ApiOperation({ summary: 'Start OAuth2 binding (POST)', description: 'Returns the provider authorize URL for the frontend to redirect to. Accepts credentials in the body (recommended).' })
+  @ApiParam({ name: 'platform', description: 'Target platform' })
+  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Post(':platform/authorize')
   async authorize(
@@ -63,6 +73,9 @@ export class OAuthAuthorizeController {
     );
   }
 
+  @ApiOperation({ summary: 'Start OAuth2 binding (GET)', description: 'GET variant for a plain link-based authorize flow.' })
+  @ApiParam({ name: 'platform', description: 'Target platform' })
+  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get(':platform/authorize')
   authorizeGet(
@@ -74,6 +87,7 @@ export class OAuthAuthorizeController {
   }
 }
 
+@ApiTags('Accounts / OAuth')
 @Controller('accounts/oauth')
 export class OAuthCallbackController {
   constructor(
@@ -87,6 +101,12 @@ export class OAuthCallbackController {
    * binding context. Always answers with a 302 to the frontend so the browser
    * lands back in the SPA; the SPA reads the oauth result from the querystring.
    */
+  @ApiOperation({
+    summary: 'OAuth2 callback (public)',
+    description:
+      'Platform redirect target. Redirects 302 back to the frontend with oauth=success|error in the querystring. Stateless — context is carried in the sealed `state`.',
+  })
+  @ApiParam({ name: 'platform', description: 'Target platform' })
   @Get(':platform/callback')
   async callback(
     @Param('platform') platform: string,

@@ -10,6 +10,12 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
 import { ContentTemplateService } from './content-template.service';
 import { AuditService } from '../audit/audit.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -21,6 +27,8 @@ import {
   ApplyTemplateDto,
 } from './dto/content-template.dto';
 
+@ApiTags('Content Templates')
+@ApiBearerAuth()
 @Controller('templates')
 @UseGuards(JwtAuthGuard)
 export class ContentTemplateController {
@@ -29,6 +37,7 @@ export class ContentTemplateController {
     private readonly audit: AuditService,
   ) {}
 
+  @ApiOperation({ summary: 'Create template', description: 'Creates a reusable, team-scoped content template.' })
   @Post()
   async create(
     @CurrentUser() user: AuthUser,
@@ -56,6 +65,7 @@ export class ContentTemplateController {
     return created;
   }
 
+  @ApiOperation({ summary: 'List templates', description: 'Paginated, searchable listing of the team\'s templates.' })
   @Get()
   findAll(@Query() query: ListTemplatesQueryDto) {
     return this.templates.findAll({
@@ -66,11 +76,15 @@ export class ContentTemplateController {
     });
   }
 
+  @ApiOperation({ summary: 'Get template by id' })
+  @ApiParam({ name: 'id', description: 'Template id' })
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.templates.findOne(id);
   }
 
+  @ApiOperation({ summary: 'Update template' })
+  @ApiParam({ name: 'id', description: 'Template id' })
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -90,6 +104,8 @@ export class ContentTemplateController {
     return updated;
   }
 
+  @ApiOperation({ summary: 'Delete template' })
+  @ApiParam({ name: 'id', description: 'Template id' })
   @Delete(':id')
   async remove(
     @Param('id') id: string,
@@ -113,6 +129,8 @@ export class ContentTemplateController {
    * `ContentService.create`; the frontend persists it as DRAFT content or loads
    * it into the editor.
    */
+  @ApiOperation({ summary: 'Apply template', description: 'Seeds a new draft from a template. Returns the input shape for content creation.' })
+  @ApiParam({ name: 'id', description: 'Template id' })
   @Post(':id/apply')
   async apply(
     @Param('id') id: string,

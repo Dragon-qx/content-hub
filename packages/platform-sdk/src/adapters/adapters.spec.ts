@@ -116,6 +116,48 @@ describe('XiaoHongShuAdapter signing', () => {
   });
 });
 
+describe('XiaoHongShuAdapter refreshToken', () => {
+  it('captures a refresh token returned by the token endpoint', async () => {
+    const spy = jest.spyOn(global, 'fetch').mockResolvedValue(
+      jsonResponse({ access_token: 'AT', refresh_token: 'RT', expires_in: 3600 }),
+    );
+    const adapter = new XiaoHongShuAdapter({ appKey: 'AK', appSecret: 'AS', accountId: 'a' });
+    const creds = await adapter.handleCallback('code');
+    expect(creds.refreshToken).toBe('RT');
+    // The captured refresh token must be held internally for later rotation.
+    expect((adapter as unknown as { refreshTokenValue: string | null }).refreshTokenValue).toBe('RT');
+    spy.mockRestore();
+  });
+
+  it('rotates the access token using the refresh grant + HMAC signature', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        jsonResponse({ access_token: 'T1', refresh_token: 'R1', expires_in: 10 }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ access_token: 'T2', refresh_token: 'R2', expires_in: 3600 }),
+      );
+    const adapter = new XiaoHongShuAdapter({ appKey: 'AK', appSecret: 'AS', accountId: 'a' });
+    await adapter.handleCallback('code');
+    // Expire the cached access token so refreshToken() is forced to rotate.
+    (adapter as unknown as { tokenExpire: number }).tokenExpire = 0;
+    const creds = await adapter.refreshToken();
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(creds.accessToken).toBe('T2');
+    // Second call must target the token endpoint with the refresh grant.
+    const init = spy.mock.calls[1][1] as RequestInit;
+    const body = JSON.parse((init.headers as Record<string, string>)['X-Signature'] ? (init.body as string) : '{}');
+    expect(body.grant_type).toBe('refresh_token');
+    expect(body.refresh_token).toBe('R1');
+    spy.mockRestore();
+  });
+
+  it('throws when no refresh token is held', async () => {
+    const adapter = new XiaoHongShuAdapter({ appKey: 'AK', appSecret: 'AS', accountId: 'a' });
+    await expect(adapter.refreshToken()).rejects.toThrow(/No refresh token for XiaoHongShu/);
+  });
+});
+
 describe('BilibiliAdapter', () => {
   it('fetches comments and maps them', async () => {
     const spy = jest.spyOn(global, 'fetch').mockResolvedValue(

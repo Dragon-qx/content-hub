@@ -9,6 +9,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
+import {
   AuthUser,
   CurrentUser,
 } from '../auth/decorators/current-user.decorator';
@@ -43,21 +49,26 @@ class ListUsersQueryDto {
   isActive?: boolean;
 }
 
+@ApiTags('Users')
+@ApiBearerAuth()
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
+  @ApiOperation({ summary: 'Current user profile' })
   @Get('me')
   me(@CurrentUser() user: AuthUser) {
     return this.userService.findById(user.userId);
   }
 
+  @ApiOperation({ summary: 'Update current user profile' })
   @Put('me')
   update(@CurrentUser() user: AuthUser, @Body() dto: UpdateUserDto) {
     return this.userService.update(user.userId, dto);
   }
 
+  @ApiOperation({ summary: 'List users (admin/owner only)', description: 'Paginated, searchable listing of the organization's users.' })
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserRole.OWNER, UserRole.ADMIN)
@@ -70,6 +81,8 @@ export class UserController {
     });
   }
 
+  @ApiOperation({ summary: 'Delete a user (admin/owner only)' })
+  @ApiParam({ name: 'id', description: 'User id' })
   @Delete(':id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.OWNER, UserRole.ADMIN)

@@ -10,9 +10,18 @@ async function bootstrap() {
   // Swagger / OpenAPI documentation at /api/docs
   const swaggerConfig = new DocumentBuilder()
     .setTitle('ContentHub API')
-    .setDescription('Multi-platform content management & publishing platform')
-    .setVersion('1.0')
+    .setDescription(
+      'Multi-platform content management & publishing platform.\n\n' +
+        'All endpoints (except `/auth/*` public actions and the OAuth callback) ' +
+        'require `Authorization: Bearer <jwt>`. Obtain a token via ' +
+        '`POST /auth/register` or `POST /auth/login`, and refresh it via ' +
+        '`POST /auth/refresh`.',
+    )
+    .setVersion('1.1')
+    .setContact('ContentHub', '', '')
+    .setLicense('Proprietary', '')
     .addBearerAuth()
+    .addServer('/api/v1', 'Current prefix')
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);

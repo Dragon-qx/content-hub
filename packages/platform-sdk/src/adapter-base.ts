@@ -106,4 +106,12 @@ export abstract class BaseAdapter implements PlatformAdapter {
   async fetchMessages(_accountId: string): Promise<Message[]> {
     throw new Error(`${this.platform} does not expose a messages API`);
   }
+
+  async replyToMessage(
+    _accountId: string,
+    _messageId: string,
+    _content: string,
+  ): Promise<void> {
+    throw new Error(`${this.platform} does not support replying to private messages`);
+  }
 }

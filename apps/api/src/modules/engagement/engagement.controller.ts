@@ -9,6 +9,12 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
 import { AuthUser, CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { EngagementService } from './engagement.service';
@@ -23,6 +29,8 @@ import {
   SyncTeamDto,
 } from './dto/engagement.dto';
 
+@ApiTags('Engagement')
+@ApiBearerAuth()
 @Controller('engagement')
 @UseGuards(JwtAuthGuard)
 export class EngagementController {
@@ -41,6 +49,7 @@ export class EngagementController {
   }
 
   /** Inbox header stats (totals + per-platform breakdown). */
+  @ApiOperation({ summary: 'Engagement inbox stats', description: 'Totals + per-platform breakdown of comments and messages.' })
   @Get('stats')
   async stats(
     @CurrentUser() user: AuthUser,
@@ -50,6 +59,7 @@ export class EngagementController {
   }
 
   /** Unified comment inbox with filters + pagination. */
+  @ApiOperation({ summary: 'List comments', description: 'Paginated comment inbox with platform / sentiment / unreplied filters.' })
   @Get('comments')
   async listComments(
     @CurrentUser() user: AuthUser,
@@ -66,12 +76,15 @@ export class EngagementController {
   }
 
   /** Pull fresh comments for a social account from its platform adapter. */
+  @ApiOperation({ summary: 'Ingest comments', description: 'Pulls the latest comments for an account / post from the platform adapter.' })
   @Post('ingest')
   ingest(@Body() dto: IngestCommentsDto) {
     return this.engagement.ingest(dto.accountId, dto.postExternalId);
   }
 
   /** Reply to a single comment. */
+  @ApiOperation({ summary: 'Reply to a comment' })
+  @ApiParam({ name: 'id', description: 'Comment id' })
   @Patch('comments/:id/reply')
   reply(
     @Param('id') id: string,
@@ -81,6 +94,7 @@ export class EngagementController {
   }
 
   /** Unified message inbox with filters + pagination. */
+  @ApiOperation({ summary: 'List private messages', description: 'Paginated message inbox with platform / conversation filters.' })
   @Get('messages')
   async listMessages(
     @CurrentUser() user: AuthUser,
@@ -97,6 +111,7 @@ export class EngagementController {
   }
 
   /** Pull fresh private messages for a social account from its adapter. */
+  @ApiOperation({ summary: 'Ingest private messages', description: 'Pulls the latest DMs for an account from the platform adapter.' })
   @Post('messages/ingest')
   ingestMessages(@Body() dto: IngestMessagesDto) {
     return this.engagement.ingestMessages(dto.accountId);
@@ -107,6 +122,7 @@ export class EngagementController {
    * from the caller if not supplied). The background worker also does this
    * on a timer.
    */
+  @ApiOperation({ summary: 'Sync a team', description: 'Manually triggers comment + message ingestion for the acting team.' })
   @Post('sync')
   async sync(@CurrentUser() user: AuthUser, @Body() dto: SyncTeamDto) {
     const teamId =
@@ -119,6 +135,7 @@ export class EngagementController {
   // ── Sentiment keyword alerts ────────────────────────────────────────
 
   /** List the team's watch keywords. */
+  @ApiOperation({ summary: 'List watch keywords' })
   @Get('keywords')
   async listKeywords(
     @CurrentUser() user: AuthUser,
@@ -128,6 +145,7 @@ export class EngagementController {
   }
 
   /** Add a watch keyword for sentiment alerts. */
+  @ApiOperation({ summary: 'Add watch keyword', description: 'Registers a keyword that triggers alerts on negative sentiment.' })
   @Post('keywords')
   async createKeyword(
     @CurrentUser() user: AuthUser,
@@ -142,6 +160,8 @@ export class EngagementController {
   }
 
   /** Remove a watch keyword. */
+  @ApiOperation({ summary: 'Delete watch keyword' })
+  @ApiParam({ name: 'id', description: 'Keyword id' })
   @Delete('keywords/:id')
   async deleteKeyword(
     @Param('id') id: string,
@@ -156,11 +176,13 @@ export class EngagementController {
 
   // ── Quick-reply templates ─────────────────────────────────────────
 
+  @ApiOperation({ summary: 'List quick-reply templates' })
   @Get('templates')
   listTemplates(@CurrentUser() user: AuthUser) {
     return this.engagement.listTemplates(user.userId);
   }
 
+  @ApiOperation({ summary: 'Create quick-reply template' })
   @Post('templates')
   createTemplate(
     @CurrentUser() user: AuthUser,
@@ -169,6 +191,8 @@ export class EngagementController {
     return this.engagement.createTemplate(user.userId, dto);
   }
 
+  @ApiOperation({ summary: 'Delete quick-reply template' })
+  @ApiParam({ name: 'id', description: 'Template id' })
   @Delete('templates/:id')
   deleteTemplate(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.engagement.deleteTemplate(id, user.userId);

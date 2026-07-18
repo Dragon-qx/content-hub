@@ -26,6 +26,7 @@ export class XiaoHongShuAdapter extends BaseAdapter {
   platform = Platform.XIAOHONGSHU;
   private accessToken: string | null = null;
   private tokenExpire = 0;
+  private refreshTokenValue: string | null = null;
 
   constructor(private config: XiaoHongShuConfig) {
     super();
@@ -43,19 +44,49 @@ export class XiaoHongShuAdapter extends BaseAdapter {
 
   async handleCallback(code: string): Promise<Credentials> {
     const payload = JSON.stringify({ app_key: this.config.appKey, app_secret: this.config.appSecret, code, grant_type: 'authorization_code' });
-    const data = await this.call<{ access_token: string; expires_in: number }>(
+    const data = await this.call<{ access_token: string; refresh_token?: string; expires_in: number }>(
       'https://customer.xiaohongshu.com/api/oauth/v1/token',
       { method: 'POST', headers: { 'X-Signature': this.sign(payload) }, body: payload },
     );
     this.accessToken = data.access_token;
+    // The token endpoint returns a refresh token alongside the access token;
+    // persist it so refreshToken() can rotate without a fresh handshake.
+    if (data.refresh_token) this.refreshTokenValue = data.refresh_token;
     this.tokenExpire = Date.now() + data.expires_in * 1000;
-    return { accessToken: data.access_token, expiresAt: new Date(this.tokenExpire) };
+    return {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      expiresAt: new Date(this.tokenExpire),
+    };
+  }
+
+  async refreshToken(): Promise<Credentials> {
+    if (!this.refreshTokenValue) throw new Error('No refresh token for XiaoHongShu');
+    const payload = JSON.stringify({
+      app_key: this.config.appKey,
+      app_secret: this.config.appSecret,
+      refresh_token: this.refreshTokenValue,
+      grant_type: 'refresh_token',
+    });
+    const data = await this.call<{ access_token: string; refresh_token?: string; expires_in: number }>(
+      'https://customer.xiaohongshu.com/api/oauth/v1/token',
+      { method: 'POST', headers: { 'X-Signature': this.sign(payload) }, body: payload },
+    );
+    this.accessToken = data.access_token;
+    if (data.refresh_token) this.refreshTokenValue = data.refresh_token;
+    this.tokenExpire = Date.now() + data.expires_in * 1000;
+    return {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      expiresAt: new Date(this.tokenExpire),
+    };
   }
 
   private async getToken(): Promise<string> {
     const injected = this.getInjectedAccessToken();
     if (injected) return injected;
     if (this.accessToken && Date.now() < this.tokenExpire - 60000) return this.accessToken;
+    if (this.refreshTokenValue) return (await this.refreshToken()).accessToken;
     throw new Error('XiaoHongShu adapter is not authenticated');
   }
 

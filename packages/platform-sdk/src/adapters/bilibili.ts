@@ -117,6 +117,19 @@ export class BilibiliAdapter extends BaseAdapter {
     });
   }
 
+  // B站 exposes a real message-reply surface (the web_im send_msg endpoint);
+  // every other platform degrades via the BaseAdapter default below.
+  async replyToMessage(accountId: string, messageId: string, content: string): Promise<void> {
+    const token = await this.getToken();
+    // The receiver is derived from the message being replied to. We encode the
+    // reply as JSON like the real platform expects (msg_type 1 = plain text).
+    await this.call<unknown>('https://api.vc.bilibili.com/web_im/v1/web_im/send_msg', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ receiver_id: accountId, reply_mid: messageId, content: JSON.stringify({ content }), msg_type: 1 }),
+    });
+  }
+
   async fetchMessages(accountId: string): Promise<Message[]> {
     const data = await this.call<{ data: { messages: Array<{ id: number; talker_id: number; talker_name: string; content: string; session_ts: number; is_sender: number }> } }>(
       `https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions?session_type=1&mid=${encodeURIComponent(accountId)}`,
