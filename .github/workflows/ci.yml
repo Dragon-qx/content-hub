@@ -81,7 +81,7 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    needs: build
+    needs: lint-typecheck
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -100,6 +100,9 @@ jobs:
 
       - name: Prisma generate
         run: pnpm --filter=@content-hub/api prisma:generate
+
+      - name: Build workspace packages
+        run: pnpm --filter=@content-hub/platform-sdk build && pnpm --filter=@content-hub/shared-types build
 
       - name: Run API tests
         run: pnpm --filter=@content-hub/api test
@@ -107,16 +110,13 @@ jobs:
       - name: Run platform-sdk tests
         run: pnpm --filter=@content-hub/platform-sdk test
 
-      # Jest enforces the coverage threshold declared in jest.config.js
-      # (branches 60 / functions 80 / lines 80 / statements 85) and fails the
-      # run if any band drops below target.
       - name: API coverage (threshold enforced)
         run: pnpm --filter=@content-hub/api test -- --coverage
 
   e2e:
     name: E2E
     runs-on: ubuntu-latest
-    needs: build
+    needs: lint-typecheck
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -136,13 +136,16 @@ jobs:
       - name: Prisma generate
         run: pnpm --filter=@content-hub/api prisma:generate
 
+      - name: Build workspace packages
+        run: pnpm --filter=@content-hub/platform-sdk build && pnpm --filter=@content-hub/shared-types build
+
       - name: Run E2E tests
         run: pnpm --filter=@content-hub/api test:e2e
 
   openapi:
     name: OpenAPI spec
     runs-on: ubuntu-latest
-    needs: build
+    needs: lint-typecheck
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -160,7 +163,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate OpenAPI document
-        run: pnpm --filter=@content-hub/api prisma:generate && pnpm --filter=@content-hub/api openapi
+        run: pnpm --filter=@content-hub/api prisma:generate && pnpm --filter=@content-hub/platform-sdk build && pnpm --filter=@content-hub/shared-types build && pnpm --filter=@content-hub/api openapi
 
       - name: Upload OpenAPI artifact
         uses: actions/upload-artifact@v4
