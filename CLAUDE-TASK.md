@@ -119,6 +119,7 @@
   - **adapters.spec.ts**: XHS/Douyin/WeChatOfficial/WeChatVideo 测试更新匹配真实调用链路；单测数量 47 全绿
 - [x] **数据库迁移 SQL 文件**（35b5c6f ✅）— 0001_init 完整 schema (607行) + 14 个里程碑迁移（原时间戳序列保留）
 - [x] **最终测试修复**（f4f003b ✅）— 修复真实 API 接入后的 e2e + 单元测试 mock（WeChat cover image / Twitter endpoint），544/544 全绿 / 48 套件
+- [x] **内容模板变量系统**（M43 ✅）— PRD §3.3 P2：`TemplateVariable {key, label, defaultValue?, type}` 可选字段；ContentTemplate CRUD DTO 增加 `variables: TemplateVariableDto[]`；`ContentTemplateService.resolve()`/`resolveVariables()` 占位符替换（`{{key}}` → 用户值 → defaultValue → 保留原占位符）；`ApplyTemplateDto.values: Record<string,string>`；新增 `ResolveTemplateDto`；`TemplatePicker` 组件变量预览与编辑表单；75 新增单测；commit `b90e99c`
 
 ## 重要约束
 - **每次完成必须按「铁律」更新文档，不得跳过**
