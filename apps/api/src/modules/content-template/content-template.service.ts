@@ -3,7 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { ContentType, Prisma } from '@prisma/client';
+import { ContentType, Prisma, ContentTemplate } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
 /** A single variable definition on a template. */
@@ -13,7 +13,7 @@ export interface TemplateVariable {
   /** Human-readable label for the UI. */
   label: string;
   /** Variable type — `text`, `number`, or `date`. */
-  type: 'text' | 'number' | 'date';
+  type?: 'text' | 'number' | 'date';
   /** Default value used when the caller does not supply one. */
   defaultValue?: string;
   /** Whether the variable must be provided (no empty string allowed). */
@@ -56,6 +56,8 @@ export interface ApplyTemplateInput {
   teamId: string;
   /** Optional override for the seeded draft title; defaults to the template title. */
   title?: string;
+  /** Optional variable values to substitute placeholders (`{{variableKey}}`). */
+  values?: VariableValues;
 }
 
 /** A draft seed returned by `apply()` — the input shape for `ContentService.create`. */
@@ -171,20 +173,25 @@ export class ContentTemplateService {
 
   /**
    * Resolve variables in a template's body and title. Convenience wrapper for
-   * `resolveVariables()` that operates on both fields at once.
+   * `resolveVariables()` that operates on both fields at once. Throws
+   * NotFoundException if the template does not exist.
    */
-  resolve(templateId: string, values: VariableValues): { title: string; body: string } {
-    const template = this.findOneGrid(templateId);
+  async resolve(templateId: string, values: VariableValues): Promise<{ title: string; body: string }> {
+    const template = await this.findOneGrid(templateId);
+    const vars = (template.variables as unknown as TemplateVariable[]) ?? [];
     return {
-      title: this.resolveVariables(template.title, (template.variables as unknown as TemplateVariable[]) ?? [], values),
-      body: this.resolveVariables(template.body ?? '', (template.variables as unknown as TemplateVariable[]) ?? [], values),
+      title: this.resolveVariables(template.title, vars, values),
+      body: this.resolveVariables(template.body ?? '', vars, values),
     };
   }
 
-  /** Synchronous helper — like findOne but throws if null internally. */
-  private findOneGrid(id: string) {
-    const r = this.prisma;
-    return r.contentTemplate.findUnique({ where: { id } });
+  /** Internal helper — fetch a template or throw NotFoundException. */
+  private async findOneGrid(id: string) {
+    const template = await this.prisma.contentTemplate.findUnique({ where: { id } });
+    if (!template) {
+      throw new NotFoundException(`ContentTemplate ${id} not found`);
+    }
+    return template;
   }
 
   /**

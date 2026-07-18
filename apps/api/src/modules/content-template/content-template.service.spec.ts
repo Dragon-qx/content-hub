@@ -168,6 +168,7 @@ describe('ContentTemplateService', () => {
       contentType: ContentType.TEXT,
       teamId: 'team-1',
       tags: ['launch'],
+      variables: [],
     };
 
     it('seeds a draft from the template', async () => {
@@ -202,6 +203,80 @@ describe('ContentTemplateService', () => {
       await expect(
         service.apply('t1', { templateId: 't1', teamId: 'other-team' }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('substitutes variable placeholders when values are provided', async () => {
+      prisma.contentTemplate.findUnique.mockResolvedValue({
+        ...template,
+        title: 'Introducing {{productName}}',
+        body: 'Today we launch {{productName}} — {{tagline}}',
+        variables: [
+          { key: 'productName', label: 'Product Name', type: 'text' },
+          { key: 'tagline', label: 'Tagline', type: 'text', defaultValue: 'the best' },
+        ],
+      } as any);
+
+      const seed = await service.apply('t1', {
+        templateId: 't1',
+        teamId: 'team-1',
+        values: { productName: 'ContentHub' },
+      });
+
+      expect(seed.title).toBe('Introducing ContentHub');
+      expect(seed.body).toBe('Today we launch ContentHub — the best');
+    });
+  });
+
+  describe('resolveVariables', () => {
+    it('replaces all occurrences of a placeholder', () => {
+      const body = '{{greeting}} world, {{greeting}}!';
+      const vars = [{ key: 'greeting', label: 'Greeting', type: 'text' as const }];
+      expect(service.resolveVariables(body, vars, { greeting: 'hello' })).toBe('hello world, hello!');
+    });
+
+    it('falls back to defaultValue when value not provided', () => {
+      const body = 'Hello {{name}}';
+      const vars = [{ key: 'name', label: 'Name', type: 'text' as const, defaultValue: 'World' }];
+      expect(service.resolveVariables(body, vars, {})).toBe('Hello World');
+    });
+
+    it('leaves placeholder unchanged when no value or default', () => {
+      const body = 'Hello {{name}}';
+      const vars = [{ key: 'name', label: 'Name', type: 'text' as const }];
+      expect(service.resolveVariables(body, vars, {})).toBe('Hello {{name}}');
+    });
+
+    it('handles empty variables array', () => {
+      expect(service.resolveVariables('no change', [], {})).toBe('no change');
+    });
+
+    it('does not touch text outside placeholders', () => {
+      const body = 'plain text';
+      const vars = [{ key: 'unused', label: 'Unused', type: 'text' as const }];
+      expect(service.resolveVariables(body, vars, { unused: 'replaced' })).toBe('plain text');
+    });
+  });
+
+  describe('resolve', () => {
+    it('resolves both title and body', async () => {
+      prisma.contentTemplate.findUnique.mockResolvedValue({
+        id: 't1',
+        title: 'New: {{product}}',
+        body: 'Meet {{product}} by {{brand}}',
+        variables: [
+          { key: 'product', label: 'Product', type: 'text' },
+          { key: 'brand', label: 'Brand', type: 'text', defaultValue: 'us' },
+        ],
+      } as any);
+
+      const result = await service.resolve('t1', { product: 'ContentHub' });
+      expect(result.title).toBe('New: ContentHub');
+      expect(result.body).toBe('Meet ContentHub by us');
+    });
+
+    it('throws NotFoundException for missing template', async () => {
+      prisma.contentTemplate.findUnique.mockResolvedValue(null);
+      await expect(service.resolve('nope', {})).rejects.toThrow(NotFoundException);
     });
   });
 });

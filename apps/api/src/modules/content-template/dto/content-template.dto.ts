@@ -2,7 +2,9 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -10,8 +12,39 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 import { ContentType } from '@prisma/client';
+
+/** A single variable definition on a template. */
+export class TemplateVariableDto {
+  @ApiProperty({ description: 'Variable key (used in placeholders)', example: 'productName' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  key: string;
+
+  @ApiProperty({ description: 'Human-readable label', example: 'Product Name' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  label: string;
+
+  @ApiProperty({ description: 'Variable type', enum: ['text', 'number', 'date'], default: 'text' })
+  @IsOptional()
+  @IsIn(['text', 'number', 'date'])
+  type?: 'text' | 'number' | 'date';
+
+  @ApiPropertyOptional({ description: 'Default value when not provided', example: 'Untitled' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  defaultValue?: string;
+
+  @ApiPropertyOptional({ description: 'Whether this variable is required', default: false })
+  @IsOptional()
+  required?: boolean;
+}
 
 /** Create a reusable content template scoped to the caller's team. */
 export class CreateContentTemplateDto {
@@ -42,6 +75,13 @@ export class CreateContentTemplateDto {
   @IsArray()
   @IsString({ each: true })
   tags?: string[];
+
+  @ApiPropertyOptional({ description: 'Variable definitions for placeholders', type: [TemplateVariableDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TemplateVariableDto)
+  variables?: TemplateVariableDto[];
 }
 
 /** Patch fields of an existing template. All fields optional. */
@@ -68,6 +108,13 @@ export class UpdateContentTemplateDto {
   @IsArray()
   @IsString({ each: true })
   tags?: string[];
+
+  @ApiPropertyOptional({ description: 'Updated variable definitions', type: [TemplateVariableDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TemplateVariableDto)
+  variables?: TemplateVariableDto[];
 }
 
 /** Query params for listing templates (team-scoped, paginated, searchable). */
@@ -113,4 +160,18 @@ export class ApplyTemplateDto {
   @IsString()
   @MinLength(1)
   title?: string;
+
+  @ApiPropertyOptional({ description: 'Variable values keyed by variable `key`' })
+  @IsOptional()
+  values?: Record<string, string>;
+}
+
+/**
+ * Resolve placeholders in a template's body and title. Returns the resolved
+ * title and body strings so the frontend can preview the result.
+ */
+export class ResolveTemplateDto {
+  @ApiPropertyOptional({ description: 'Variable values keyed by variable `key`' })
+  @IsOptional()
+  values?: Record<string, string>;
 }

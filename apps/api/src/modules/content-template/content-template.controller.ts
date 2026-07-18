@@ -19,7 +19,12 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
-import { ContentTemplateService } from './content-template.service';
+import {
+  ContentTemplateService,
+  TemplateVariable,
+  CreateTemplateInput,
+  UpdateTemplateInput,
+} from './content-template.service';
 import { AuditService } from '../audit/audit.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser, AuthUser } from '../auth/decorators/current-user.decorator';
@@ -28,6 +33,7 @@ import {
   UpdateContentTemplateDto,
   ListTemplatesQueryDto,
   ApplyTemplateDto,
+  ResolveTemplateDto,
 } from './dto/content-template.dto';
 
 @ApiTags('Content Templates')
@@ -55,7 +61,8 @@ export class ContentTemplateController {
         contentType: dto.contentType,
         teamId: dto.teamId ?? '',
         tags: dto.tags,
-      },
+        variables: dto.variables as unknown as TemplateVariable[],
+      } as CreateTemplateInput,
       user.userId,
     );
     await this.audit.log(
@@ -98,7 +105,13 @@ export class ContentTemplateController {
     @Body() dto: UpdateContentTemplateDto,
     @Req() req: { ip?: string },
   ) {
-    const updated = await this.templates.update(id, dto);
+    const updated = await this.templates.update(id, {
+        title: dto.title,
+        body: dto.body,
+        contentType: dto.contentType,
+        tags: dto.tags,
+        variables: dto.variables as unknown as TemplateVariable[],
+      } as UpdateTemplateInput,);
     await this.audit.log(
       'UPDATE',
       user.userId,
@@ -131,6 +144,22 @@ export class ContentTemplateController {
   }
 
   /**
+   * Resolve placeholders (`{{variableKey}}`) in a template's title and body.
+   * Returns the resolved title and body strings; the frontend uses this to
+   * preview the result of variable substitution before seeding a draft.
+   */
+  @ApiOperation({ summary: 'Resolve template variables', description: 'Substitutes `{{variableKey}}` placeholders with provided values, falling back to variable defaults.' })
+  @ApiParam({ name: 'id', description: 'Template id' })
+  @Post(':id/resolve')
+  @ApiOkResponse({ description: 'Resolved title and body.' })
+  async resolve(
+    @Param('id') id: string,
+    @Body() dto: ResolveTemplateDto,
+  ) {
+    return this.templates.resolve(id, dto.values ?? {});
+  }
+
+  /**
    * Apply a template to seed a new draft. Returns the input shape for
    * `ContentService.create`; the frontend persists it as DRAFT content or loads
    * it into the editor.
@@ -149,6 +178,7 @@ export class ContentTemplateController {
       templateId: id,
       teamId: dto.teamId,
       title: dto.title,
+      values: dto.values,
     });
     // Best-effort audit; the seed itself is not persisted here.
     await this.audit.log(

@@ -45,6 +45,15 @@ export interface ContentVersion {
   createdAt: string;
 }
 
+/** A variable definition on a template (placeholders `{{key}}`). */
+export interface TemplateVariable {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'date';
+  defaultValue?: string;
+  required?: boolean;
+}
+
 /** A reusable content template scoped to a team (PRD §3.3 内容模板). */
 export interface ContentTemplate {
   id: string;
@@ -53,6 +62,7 @@ export interface ContentTemplate {
   body?: string | null;
   contentType: ContentType;
   tags: string[];
+  variables?: TemplateVariable[];
   createdBy: string;
   createdAt: string;
   updatedAt: string;
