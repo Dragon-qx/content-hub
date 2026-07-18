@@ -1,7 +1,8 @@
-import { Test } from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
 import { Reflector } from '@nestjs/core';
 import { SchedulerController } from './scheduler.controller';
 import { SchedulerService } from './scheduler.service';
+import { SchedulingRecommendationService } from './scheduling-recommendation.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { PlatformSdkService } from '../platform-sdk/platform-sdk.service';
@@ -9,6 +10,7 @@ import { PlatformSdkService } from '../platform-sdk/platform-sdk.service';
 describe('SchedulerController', () => {
   let controller: SchedulerController;
   let service: any;
+  let recommendations: any;
 
   beforeEach(async () => {
     service = {
@@ -19,11 +21,15 @@ describe('SchedulerController', () => {
       retry: jest.fn().mockResolvedValue({ id: 'job-1', status: 'QUEUED' }),
       executeJob: jest.fn().mockResolvedValue(undefined),
     };
+    recommendations = {
+      recommend: jest.fn().mockResolvedValue({ basis: 'heuristic', slots: [] }),
+    };
 
-    const module = await Test.createTestingModule({
+    const module: TestingModule = await Test.createTestingModule({
       controllers: [SchedulerController],
       providers: [
         { provide: SchedulerService, useValue: service },
+        { provide: SchedulingRecommendationService, useValue: recommendations },
         { provide: PrismaService, useValue: {} },
         { provide: PlatformSdkService, useValue: {} },
       ],
@@ -64,5 +70,20 @@ describe('SchedulerController', () => {
     await controller.execute('job-1');
     expect(service.executeJob).toHaveBeenCalledWith('job-1');
     expect(service.findOne).toHaveBeenCalledWith('job-1');
+  });
+
+  it('getRecommendations delegates to SchedulingRecommendationService with parsed options', async () => {
+    recommendations.recommend.mockResolvedValue({
+      basis: 'historical',
+      slots: [{ scheduledAt: '2026-07-10T19:00:00.000Z', score: 0.9 }],
+      accountsConsidered: 3,
+    });
+    const query = { teamId: 'team-1', slots: 3 as any, horizonDays: 14 as any, accountId: undefined };
+    await controller.getRecommendations(query);
+    expect(recommendations.recommend).toHaveBeenCalledWith('team-1', {
+      accountId: undefined,
+      slots: 3,
+      horizonDays: 14,
+    });
   });
 });

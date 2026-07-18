@@ -19,16 +19,43 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { SchedulerService } from './scheduler.service';
+import {
+  SchedulingRecommendationService,
+  RecommendationResult,
+} from './scheduling-recommendation.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { SchedulePublishDto } from './dto/scheduler.dto';
+import { RecommendQueryDto } from './dto/recommend-query.dto';
 
 @ApiTags('Scheduler')
 @ApiBearerAuth()
 @Controller('scheduler')
 @UseGuards(JwtAuthGuard)
 export class SchedulerController {
-  constructor(private readonly scheduler: SchedulerService) {}
+  constructor(
+    private readonly scheduler: SchedulerService,
+    private readonly recommendations: SchedulingRecommendationService,
+  ) {}
+
+  @ApiOperation({
+    summary: 'Recommend optimal publish times for a team',
+    description:
+      'Analyses the team\'s analytics history (engagement rate per day-of-week) and ' +
+      'returns the best upcoming publish slots. Falls back to industry-baselined ' +
+      'windows when no history exists.',
+  })
+  @ApiOkResponse({ description: 'Ranked recommended publish slots.' })
+  @Get('recommendations')
+  getRecommendations(
+    @Query() query: RecommendQueryDto,
+  ): Promise<RecommendationResult> {
+    return this.recommendations.recommend(query.teamId ?? '', {
+      accountId: query.accountId,
+      slots: query.slots,
+      horizonDays: query.horizonDays,
+    });
+  }
 
   @ApiOperation({ summary: 'Schedule a publish job', description: 'Creates a QUEUED job to publish a piece of content to a platform at a given time.' })
   @ApiCreatedResponse({ description: 'Job created (status QUEUED).' })
