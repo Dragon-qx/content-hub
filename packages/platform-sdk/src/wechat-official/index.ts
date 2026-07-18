@@ -122,17 +122,28 @@ export class WechatOfficialAdapter extends BaseAdapter {
   }
 
   /**
-   * Publish a post: create a multimedia draft then submit it. TEXT content is
-   * wrapped into a single-article draft; richer media would be supplied via
-   * the draft articles in a real integration.
+   * Publish a post: create a multimedia draft then submit it.
+   *
+   * WeChat requires a thumb_media_id (permanent image material) for every
+   * article draft. If `post.mediaUrls` is supplied the first URL is uploaded
+   * via the real `/cgi-bin/material/add_material` multipart endpoint and its
+   * returned media_id is used. Without a cover image the call throws because
+   * WeChat will reject a draft with a placeholder thumb.
    */
   async publish(post: PublishRequest): Promise<PublishResult> {
     const title = (post.extra as { title?: string } | undefined)?.title ?? 'Untitled';
+    const thumbUrl = post.mediaUrls?.[0];
+    if (!thumbUrl) {
+      throw new Error(
+        'WeChat Official requires a cover image (thumb) — pass mediaUrls[0]',
+      );
+    }
+    const thumb = await this.uploadImageMaterial(thumbUrl);
     const draft = await this.createDraft([
       {
         title,
         content: post.content,
-        thumb_media_id: 'thumb', // media would be uploaded & attached here
+        thumb_media_id: thumb.media_id,
       },
     ]);
     const result = await this.publishDraft(draft.media_id);
@@ -209,26 +220,32 @@ export class WechatOfficialAdapter extends BaseAdapter {
   }
 
   /**
-   * 添加永久图片素材
-   * @param imageUrl 图片 URL（需要先上传到微信服务器）
+   * Upload a permanent image material via the real WeChat multipart endpoint.
+   *
+   * The WeChat API requires multipart/form-data with the raw image bytes (not
+   * a JSON body). This method fetches the image from `imageUrl` and POSTs it
+   * to `/cgi-bin/material/add_material?type=image`.
+   */
+  async uploadImageMaterial(imageUrl: string): Promise<{ media_id: string; url: string }> {
+    const token = await this.getToken();
+    const bytes = await this.fetchMediaBytes(imageUrl);
+    const form = new FormData();
+    form.append('media', new Blob([bytes], { type: 'image/jpeg' }), 'cover.jpg');
+    const data = await this.callMultipart<{ media_id: string; url: string }>(
+      `https://api.weixin.qq.com/cgi-bin/material/add_material?access_token=${encodeURIComponent(token)}&type=image`,
+      form,
+    );
+    if (!data.media_id) {
+      throw new Error('WeChat add material returned no media_id');
+    }
+    return { media_id: data.media_id, url: data.url };
+  }
+
+  /**
+   * @deprecated Use {@link uploadImageMaterial} which uses the real multipart endpoint.
    */
   async addImageMaterial(imageUrl: string): Promise<{ media_id: string; url: string }> {
-    const token = await this.getToken();
-    const url = `https://api.weixin.qq.com/cgi-bin/material/add_material?access_token=${encodeURIComponent(token)}&type=image`;
-
-    const resp = await fetch(url, {
-      method: 'POST',
-      body: JSON.stringify({ imageUrl }),
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    const data = (await resp.json()) as { media_id?: string; url?: string; errcode?: number; errmsg?: string };
-
-    if (!data.media_id) {
-      throw new Error(`WeChat add material error: ${data.errcode} - ${data.errmsg}`);
-    }
-
-    return { media_id: data.media_id, url: data.url! };
+    return this.uploadImageMaterial(imageUrl);
   }
 
   /**

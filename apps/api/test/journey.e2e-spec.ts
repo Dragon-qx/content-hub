@@ -192,6 +192,8 @@ describe('ContentHub core journey (e2e)', () => {
       let body: any = {};
       if (u.includes('cgi-bin/token')) {
         body = { access_token: 'mock-access-token', expires_in: 7200 };
+      } else if (u.includes('add_material')) {
+        body = { media_id: 'mock-thumb-id', url: 'https://mmbiz.qpic.cn/mock-thumb' };
       } else if (u.includes('draft/add')) {
         body = { media_id: 'mock-media-id' };
       } else if (u.includes('freepublish/submit')) {
@@ -201,6 +203,7 @@ describe('ContentHub core journey (e2e)', () => {
         ok: true,
         status: 200,
         json: () => Promise.resolve(body),
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
       } as Response);
     });
     (globalThis as any).fetch = fetchMock;
@@ -312,7 +315,11 @@ describe('ContentHub core journey (e2e)', () => {
     const published = await auth(
       req()
         .post(`${PREFIX}/platform-sdk/publish`)
-        .send({ contentId, platform: 'WECHAT_OFFICIAL' }),
+        .send({
+          contentId,
+          platform: 'WECHAT_OFFICIAL',
+          payload: { mediaUrls: ['https://example.com/cover.jpg'] },
+        }),
     );
     expect(published.status).toBe(201);
     expect(published.body.externalId).toBe('mock-publish-id');

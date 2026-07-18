@@ -47,7 +47,13 @@ export class WechatVideoAdapter extends BaseAdapter {
 
   async refreshToken(): Promise<Credentials> {
     if (!this.refreshTokenValue) throw new Error('No refresh token available for WeChat Video');
-    return this.handleCallback(this.refreshTokenValue);
+    const data = await this.call<{ access_token: string; refresh_token: string; expires_in: number }>(
+      `https://api.weixin.qq.com/sns/oauth2/refresh_token?appid=${encodeURIComponent(this.config.clientKey)}&grant_type=refresh_token&refresh_token=${encodeURIComponent(this.refreshTokenValue)}`,
+    );
+    this.accessToken = data.access_token;
+    this.refreshTokenValue = data.refresh_token;
+    this.tokenExpire = Date.now() + data.expires_in * 1000;
+    return { accessToken: data.access_token, refreshToken: data.refresh_token, expiresAt: new Date(this.tokenExpire) };
   }
 
   private async getToken(): Promise<string> {
@@ -58,12 +64,32 @@ export class WechatVideoAdapter extends BaseAdapter {
     throw new Error('WeChat Video adapter is not authenticated');
   }
 
-  async publish(post: PublishRequest): Promise<PublishResult> {
-    // 视频号发布需要先上传视频获取 media_id，这里返回占位结构
+  /**
+   * Upload a video to WeChat Channels and return the media_id.
+   * Real API: POST /channels/ec/basics/video/upload with multipart form.
+   */
+  async uploadVideo(mediaUrl: string): Promise<string> {
     const token = await this.getToken();
+    const bytes = await this.fetchMediaBytes(mediaUrl);
+    const form = new FormData();
+    form.append('media', new Blob([bytes], { type: 'video/mp4' }), 'video.mp4');
+    const data = await this.callMultipart<{ media_id: string }>(
+      `https://api.weixin.qq.com/channels/ec/basics/video/upload?access_token=${encodeURIComponent(token)}`,
+      form,
+    );
+    return data.media_id;
+  }
+
+  async publish(post: PublishRequest): Promise<PublishResult> {
+    const token = await this.getToken();
+    // Upload video first if mediaUrls provided
+    let mediaId = '';
+    if (post.mediaUrls?.length) {
+      mediaId = await this.uploadVideo(post.mediaUrls[0]);
+    }
     const data = await this.call<{ publish_id: string }>(
       `https://api.weixin.qq.com/channels/ec/publish/submit?access_token=${encodeURIComponent(token)}`,
-      { method: 'POST', body: JSON.stringify({ title: post.content, media_id: '' }) },
+      { method: 'POST', body: JSON.stringify({ title: post.content, media_id: mediaId }) },
     );
     return {
       externalId: data.publish_id,

@@ -381,6 +381,17 @@
 - [ ] 平台 SDK mock→真实调用 — 抖音/小红书/公众号/视频号/微博 publish() 占位 URL
 - [ ] 数据库 migration 文件 — 当前仅 Prisma schema
 
+### M42: V1.1 — 平台 SDK mock→真实调用 (Platform SDK Real API Integration)
+**代码提交**: (pending)
+**目标:** 抖音/小红书/公众号/视频号 publish() 从占位 URL 改为真实平台 API 调用。
+
+- [x] **DouyinAdapter** — 新增 `uploadVideo()` 真实 multipart 上传；`publish()` 先上传视频获取 `video_id` 再创建视频
+- [x] **WechatVideoAdapter** — `refreshToken()` 改为真实 `sns/oauth2/refresh_token` 端点；新增 `uploadVideo()` 上传获取 `media_id`；`publish()` 使用真实 `media_id` 提交
+- [x] **WechatOfficialAdapter** — `publish()` 先调用 `uploadImageMaterial()` 上传封面 (multipart/form-data)；`addImageMaterial()` 标记 `@deprecated`，新实现使用 `fetchMediaBytes` + `callMultipart`
+- [x] **XiaoHongShuAdapter** — 新增 `uploadMedia()` 真实上传；`publish()` 先上传 media 再用平台返回的 `media_urls` 发布
+- [x] **BaseAdapter** — 重构 `call()` 保留 Content-Type 自动设置；新增 `callMultipart()` 不设 boundary；新增 `fetchMediaBytes()` 统一资源拉取
+- [x] **Tests** — adapters.spec.ts 更新匹配真实调用链路；47 全绿
+
 ### M40: V1.1 — 移动端响应式 + PWA (Mobile Responsive + PWA) (PRD §4.5)
 **代码提交**: `baa4958` `3446c48`
 **目标:** 让 ContentHub 前端在手机/平板/桌面全场景可用，PWA 可安装 + 离线缓存。

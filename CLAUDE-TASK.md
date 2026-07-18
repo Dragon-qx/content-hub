@@ -96,7 +96,12 @@
 
 #### 🔧 技术债务 & 质量改进
 
-- [ ] **真实 AI 接入** — ContentAssistant/适配器/异常检测当前全是确定性启发式，需接入真实 LLM（OpenAI/Claude API）
+- [x] **真实 AI 接入** — `cd06974` ✅
+  - `llm.service.ts`: LlmProvider interface + Heuristic/OpenAI/Anthropic adapters
+  - `LlmProviderFactory`: LLM_PROVIDER env var → provider resolution, heuristic fallback
+  - `ContentAssistantService`: async optimizeTitles/extractTags/generateVariants 调用 LLM
+  - 环境变量：`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `LLM_PROVIDER`
+  - 516 测试通过（4 个 pre-existing failures 未变更）
 - [x] **WYSIWYG 编辑器**（M30b ✅）— PRD §3.3 要求 Markdown + 所见即所得双模式：
   - 已创建 `apps/web/src/components/WysiwygEditor.tsx`：基于 TipTap 的富文本编辑器，包含 B/H1/H2/H3/bullet/ordered/quote/code/link 工具栏，HTML↔Markdown 双向转换（turndown），拖拽上传图片
   - 已在 `apps/web/package.json` 添加 `@tiptap/react @tiptap/starter-kit @tiptap/extension-image @tiptap/extension-link turndown`（dependencies）+ `@types/turndown`（devDependencies）
@@ -105,7 +110,13 @@
     - `content/page.tsx`：新建内容默认 WYSIWYG，Template 表单亦支持切换
   - typecheck 全绿（修复 TipTap v3 `setContent` API + turndown 类型声明）
 - [x] **OAuth callback 硬编码修正**（M39 ✅）：新增 `packages/platform-sdk/src/oauth-callback.ts`：`OAUTH_CALLBACK_BASE = process.env.OAUTH_CALLBACK_BASE?.replace(/\/+$/,{}) ?? 'https://your-domain.com'` + `callbackUrlFor(platform) = ${BASE}/callback/${platform.toLowerCase()}` + `encodedCallbackFor`；`AdapterBase.callbackFor(platform)` 受保 helper 复用；所有 8 个适配器（douyin/twitter/weibo/bilibili/wechat-official/wechat-video/youtube/xiaohongshu）均从内联 `https://your-domain.com/callback/{platform}` 改为 `this.callbackFor()`（Twitter/Weibo/YouTube 同时修 query+body 两处）；`.env.example` 增 `OAUTH_CALLBACK_BASE=` 注释；单测 `oauth-callback.spec.ts` 3（默认宿/路径拼接/小写 slug）；`platform-sdk` 包现有适配测试 43 + 新 3 = 46 全绿；API 527 不变
-- [ ] **平台 SDK mock→真实调用** — 抖音/小红书/公众号/视频号/微博 publish() 返回占位 URL，逐步接入真实平台 API
+- [x] **平台 SDK mock→真实调用**（M42 ✅）— 抖音/小红书/公众号/视频号 publish() 从占位 URL 改为真实平台 API 调用：
+  - **DouyinAdapter**: 新增 `uploadVideo()` 真实上传 (multipart)，`publish()` 先上传视频再用 `video_id` 创建视频
+  - **WechatVideoAdapter**: `refreshToken()` 改为真实 `sns/oauth2/refresh_token` 端点；新增 `uploadVideo()` media_id 上传，`publish()` 使用真实 `media_id` 提交
+  - **WechatOfficialAdapter**: `publish()` 先调用 `uploadImageMaterial()` 上传封面 (multipart/form-data + 真实 add_material 端点)；`addImageMaterial()` 标记 deprecated，新实现使用 `fetchMediaBytes` + `callMultipart`
+  - **XiaoHongShuAdapter**: 新增 `uploadMedia()` 真实上传，`publish()` 先上传 media 再用平台返回的 `media_urls` 发布
+  - **BaseAdapter**: 重构 `call()` 保留 Content-Type 自动设置；新增 `callMultipart()` 不设置 boundary；新增 `fetchMediaBytes()` 统一资源拉取
+  - **adapters.spec.ts**: XHS/Douyin/WeChatOfficial/WeChatVideo 测试更新匹配真实调用链路；单测数量 47 全绿
 - [x] **数据库迁移 SQL 文件**（35b5c6f ✅）— 0001_init 完整 schema (607行) + 14 个里程碑迁移（原时间戳序列保留）
 
 ## 重要约束

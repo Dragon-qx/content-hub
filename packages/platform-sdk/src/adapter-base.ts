@@ -74,14 +74,50 @@ export abstract class BaseAdapter implements PlatformAdapter {
 
   /** Perform an authenticated fetch against the platform API. */
   protected async call<T>(url: string, init: RequestInit = {}): Promise<T> {
-    const res = await fetch(url, {
-      ...init,
-      headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
-    });
+    const headers: Record<string, string> = {};
+    const src = init.headers;
+    if (src instanceof Headers) {
+      src.forEach((v, k) => { headers[k] = v; });
+    } else if (Array.isArray(src)) {
+      for (const [k, v] of src) headers[k] = v;
+    } else if (src) {
+      Object.assign(headers, src);
+    }
+    // Only default to JSON when the caller has not already specified a
+    // Content-Type (e.g. form-urlencoded OAuth token exchanges).
+    if (!headers['Content-Type'] && !headers['content-type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+    const res = await fetch(url, { ...init, headers });
     if (!res.ok) {
       throw new Error(`${this.platform} request failed: HTTP ${res.status}`);
     }
     return (await res.json()) as T;
+  }
+
+  /**
+   * Perform a multipart/form-data upload against the platform API.
+   * Does NOT set Content-Type header (browser/fetch will set the boundary).
+   */
+  protected async callMultipart<T>(url: string, formData: FormData, extraHeaders?: Record<string, string>): Promise<T> {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: extraHeaders ?? {},
+      body: formData,
+    });
+    if (!res.ok) {
+      throw new Error(`${this.platform} multipart upload failed: HTTP ${res.status}`);
+    }
+    return (await res.json()) as T;
+  }
+
+  /** Fetch media bytes from a URL (HTTP/HTTPS) or local path. */
+  protected async fetchMediaBytes(mediaUrl: string): Promise<ArrayBuffer> {
+    const res = await fetch(mediaUrl);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch media from ${mediaUrl}: HTTP ${res.status}`);
+    }
+    return res.arrayBuffer();
   }
 
   // ── Auth ────────────────────────────────────────────────────────────

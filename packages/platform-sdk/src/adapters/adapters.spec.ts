@@ -15,6 +15,7 @@ const jsonResponse = (body: unknown): Response =>
     ok: true,
     status: 200,
     json: async () => body,
+    arrayBuffer: async () => new ArrayBuffer(0),
   }) as Response;
 
 afterEach(() => {
@@ -453,6 +454,8 @@ describe('XiaoHongShuAdapter publish + fetchMetrics', () => {
   it('publishes a note with a signed body and returns its id + url', async () => {
     const spy = jest.spyOn(global, 'fetch')
       .mockResolvedValueOnce(jsonResponse({ access_token: 'AT', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({ media_url: 'https://cdn.xhs.cn/uploaded.jpg' }))
+      .mockResolvedValueOnce(jsonResponse({ media_url: 'https://cdn.xhs.cn/uploaded.jpg' }))
       .mockResolvedValueOnce(jsonResponse({ note_id: 'nh-42' }));
     const adapter = new XiaoHongShuAdapter({ appKey: 'AK', appSecret: 'AS', accountId: 'a' });
     await adapter.handleCallback('code');
@@ -460,7 +463,7 @@ describe('XiaoHongShuAdapter publish + fetchMetrics', () => {
     expect(result.externalId).toBe('nh-42');
     expect(result.externalUrl).toContain('nh-42');
     // The create call must carry the HMAC signature header.
-    const init = spy.mock.calls[1][1] as RequestInit;
+    const init = spy.mock.calls[3][1] as RequestInit;
     expect((init.headers as Record<string, string>)['X-Signature']).toMatch(/^[0-9a-f]{64}$/);
     spy.mockRestore();
   });
@@ -509,18 +512,36 @@ describe('DouyinAdapter publish + fetchMetrics', () => {
 });
 
 describe('WechatOfficialAdapter publish + fetchMetrics + refreshToken', () => {
-  it('creates a draft then submits it for publishing', async () => {
+  it('uploads cover image, creates a draft, then submits for publishing', async () => {
     const spy = jest.spyOn(global, 'fetch')
-      .mockResolvedValueOnce(jsonResponse({ access_token: 'AT', expires_in: 7200 }))
-      .mockResolvedValueOnce(jsonResponse({ media_id: 'mid-1' }))
-      .mockResolvedValueOnce(jsonResponse({ publish_id: 'pub-1' }));
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'AT', expires_in: 7200 })) // getAccessToken
+      .mockResolvedValueOnce(jsonResponse({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) })) // fetchMediaBytes
+      .mockResolvedValueOnce(jsonResponse({ media_id: 'thumb-1', url: 'https://mmbiz.qpic.cn/thumb-1' })) // add_material
+      .mockResolvedValueOnce(jsonResponse({ media_id: 'mid-1' })) // draft/add
+      .mockResolvedValueOnce(jsonResponse({ publish_id: 'pub-1' })); // freepublish/submit
     const adapter = new WechatOfficialAdapter({ appid: 'APP', secret: 'SEC', rawId: 'raw' });
-    const result = await adapter.publish({ content: 'article body', extra: { title: 'T' } });
+    const result = await adapter.publish({
+      content: 'article body',
+      extra: { title: 'T' },
+      mediaUrls: ['https://img/cover.jpg'],
+    });
     expect(result.externalId).toBe('pub-1');
     expect(result.externalUrl).toContain('pub-1');
-    // draft/add then freepublish/submit in order.
-    expect(String(spy.mock.calls[1][0])).toContain('draft/add');
-    expect(String(spy.mock.calls[2][0])).toContain('freepublish/submit');
+    // fetchMediaBytes → add_material → draft/add → freepublish/submit in order.
+    expect(String(spy.mock.calls[1][0])).toContain('https://img/cover.jpg');
+    expect(String(spy.mock.calls[2][0])).toContain('add_material');
+    expect(String(spy.mock.calls[3][0])).toContain('draft/add');
+    expect(String(spy.mock.calls[4][0])).toContain('freepublish/submit');
+    spy.mockRestore();
+  });
+
+  it('throws when no cover image is provided (WeChat requires thumb)', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'AT', expires_in: 7200 }));
+    const adapter = new WechatOfficialAdapter({ appid: 'APP', secret: 'SEC', rawId: 'raw' });
+    await expect(
+      adapter.publish({ content: 'article body', extra: { title: 'T' } }),
+    ).rejects.toThrow(/cover image/);
     spy.mockRestore();
   });
 
@@ -570,7 +591,7 @@ describe('WechatVideoAdapter publish + fetchMetrics + refreshToken', () => {
     spy.mockRestore();
   });
 
-  it('rotates the token by re-running the code exchange with the refresh token', async () => {
+  it('rotates the token via the dedicated refresh_token endpoint', async () => {
     const spy = jest.spyOn(global, 'fetch')
       .mockResolvedValueOnce(jsonResponse({ access_token: 'T1', refresh_token: 'R1', expires_in: 3600 }))
       .mockResolvedValueOnce(jsonResponse({ access_token: 'T2', refresh_token: 'R2', expires_in: 3600 }));
@@ -580,8 +601,10 @@ describe('WechatVideoAdapter publish + fetchMetrics + refreshToken', () => {
     const creds = await adapter.refreshToken();
     expect(spy).toHaveBeenCalledTimes(2);
     expect(creds.accessToken).toBe('T2');
-    // Refresh reuses the code/pass_token exchange endpoint with the refresh token.
-    expect(String(spy.mock.calls[1][0])).toContain('sns/oauth2/access_token');
+    // The refresh uses the dedicated refresh_token endpoint with the stored refresh token.
+    expect(String(spy.mock.calls[1][0])).toContain('sns/oauth2/refresh_token');
+    expect(String(spy.mock.calls[1][0])).toContain('grant_type=refresh_token');
+    expect(String(spy.mock.calls[1][0])).toContain(encodeURIComponent('R1'));
     spy.mockRestore();
   });
 });

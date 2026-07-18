@@ -64,11 +64,32 @@ export class DouyinAdapter extends BaseAdapter {
     throw new Error('Douyin adapter is not authenticated');
   }
 
+  /**
+   * Upload a video to Douyin and return the video_id.
+   * Real API: POST /api/apps/v1/video/upload/ with multipart form.
+   */
+  async uploadVideo(mediaUrl: string): Promise<string> {
+    const token = await this.getToken();
+    const bytes = await this.fetchMediaBytes(mediaUrl);
+    const form = new FormData();
+    form.append('video', new Blob([bytes], { type: 'video/mp4' }), 'video.mp4');
+    const data = await this.callMultipart<{ data: { video_id: string } }>(
+      `https://open.douyin.com/api/apps/v1/video/upload/?open_id=${encodeURIComponent(this.config.openId)}&access_token=${encodeURIComponent(token)}`,
+      form,
+    );
+    return data.data.video_id;
+  }
+
   async publish(post: PublishRequest): Promise<PublishResult> {
     const token = await this.getToken();
+    // Upload video first if mediaUrls provided
+    let videoId = '';
+    if (post.mediaUrls?.length) {
+      videoId = await this.uploadVideo(post.mediaUrls[0]);
+    }
     const data = await this.call<{ data: { item_id: string; share_url: string } }>(
       `https://open.douyin.com/api/apps/v1/video/create/?open_id=${encodeURIComponent(this.config.openId)}&access_token=${encodeURIComponent(token)}`,
-      { method: 'POST', body: JSON.stringify({ text: post.content, video_id: '' }) },
+      { method: 'POST', body: JSON.stringify({ text: post.content, video_id: videoId }) },
     );
     return { externalId: data.data.item_id, externalUrl: data.data.share_url, publishedAt: new Date() };
   }

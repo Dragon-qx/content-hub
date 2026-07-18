@@ -90,9 +90,34 @@ export class XiaoHongShuAdapter extends BaseAdapter {
     throw new Error('XiaoHongShu adapter is not authenticated');
   }
 
+  /**
+   * Upload media to XiaoHongShu and return the platform media URL.
+   * Real API: POST /api/media/v1/upload with HMAC signature.
+   */
+  async uploadMedia(mediaUrl: string, type: 'image' | 'video' = 'image'): Promise<string> {
+    const token = await this.getToken();
+    const bytes = await this.fetchMediaBytes(mediaUrl);
+    const form = new FormData();
+    form.append('file', new Blob([bytes], { type: type === 'video' ? 'video/mp4' : 'image/jpeg' }), type === 'video' ? 'media.mp4' : 'media.jpg');
+    form.append('type', type);
+    const payload = JSON.stringify({ type, timestamp: Date.now() });
+    const data = await this.callMultipart<{ media_url: string }>(
+      `https://customer.xiaohongshu.com/api/media/v1/upload`,
+      form,
+      { Authorization: `Bearer ${token}`, 'X-Signature': this.sign(payload) },
+    );
+    return data.media_url;
+  }
+
   async publish(post: PublishRequest): Promise<PublishResult> {
     const token = await this.getToken();
-    const payload = JSON.stringify({ title: post.content.slice(0, 20), content: post.content, media_urls: post.mediaUrls ?? [] });
+    // Upload media first if provided, then use returned URLs
+    let mediaUrls: string[] = post.mediaUrls ?? [];
+    if (mediaUrls.length > 0) {
+      const type = mediaUrls[0].match(/\.(mp4|mov|avi)$/i) ? 'video' : 'image';
+      mediaUrls = await Promise.all(mediaUrls.map(url => this.uploadMedia(url, type)));
+    }
+    const payload = JSON.stringify({ title: post.content.slice(0, 20), content: post.content, media_urls: mediaUrls });
     const data = await this.call<{ note_id: string }>(
       `https://customer.xiaohongshu.com/api/notes/v1/publish`,
       { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'X-Signature': this.sign(payload) }, body: payload },
