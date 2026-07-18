@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { AccountStatus, Platform, Prisma } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { NotificationService } from '../notification/notification.service';
@@ -31,6 +32,7 @@ export interface AccountHealth {
   platform: Platform;
   status: AccountStatus;
   health: HealthStatus;
+  score: number;
   signals: SignalDiagnostic[];
   lastSyncedAt?: string | null;
   tokenExpiresAt?: string | null;
@@ -42,6 +44,42 @@ export interface TeamHealthSummary {
   evaluatedAt: string;
   totals: { total: number; healthy: number; warning: number; critical: number };
   accounts: AccountHealth[];
+}
+
+/**
+ * Threshold configuration for health-score alerts (PRD §3.2). Env-tunable.
+ * `critical` < `warning`: score < critical → CRITICAL alert; score < warning →
+ * WARNING alert; score >= warning → HEALTHY (no alert).
+ */
+export interface HealthThresholdConfig {
+  critical: number;
+  warning: number;
+}
+
+/**
+ * A single threshold alert generated when an account's health score drops
+ * below the team's configured warning or critical level.
+ */
+export interface ThresholdAlert {
+  accountId: string;
+  accountName: string;
+  platform: Platform;
+  score: number;
+  level: HealthStatus;
+  signals: SignalDiagnostic[];
+  evaluatedAt: string;
+}
+
+/**
+ * Result of a threshold-sweep across a team: the list of active alerts plus
+ * the threshold levels that were applied.
+ */
+export interface ThresholdAlertResult {
+  teamId: string;
+  evaluatedAt: string;
+  config: HealthThresholdConfig;
+  alerts: ThresholdAlert[];
+  notified: number;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -64,6 +102,10 @@ const STALE_DATA_DAYS = 7;
  */
 const CONSECUTIVE_FAILURES_CRITICAL = 3;
 
+/** Per-signal score deductions used to compute a 0-100 health score. */
+const SCORE_DEDUCTION_WARNING = 10;
+const SCORE_DEDUCTION_CRITICAL = 25;
+
 /**
  * Computes account health purely from existing relations (lastSyncedAt,
  * publishJobs, stored credential expiry, status). No schema migration needed:
@@ -71,12 +113,19 @@ const CONSECUTIVE_FAILURES_CRITICAL = 3;
  */
 @Injectable()
 export class HealthService {
-  private readonly logger = new Logger(HealthService.name);
+ private readonly logger = new Logger(HealthService.name);
+
+  /** Process-wide in-memory override of threshold config (PATCH endpoint). */
+  private thresholdOverride?: HealthThresholdConfig;
+
+  /** Team-scoped in-memory overrides keyed by teamId. */
+  private teamThresholdOverrides = new Map<string, HealthThresholdConfig>();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly notifications: NotificationService,
+    private readonly config: ConfigService,
   ) {}
 
   /** Decrypt stored credentials into a plain object (mirrors AccountService). */
@@ -185,6 +234,184 @@ export class HealthService {
     return { summary, notified: degraded.length };
   }
 
+  // ── Score + threshold alerts (M30c, PRD §3.2) ──────────────────────────
+
+  /**
+   * Compute a 0–100 health score from the account's signals. Pure: each
+   * warning deducts {@link SCORE_DEDUCTION_WARNING}, each critical deducts
+   * {@link SCORE_DEDUCTION_CRITICAL}; result is clamped to [0, 100].
+   */
+  computeScore(signals: SignalDiagnostic[]): number {
+    let score = 100;
+    for (const s of signals) {
+      score -= s.severity === 'critical'
+        ? SCORE_DEDUCTION_CRITICAL
+        : SCORE_DEDUCTION_WARNING;
+    }
+    return Math.max(0, Math.min(100, score));
+  }
+
+  /**
+   * Read the configured threshold levels from the environment. PRD §3.2
+   * default: critical < 40, warning < 65. Both are env-tunable:
+   *   HEALTH_CRITICAL_THRESHOLD (default 40)
+   *   HEALTH_WARNING_THRESHOLD (default 65)
+   *
+   * A process-wide override installed via {@link setThresholdConfig}
+   * takes precedence; a team-specific override installed via
+   * {@link setTeamThresholdConfig} further overrides for that team.
+   */
+  getThresholdConfig(teamId?: string): HealthThresholdConfig {
+    const criticalEnv = Number(
+      this.config.get('HEALTH_CRITICAL_THRESHOLD', 40),
+    );
+    const warningEnv = Number(
+      this.config.get('HEALTH_WARNING_THRESHOLD', 65),
+    );
+    let critical = criticalEnv;
+    let warning = warningEnv;
+    if (this.thresholdOverride) {
+      if (this.thresholdOverride.critical !== undefined) critical = this.thresholdOverride.critical;
+      if (this.thresholdOverride.warning !== undefined) warning = this.thresholdOverride.warning;
+    }
+    if (teamId && this.teamThresholdOverrides.has(teamId)) {
+      const ov = this.teamThresholdOverrides.get(teamId)!;
+      if (ov.critical !== undefined) critical = ov.critical;
+      if (ov.warning !== undefined) warning = ov.warning;
+    }
+    return { critical, warning };
+  }
+
+  /**
+   * Install a process-wide threshold override. Fields left undefined fall
+   * back to the previous layer (env). Returns the effective config for
+   * confirmation.
+   */
+  setThresholdConfig(dto: { critical?: number; warning?: number }): HealthThresholdConfig {
+    const prev = this.getThresholdConfig();
+    this.thresholdOverride = {
+      critical: dto.critical ?? prev.critical,
+      warning: dto.warning ?? prev.warning,
+    };
+    return this.getThresholdConfig();
+  }
+
+  /**
+   * Install a team-scoped threshold override. Fields left undefined fall
+   * back to the previous layer (env / process-wide). Returns the effective
+   * config for confirmation.
+   */
+  setTeamThresholdConfig(
+    teamId: string,
+    dto: { critical?: number; warning?: number },
+  ): HealthThresholdConfig {
+    const prev = this.teamThresholdOverrides.get(teamId) ?? { critical: 0, warning: 0 };
+    this.teamThresholdOverrides.set(teamId, {
+      critical: dto.critical ?? prev.critical,
+      warning: dto.warning ?? prev.warning,
+    });
+    return this.getThresholdConfig(teamId);
+  }
+
+  /**
+   * Map a health score to an alert level using the supplied (or configured)
+   * thresholds. Pure.
+   */
+  scoreToLevel(
+    score: number,
+    config: HealthThresholdConfig = this.getThresholdConfig(),
+  ): HealthStatus {
+    if (score < config.critical) return 'CRITICAL';
+    if (score < config.warning) return 'WARNING';
+    return 'HEALTHY';
+  }
+
+  /**
+   * Evaluate every account in a team, compute scores, and return only the
+   * accounts whose score falls below the warning threshold — the raw
+   * threshold alerts, without sending any notification.
+   */
+  async listActiveAlerts(
+    teamId: string,
+    config: HealthThresholdConfig = this.getThresholdConfig(teamId),
+  ): Promise<ThresholdAlert[]> {
+    const summary = await this.evaluateTeam(teamId);
+    const alerts: ThresholdAlert[] = [];
+
+    for (const account of summary.accounts) {
+      const level = this.scoreToLevel(account.score, config);
+      if (level === 'HEALTHY') continue;
+      alerts.push({
+        accountId: account.accountId,
+        accountName: account.accountName,
+        platform: account.platform,
+        score: account.score,
+        level,
+        signals: account.signals,
+        evaluatedAt: account.evaluatedAt,
+      });
+    }
+
+    return alerts;
+  }
+
+  /**
+   * Sweep every account in a team for threshold breaches and, when any are
+   * found, broadcast an in-app notification to the whole team. Returns the
+   * sweep result plus the count of newly created notification rows.
+   *
+   * The broadcast is fired once per sweep (not per account), so a team
+   * crossing the threshold on N accounts receives a single summary message.
+   */
+  async checkThresholdAlerts(
+    teamId: string,
+    notify = true,
+    config: HealthThresholdConfig = this.getThresholdConfig(teamId),
+  ): Promise<ThresholdAlertResult> {
+    const evaluatedAt = new Date().toISOString();
+    const alerts = await this.listActiveAlerts(teamId, config);
+
+    let notified = 0;
+    if (notify && alerts.length > 0) {
+      const criticalAlerts = alerts.filter((a) => a.level === 'CRITICAL');
+      const summary = alerts
+        .map(
+          (a) =>
+            `${a.accountName} (score ${a.score}): ${a.signals
+              .map((s) => s.message)
+              .join(', ') || 'no specific signal'}`,
+        )
+        .join('; ');
+
+      await this.notifications.broadcastToTeam(teamId, {
+        type: criticalAlerts.length > 0 ? 'error' : 'warning',
+        title:
+          criticalAlerts.length > 0
+            ? `${criticalAlerts.length} account(s) in critical health (score < ${config.critical})`
+            : `${alerts.length} account(s) below health threshold (score < ${config.warning})`,
+        body: summary,
+        metadata: JSON.stringify({
+          teamId,
+          config,
+          alertCount: alerts.length,
+          criticalCount: criticalAlerts.length,
+          warningCount: alerts.length - criticalAlerts.length,
+          accountIds: alerts.map((a) => a.accountId),
+        }),
+      });
+      notified = alerts.length;
+
+      this.logger.log(
+        `Threshold sweep team ${teamId}: ${alerts.length} alert(s) ` +
+          `(${criticalAlerts.length} critical, ${
+            alerts.length - criticalAlerts.length
+          } warning) notified`,
+      );
+    }
+
+    return { teamId, evaluatedAt, config, alerts, notified };
+  }
+
   /**
    * Core evaluation logic. Pure with respect to `now` so tests can pin the
    * clock. Reusable for single-account and team paths.
@@ -288,6 +515,7 @@ export class HealthService {
     }
 
     const health = this.rollup(signals);
+    const score = this.computeScore(signals);
 
     return {
       accountId: account.id,
@@ -295,6 +523,7 @@ export class HealthService {
       platform: account.platform,
       status: account.status,
       health,
+      score,
       signals,
       lastSyncedAt: account.lastSyncedAt?.toISOString() ?? null,
       tokenExpiresAt: tokenExpiresAt?.toISOString() ?? null,

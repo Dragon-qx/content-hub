@@ -88,8 +88,10 @@
 
 #### 🟢 低优先级（锦上添花）
 
-- [ ] **自定义报表（拖拽生成）** — PRD §3.5 P2，用户拖拽字段生成自定义报表
+- [x] **自定义报表（拖拽生成）** — PRD §3.5 P2（M41 ✅）
+  - 已完成：CustomReport model + AnalyticsService getAvailableFields / generateReport + 前端页面 + Controller API + 单元测试 + commit push
 - [ ] **账号健康度指标阈值告警** — PRD §3.2：健康度低于阈值自动告警
+  - 待子代理推进：HealthMonitorService.checkThresholdAlerts + NotificationService 集成 + 邮件/Webhook
   - 待推进：`HealthMonitorService` 的阈值告警扩展（新增 `threshold_alert` 级别，自动发通知）
 
 #### 🔧 技术债务 & 质量改进
@@ -104,7 +106,7 @@
   - typecheck 全绿（修复 TipTap v3 `setContent` API + turndown 类型声明）
 - [x] **OAuth callback 硬编码修正**（M39 ✅）：新增 `packages/platform-sdk/src/oauth-callback.ts`：`OAUTH_CALLBACK_BASE = process.env.OAUTH_CALLBACK_BASE?.replace(/\/+$/,{}) ?? 'https://your-domain.com'` + `callbackUrlFor(platform) = ${BASE}/callback/${platform.toLowerCase()}` + `encodedCallbackFor`；`AdapterBase.callbackFor(platform)` 受保 helper 复用；所有 8 个适配器（douyin/twitter/weibo/bilibili/wechat-official/wechat-video/youtube/xiaohongshu）均从内联 `https://your-domain.com/callback/{platform}` 改为 `this.callbackFor()`（Twitter/Weibo/YouTube 同时修 query+body 两处）；`.env.example` 增 `OAUTH_CALLBACK_BASE=` 注释；单测 `oauth-callback.spec.ts` 3（默认宿/路径拼接/小写 slug）；`platform-sdk` 包现有适配测试 43 + 新 3 = 46 全绿；API 527 不变
 - [ ] **平台 SDK mock→真实调用** — 抖音/小红书/公众号/视频号/微博 publish() 返回占位 URL，逐步接入真实平台 API
-- [ ] **数据库迁移 SQL 文件** — 当前仅 Prisma schema，缺少版本化 migration 文件
+- [x] **数据库迁移 SQL 文件**（35b5c6f ✅）— 0001_init 完整 schema (607行) + 14 个里程碑迁移（原时间戳序列保留）
 
 ## 重要约束
 - **每次完成必须按「铁律」更新文档，不得跳过**

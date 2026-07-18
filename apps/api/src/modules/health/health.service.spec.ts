@@ -5,6 +5,7 @@ import { HealthService, HealthStatus } from './health.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { NotificationService } from '../notification/notification.service';
+import { ConfigService } from '@nestjs/config';
 
 const mockCrypto = () => ({
   // Echo JSON through an "enc:" prefix so the decrypt path round-trips.
@@ -53,6 +54,7 @@ describe('HealthService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: CryptoService, useValue: crypto },
         { provide: NotificationService, useValue: notifications },
+        { provide: ConfigService, useValue: { get: jest.fn() } },
       ],
     }).compile();
 

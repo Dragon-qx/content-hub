@@ -9,6 +9,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { SchedulerService } from '../scheduler/scheduler.service';
 import { EngagementService } from '../engagement/engagement.service';
 import { AnalyticsService } from '../analytics/analytics.service';
+import { HealthService } from '../health/health.service';
 
 export interface PublishJobPayload {
   contentId: string;
@@ -32,6 +33,12 @@ export interface AnomalyScanResult {
   accounts: number;
   anomalies: number;
   teamsAlerted: number;
+}
+
+export interface ThresholdScanResult {
+  teams: number;
+  alerts: number;
+  teamsNotified: number;
 }
 
 /**
@@ -59,6 +66,7 @@ export class QueueService {
     private readonly scheduler: SchedulerService,
     private readonly engagement: EngagementService,
     private readonly analytics: AnalyticsService,
+    private readonly health: HealthService,
     @Optional()
     @Inject('QUEUE_KIND')
     readonly kind: QueueKind = 'prisma',
@@ -125,5 +133,26 @@ export class QueueService {
       anomalies: results.reduce((acc, r) => acc + (r.anomalies ?? 0), 0),
       teamsAlerted: results.filter((r) => r.notified).length,
     };
+  }
+
+  /** Run a threshold health scan across every team and notify teams below the threshold. */
+  async runThresholdScanTick(): Promise<ThresholdScanResult> {
+    const teams = await this.prisma.team.findMany({ select: { id: true } });
+    let teamsNotified = 0;
+    let alerts = 0;
+    for (const team of teams) {
+      try {
+        const result = await this.health.checkThresholdAlerts(team.id, true);
+        if (result.alerts.length > 0) {
+          alerts += result.alerts.length;
+          if (result.notified > 0) teamsNotified++;
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Threshold scan failed for team ${team.id}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+    return { teams: teams.length, alerts, teamsNotified };
   }
 }

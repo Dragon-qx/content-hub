@@ -1,4 +1,4 @@
-import { Controller, Get, Header, Param, Post, Body, Query, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Header, Param, Post, Body, Query, Res, UseGuards, Delete } from '@nestjs/common';
 import type { Response } from 'express';
 import {
   ApiBearerAuth,
@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AnalyticsQueryDto, HistoryQueryDto, TopContentQueryDto } from './dto/analytics-query.dto';
 import { SnapshotCreateDto } from './dto/snapshot-create.dto';
 import { AnomalyAlertsQueryDto, ScanAnomalyDto } from './dto/anomaly.dto';
+import { ReportConfigDto } from './dto/report.dto';
 
 @ApiTags('Analytics')
 @ApiBearerAuth()
@@ -127,5 +128,68 @@ export class AnalyticsController {
   @Get('anomaly-alerts')
   listAlerts(@Query() query: AnomalyAlertsQueryDto) {
     return this.analytics.listAlerts(query);
+  }
+
+  // ── Custom drag-and-drop reports (PRD §3.5) ──────────────────────────
+
+  /** Available fields for the report builder (grouped by category). */
+  @ApiOperation({ summary: 'Report builder fields', description: 'Returns the draggable field list grouped by category for the custom report builder.' })
+  @Get('report-fields')
+  @ApiOkResponse({ description: 'Grouped available fields.' })
+  getReportFields() {
+    return this.analytics.getAvailableFields();
+  }
+
+  /** Generate a report from selected fields (one-off, not saved). */
+  @ApiOperation({ summary: 'Generate a report', description: 'Generates report data from selected fields, filters, and grouping. Does not persist the configuration.' })
+  @Post('reports/generate')
+  @ApiOkResponse({ description: 'Generated report data.' })
+  generateReport(@Body() dto: ReportConfigDto) {
+    return this.analytics.generateReport(
+      dto.fieldIds,
+      dto.filters,
+      dto.groupBy,
+      dto.sortBy,
+      dto.sortDir,
+      dto.limit,
+    );
+  }
+
+  /** Save (create or update) a named report configuration. */
+  @ApiOperation({ summary: 'Save a report', description: 'Persists a custom report configuration for later reuse.' })
+  @Post('reports')
+  @ApiCreatedResponse({ description: 'Report saved.' })
+  async saveReport(@Body() dto: ReportConfigDto) {
+    // In a real app, userId/teamId come from the JWT. Use a placeholder for now.
+    const teamId = 'default-team';
+    const userId = 'system';
+    return this.analytics.saveReport(teamId, userId, { ...dto, name: dto.name ?? 'Untitled report' });
+  }
+
+  /** List saved reports for the current team. */
+  @ApiOperation({ summary: 'List saved reports', description: 'Returns all saved custom reports for the team.' })
+  @Get('reports')
+  @ApiOkResponse({ description: 'List of saved reports.' })
+  listReports() {
+    const teamId = 'default-team';
+    return this.analytics.listReports(teamId);
+  }
+
+  /** Fetch one saved report configuration. */
+  @ApiOperation({ summary: 'Get a saved report', description: 'Returns a single saved report configuration.' })
+  @ApiParam({ name: 'id', description: 'Report id' })
+  @Get('reports/:id')
+  @ApiOkResponse({ description: 'Saved report.' })
+  getReport(@Param('id') id: string) {
+    return this.analytics.getReport(id);
+  }
+
+  /** Delete a saved report. */
+  @ApiOperation({ summary: 'Delete a report', description: 'Permanently removes a saved custom report.' })
+  @ApiParam({ name: 'id', description: 'Report id' })
+  @Delete('reports/:id')
+  @ApiOkResponse({ description: 'Report deleted.' })
+  deleteReport(@Param('id') id: string) {
+    return this.analytics.deleteReport(id);
   }
 }

@@ -32,6 +32,13 @@ describe('AnalyticsService', () => {
         create: jest.fn(),
         findMany: jest.fn(),
       },
+      customReport: {
+        create: jest.fn(),
+        update: jest.fn(),
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        delete: jest.fn(),
+      },
     };
     notifications = {
       broadcastToTeam: jest.fn().mockResolvedValue({ count: 0 }),
@@ -596,6 +603,215 @@ describe('AnalyticsService', () => {
         }),
       );
       expect(result).toEqual([{ id: 'x1' }]);
+    });
+  });
+
+  // ── Custom drag-and-drop reports (PRD §3.5) ──────────────────────
+
+  describe('getAvailableFields', () => {
+    it('returns fields grouped by category', () => {
+      const result = service.getAvailableFields();
+      expect(result.categories).toBeInstanceOf(Array);
+      expect(result.categories.length).toBeGreaterThan(0);
+      // Each category has at least one field
+      for (const cat of result.categories) {
+        expect(cat.fields.length).toBeGreaterThan(0);
+        expect(cat.fields[0]).toHaveProperty('id');
+        expect(cat.fields[0]).toHaveProperty('label');
+        expect(cat.fields[0]).toHaveProperty('category');
+        expect(cat.fields[0]).toHaveProperty('type');
+      }
+    });
+  });
+
+  describe('generateReport', () => {
+    it('builds rows from posts and accounts, applies filters and sort', async () => {
+      prisma.socialAccount.findMany.mockResolvedValue([
+        {
+          id: 'a1',
+          platform: 'WECHAT_OFFICIAL',
+          accountName: 'Test Account',
+          followerCount: 1000,
+          followingCount: 100,
+          postCount: 50,
+          analytics: [
+            {
+              followerCount: 1200,
+              followingCount: 105,
+              postCount: 55,
+              impressions: 5000,
+              engagements: 200,
+              likes: 150,
+              comments: 30,
+              shares: 20,
+              views: 7000,
+              snapshotDate: new Date(),
+            },
+          ],
+        },
+      ]);
+      prisma.platformPost.findMany.mockResolvedValue([
+        {
+          contentId: 'c1',
+          platform: 'WECHAT_OFFICIAL',
+          publishedAt: new Date(),
+          content: { title: 'Post A' },
+          metrics: { impressions: 1000, likes: 100, comments: 10, shares: 5, views: 2000 },
+        },
+        {
+          contentId: 'c2',
+          platform: 'DOUYIN',
+          publishedAt: new Date(),
+          content: { title: 'Post B' },
+          metrics: { impressions: 500, likes: 200, comments: 20, shares: 10, views: 1000 },
+        },
+      ]);
+
+      const result = await service.generateReport(
+        ['platform', 'contentTitle', 'impressions', 'engagementRate'],
+        [{ field: 'platform', operator: 'eq', value: 'WECHAT_OFFICIAL' }],
+        undefined,
+        'impressions',
+        'desc',
+        50,
+      );
+
+      expect(result.fields).toBeInstanceOf(Array);
+      expect(result.fields.length).toBe(4);
+      expect(result.rows).toBeInstanceOf(Array);
+      // Filter: only WECHAT_OFFICIAL
+      expect(result.rows.every((r) => r.platform === 'WECHAT_OFFICIAL')).toBe(true);
+      // Sort: impressions descending
+      if (result.rows.length >= 2) {
+        expect(Number(result.rows[0].impressions)).toBeGreaterThanOrEqual(
+          Number(result.rows[1].impressions),
+        );
+      }
+      expect(result).toHaveProperty('generatedAt');
+      expect(result).toHaveProperty('totalCount');
+    });
+
+    it('groups rows by a dimension and sums numeric fields', async () => {
+      prisma.socialAccount.findMany.mockResolvedValue([]);
+      prisma.platformPost.findMany.mockResolvedValue([
+        {
+          contentId: 'c1',
+          platform: 'WECHAT_OFFICIAL',
+          publishedAt: new Date(),
+          content: { title: 'A' },
+          metrics: { impressions: 100 },
+        },
+        {
+          contentId: 'c2',
+          platform: 'WECHAT_OFFICIAL',
+          publishedAt: new Date(),
+          content: { title: 'B' },
+          metrics: { impressions: 200 },
+        },
+        {
+          contentId: 'c3',
+          platform: 'DOUYIN',
+          publishedAt: new Date(),
+          content: { title: 'C' },
+          metrics: { impressions: 300 },
+        },
+      ]);
+
+      const result = await service.generateReport(
+        ['platform', 'impressions'],
+        undefined,
+        'platform',
+        undefined,
+        'desc',
+        100,
+      );
+
+      expect(result.rows.length).toBe(2); // 2 platforms
+      const wx = result.rows.find((r) => r.platform === 'WECHAT_OFFICIAL');
+      const dy = result.rows.find((r) => r.platform === 'DOUYIN');
+      expect(Number(wx?.impressions)).toBe(300); // 100 + 200
+      expect(Number(dy?.impressions)).toBe(300);
+    });
+
+    it('returns empty rows when no posts or accounts', async () => {
+      prisma.socialAccount.findMany.mockResolvedValue([]);
+      prisma.platformPost.findMany.mockResolvedValue([]);
+
+      const result = await service.generateReport(['platform'], undefined, undefined, undefined, 'desc', 100);
+      expect(result.rows).toEqual([]);
+      expect(result.totalCount).toBe(0);
+    });
+  });
+
+  describe('saveReport / listReports / getReport / deleteReport', () => {
+    it('saveReport creates a new row with config', async () => {
+      prisma.customReport.create.mockResolvedValue({
+        id: 'r1',
+        teamId: 't1',
+        name: 'My report',
+        fieldIds: ['platform'],
+        filtersJson: '{}',
+      });
+      const result = await service.saveReport('t1', 'u1', {
+        name: 'My report',
+        fieldIds: ['platform'],
+      });
+      expect(prisma.customReport.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            teamId: 't1',
+            name: 'My report',
+            createdBy: 'u1',
+          }),
+        }),
+      );
+      expect(result).toHaveProperty('id', 'r1');
+    });
+
+    it('saveReport updates an existing row when id is provided', async () => {
+      prisma.customReport.update.mockResolvedValue({ id: 'r1' });
+      const result = await service.saveReport('t1', 'u1', {
+        id: 'r1',
+        name: 'Updated',
+        fieldIds: ['platform'],
+      });
+      expect(prisma.customReport.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'r1' } }),
+      );
+      expect(result).toHaveProperty('id', 'r1');
+    });
+
+    it('listReports filters by teamId and orders by updatedAt', async () => {
+      prisma.customReport.findMany.mockResolvedValue([{ id: 'r1' }]);
+      const result = await service.listReports('t1');
+      expect(prisma.customReport.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { teamId: 't1' },
+          orderBy: { updatedAt: 'desc' },
+        }),
+      );
+      expect(result).toEqual([{ id: 'r1' }]);
+    });
+
+    it('getReport returns a report by id', async () => {
+      prisma.customReport.findUnique.mockResolvedValue({ id: 'r1' });
+      const result = await service.getReport('r1');
+      expect(prisma.customReport.findUnique).toHaveBeenCalledWith({ where: { id: 'r1' } });
+      expect(result).toHaveProperty('id', 'r1');
+    });
+
+    it('getReport throws NotFoundException when missing', async () => {
+      prisma.customReport.findUnique.mockResolvedValue(null);
+      await expect(service.getReport('nope')).rejects.toThrow(NotFoundException);
+    });
+
+    it('deleteReport removes the report', async () => {
+      prisma.customReport.findUnique.mockResolvedValue({ id: 'r1' });
+      prisma.customReport.delete.mockResolvedValue({ id: 'r1' });
+      const result = await service.deleteReport('r1');
+      expect(prisma.customReport.delete).toHaveBeenCalledWith({ where: { id: 'r1' } });
+      expect(result).toHaveProperty('success', true);
+      expect(result).toHaveProperty('deletedId', 'r1');
     });
   });
 });

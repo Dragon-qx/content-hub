@@ -6,9 +6,9 @@ import { usePathname } from 'next/navigation';
 const BOTTOM_NAV = [
   { key: 'home', label: 'Home', icon: '🏠', href: '/dashboard' },
   { key: 'content', label: 'Content', icon: '📝', href: '/content' },
-  { key: 'media', label: 'Media', icon: '🖼️', href: '/media' },
-  { key: 'scheduler', label: 'Schedule', icon: '📅', href: '/scheduler' },
-  { key: 'settings', label: 'More', icon: '⋯', href: '/settings' },
+  { key: 'analytics', label: 'Analytics', icon: '📈', href: '/analytics' },
+  { key: 'reports', label: 'Reports', icon: '📋', href: '/reports' },
+  { key: 'more', label: 'More', icon: '⋯', href: '/settings' },
 ];
 
 export default function MobileNav() {

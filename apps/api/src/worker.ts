@@ -25,7 +25,17 @@ const ANOMALY_SCAN_INTERVAL_MS = Number(
 );
 
 /**
- * Standalone publish + engagement + anomaly worker.
+ * How often to run the health threshold sweep across every team. PRD §3.2
+ * requires an alert when an account's health score drops below a threshold.
+ * Intentionally slower than anomaly scanning: threshold sweeps broadcast
+ * notifications so they should not fire too aggressively. Defaults to 30 min.
+ */
+const THRESHOLD_SCAN_INTERVAL_MS = Number(
+  process.env.WORKER_THRESHOLD_SCAN_INTERVAL_MS ?? 30 * 60_000,
+);
+
+/**
+ * Standalone publish + engagement + anomaly + threshold worker.
  *
  * All dispatch goes through QueueService, a pluggable seam. Backed today by the
  * Prisma-backed implementation (job rows on `PublishJob`), with a reserved
@@ -38,7 +48,10 @@ const ANOMALY_SCAN_INTERVAL_MS = Number(
  *      messages for every active account
  *   3. on a yet slower cadence, runAnomalyScanTick scans every account's series
  *      and alerts teams when anomalies change
- *   4. sleep POLL_INTERVAL_MS, repeat
+ *   4. on a slow cadence (default 30 min), runThresholdScanTick evaluates every
+ *      team's accounts against the configured health thresholds and broadcasts
+ *      alerts for accounts below the warning or critical level (M30c, PRD §3.2)
+ *   5. sleep POLL_INTERVAL_MS, repeat
  *
  * Stops gracefully on SIGINT/SIGTERM.
  */
@@ -54,6 +67,7 @@ async function bootstrap() {
   let running = true;
   let lastEngagementSync = 0;
   let lastAnomalyScan = 0;
+  let lastThresholdScan = 0;
 
   const shutdown = () => {
     logger.log('Received shutdown signal, finishing current tick...');
@@ -66,7 +80,8 @@ async function bootstrap() {
     `Publish worker started (poll ${POLL_INTERVAL_MS}ms, batch ${BATCH_SIZE}, ` +
       `queue=${queue.kind}, ` +
       `engagement sync every ${ENGAGEMENT_SYNC_INTERVAL_MS}ms, ` +
-      `anomaly scan every ${ANOMALY_SCAN_INTERVAL_MS}ms)`,
+      `anomaly scan every ${ANOMALY_SCAN_INTERVAL_MS}ms, ` +
+      `threshold scan every ${THRESHOLD_SCAN_INTERVAL_MS}ms)`,
   );
 
   // Negative setTimeout are clamped to 1 ms by Node, so toMs guards delay bounds.
@@ -115,6 +130,25 @@ async function bootstrap() {
         } catch (err) {
           logger.warn(
             `Anomaly scan failed: ${
+              err instanceof Error ? err.message : err
+            }`,
+          );
+        }
+      }
+
+      if (now - lastThresholdScan >= THRESHOLD_SCAN_INTERVAL_MS) {
+        lastThresholdScan = now;
+        try {
+          const tResult = await queue.runThresholdScanTick();
+          if (tResult.alerts > 0 || tResult.teamsNotified > 0) {
+            logger.log(
+              `Threshold scan: ${tResult.teams} team(s), ` +
+                `${tResult.alerts} alert(s), ${tResult.teamsNotified} team(s) notified`,
+            );
+          }
+        } catch (err) {
+          logger.warn(
+            `Threshold scan failed: ${
               err instanceof Error ? err.message : err
             }`,
           );

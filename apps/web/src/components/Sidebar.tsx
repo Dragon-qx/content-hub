@@ -12,6 +12,7 @@ const NAV = [
   { key: 'scheduler', label: 'Scheduler', icon: '📅', href: '/scheduler' },
   { key: 'workflow', label: 'Approvals', icon: '🔄', href: '/workflow' },
   { key: 'analytics', label: 'Analytics', icon: '📈', href: '/analytics' },
+  { key: 'reports', label: 'Reports', icon: '📋', href: '/reports' },
   { key: 'accounts', label: 'Accounts', icon: '🔗', href: '/accounts' },
   { key: 'teams', label: 'Teams', icon: '👥', href: '/teams' },
   { key: 'notifications', label: 'Notifications', icon: '🔔', href: '/notifications' },

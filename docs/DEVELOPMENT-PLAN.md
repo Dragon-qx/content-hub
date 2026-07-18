@@ -2,7 +2,24 @@
 
 > 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18（第5次）
 
-> **当前进度（2026-07-18 第21次）**: M1–M38 + M30b WYSIWYG 全部完成。剩余：自定义报表拖拽生成（🟢 低优先级）、账号健康度阈值告警（🟢）、真实 AI 接入（🔧）、平台 SDK mock→真实调用（🔧）、数据库 migration SQL 文件（🔧）
+> **当前进度（2026-07-18 第22次）**: M1–M41 全部完成（含自定义报表拖拽生成）。剩余：账号健康度阈值告警（🟢）、真实 AI 接入（🔧）、平台 SDK mock→真实调用（🔧）、数据库 migration SQL 文件（🔧）
+
+---
+
+### M41: V1.1 — 自定义报表拖拽生成 (Custom Drag-and-Drop Reports) (PRD §3.5 P2)
+**目标:** 用户拖拽字段生成自定义报表，支持保存/加载/导出 CSV。
+
+- [x] **后端 API** — `AnalyticsController` 新增端点（`GET /analytics/report-fields`、`POST /analytics/reports/generate`、`GET /analytics/reports`、 `GET /analytics/reports/:id`、`DELETE /analytics/reports/:id`）；`AnalyticsService` 提供 `getAvailableFields()`、`generateReport()`、`saveReport()`、`listReports()`、`getReport()`、`deleteReport()`；`CustomReport` Prisma 模型已存在
+- [x] **DTO 校验** — `ReportConfigDto`、`ReportFilterDto`（`report.dto.ts`）覆盖生成与保存请求体验证
+- [x] **单元测试** — 控制器 **6** 单测（report-fields/generate/save/list/get/delete）+ 服务 **14** 单测（getAvailableFields、generateReport 过滤/分组/排序、saveReport 创建/更新、listReports、getReport、deleteReport）；64 测试全绿
+- [x] **前端页面** — `apps/web/src/app/(app)/reports/page.tsx`：
+  - 左侧：可拖拽字段列表（HTML5 DnD），按 category 分组（account/content/engagement/time/dimension）
+  - 中间：报表画布（已选字段排序/删除、Group by、Sort by/direction、Filters 增删改）
+  - 右侧：报表预览（表格展示生成结果）
+  - 顶部：Generate/Save/Load/Export CSV 按钮
+  - 响应式：`grid-cols-1 md:grid-cols-3`，移动端垂直堆叠
+- [x] **导航集成** — `Sidebar.tsx` 新增「Reports」入口（📋）；`MobileNav.tsx` 替换低频「Settings」为「Reports」
+- [x] **类型检查** — API + Web typecheck 全绿；543 测试 / 48 套件（含 64 analytics 测试）
 
 ---
 
@@ -335,6 +352,8 @@
 - [ ] 数据库 migration 文件 — 当前仅 Prisma schema
 
 ### M40: V1.1 — 移动端响应式 + PWA (Mobile Responsive + PWA) (PRD §4.5)
+**代码提交**: `baa4958` `3446c48`
+**目标:** 让 ContentHub 前端在手机/平板/桌面全场景可用，PWA 可安装 + 离线缓存。
 **目标:** 让 ContentHub 前端在手机/平板/桌面全场景可用，PWA 可安装 + 离线缓存。
 
 - [x] **MobileNav** — `apps/web/src/components/MobileNav.tsx`：底部 5 入口 Tab 导航（Home/Content/Media/Schedule/More），`md:hidden` 仅在移动端显示，含 safe-area-inset-bottom 适配
@@ -349,6 +368,15 @@
 - [x] **16 页面移动响应式** — dashboard/analytics/assistant/audit/content/calendar/dashboard/engagement/media/notifications/scheduler/settings/teams/workflow/contents/[id]：grid-cols 移动优先、Table 包裹 `overflow-x-auto`、Select `w-full sm:max-w-[180px]`/`max-w-xs`、按钮 `min-h-[44px]` 触摸目标
 - [x] **12 组件移动响应式** — Sidebar/Topbar/LoginForm/Table/MarkdownEditor/MediaLibrary/TemplatePicker/AdaptationPreview/TrendChart/MobileNav/ServiceWorkerRegistration：响应式 padding/文字/触摸目标
 - [x] **测试** — Next.js build 18 条路由静态生成成功，typecheck 全绿
+
+### M41: V1.1 — WYSIWYG 编辑器 (PRD §3.3)
+**代码提交**: `7133b70`
+**目标:** TipTap 富文本编辑器，与 Markdown 双向切换。
+
+- [x] **WysiwygEditor 组件** — 工具栏（B/H1/H2/H3/bullet/ordered/quote/code/link）+ 拖拽上传图片 + HTML↔Markdown 双向转换（turndown.js）
+- [x] **集成到内容页面** — `content/page.tsx` + `contents/[id]/page.tsx` Markdown/WYSIWYG 切换
+- [x] **`@tiptap/react` + `@tiptap/starter-kit` + `@tiptap/extension-image` + `@tiptap/extension-link` + `turndown`** — 依赖已安装
+- [x] **Typecheck + build** — web `tsc --noEmit` 全绿，Next.js build 18 条路由成功
 
 ### M20: V1.1 — Engagement Hub（互动管理）
 **目标：** 统一评论收件箱 + 情感分析 + 快捷回复（PRD §3.6）

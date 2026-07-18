@@ -3,9 +3,10 @@ import { QueueService } from './queue.service';
 import { SchedulerModule } from '../scheduler/scheduler.module';
 import { EngagementModule } from '../engagement/engagement.module';
 import { AnalyticsModule } from '../analytics/analytics.module';
+import { HealthModule } from '../health/health.module';
 
 @Module({
-  imports: [SchedulerModule, EngagementModule, AnalyticsModule],
+  imports: [SchedulerModule, EngagementModule, AnalyticsModule, HealthModule],
   providers: [
     QueueService,
     // Switch this provider to a BullMQ-backed QueueService to enable true

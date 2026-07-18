@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Patch, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOkResponse,
@@ -11,8 +11,10 @@ import {
   AccountHealth,
   HealthService,
   TeamHealthSummary,
+  ThresholdAlertResult,
+  HealthThresholdConfig,
 } from './health.service';
-import { AccountIdParam, TeamIdParam } from './dto/health.dto';
+import { AccountIdParam, TeamIdParam, ThresholdConfigDto } from './dto/health.dto';
 
 /**
  * Account health monitoring (PRD §3.2). All computation is derived from
@@ -60,5 +62,42 @@ export class HealthController {
   @Post('teams/:teamId/run')
   runTeamCheck(@Param() { teamId }: TeamIdParam) {
     return this.healthService.runTeamCheck(teamId);
+  }
+
+  /**
+   * Return the current threshold alerts for a team — accounts whose health
+   * score has fallen below the configured warning or critical level.
+   */
+  @ApiOperation({ summary: 'List active threshold alerts', description: 'Returns accounts whose health score is below the configured threshold.' })
+  @ApiParam({ name: 'teamId', description: 'Team id' })
+  @Get('teams/:teamId/alerts')
+  listAlerts(@Param() { teamId }: TeamIdParam): Promise<ThresholdAlertResult> {
+    return this.healthService.checkThresholdAlerts(teamId, false);
+  }
+
+  /**
+   * Manually trigger the threshold sweep for a team and broadcast an in-app
+   * notification to the whole team when any account is below threshold.
+   */
+  @ApiOperation({ summary: 'Run threshold sweep', description: 'Evaluates the team, broadcasts alerts for accounts below threshold, and returns the sweep result.' })
+  @ApiParam({ name: 'teamId', description: 'Team id' })
+  @Post('teams/:teamId/threshold-check')
+  runThresholdCheck(@Param() { teamId }: TeamIdParam): Promise<ThresholdAlertResult> {
+    return this.healthService.checkThresholdAlerts(teamId, true);
+  }
+
+  /**
+   * Override the threshold config for this worker's lifecycle. When omitted,
+   * falls back to the env defaults (HEALTH_CRITICAL_THRESHOLD,
+   * HEALTH_WARNING_THRESHOLD). Returns the effective config.
+   */
+  @ApiOperation({ summary: 'Override threshold config', description: 'Update the critical/warning threshold levels for this worker (team-scoped).' })
+  @ApiParam({ name: 'teamId', description: 'Team id' })
+  @Patch('teams/:teamId/threshold-config')
+  updateThresholdConfig(
+    @Param() { teamId }: TeamIdParam,
+    @Body() dto: ThresholdConfigDto,
+  ): HealthThresholdConfig {
+    return this.healthService.setTeamThresholdConfig(teamId, dto);
   }
 }
