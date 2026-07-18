@@ -29,7 +29,7 @@ export function Table<T extends { id: string }>({
         <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
             {columns.map((c) => (
-              <th key={c.key} className="px-4 py-3 font-medium">
+              <th key={c.key} className="px-3 py-2 font-medium md:px-4 md:py-3">
                 {c.header}
               </th>
             ))}
@@ -39,7 +39,7 @@ export function Table<T extends { id: string }>({
           {rows.map((row) => (
             <tr key={row.id} className="border-b border-slate-100 last:border-0">
               {columns.map((c) => (
-                <td key={c.key} className={`px-4 py-3 ${c.className ?? ''}`}>
+                <td key={c.key} className={`px-3 py-2 md:px-4 md:py-3 ${c.className ?? ''}`}>
                   {c.render(row)}
                 </td>
               ))}

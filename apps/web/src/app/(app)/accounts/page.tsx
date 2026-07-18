@@ -191,12 +191,12 @@ export default function AccountsPage() {
   };
 
   return (
-    <div>
+    <div className="pb-20 md:pb-8">
       <PageHeader
         title="Accounts"
         subtitle="Bind and manage social platform accounts"
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={runHealthCheck} disabled={checking}>
               {checking ? 'Checking…' : 'Run health check'}
             </Button>
@@ -254,7 +254,7 @@ export default function AccountsPage() {
           </div>
 
           {mode === 'manual' ? (
-            <form onSubmit={submitManual} className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <form onSubmit={submitManual} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Select value={platform} onChange={(e) => setPlatform(e.target.value)}>
                 {PLATFORMS.map((p) => (
                   <option key={p.value} value={p.value}>
@@ -290,15 +290,15 @@ export default function AccountsPage() {
                 value={teamId}
                 onChange={(e) => setTeamId(e.target.value)}
               />
-              <div className="md:col-span-2 flex justify-end">
+              <div className="sm:col-span-2 flex justify-end">
                 <Button type="submit" disabled={submitting}>
                   {submitting ? 'Binding…' : 'Bind account'}
                 </Button>
               </div>
             </form>
           ) : (
-            <form onSubmit={submitOAuth} className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <p className="md:col-span-2 text-sm text-slate-500">
+            <form onSubmit={submitOAuth} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <p className="sm:col-span-2 text-sm text-slate-500">
                 OAuth2 authorization-code flow. Provide your registered app
                 key/secret for the platform; you&apos;ll be redirected to
                 authorize, and the account binds on return.
@@ -334,7 +334,7 @@ export default function AccountsPage() {
                 onChange={(e) => setTeamId(e.target.value)}
                 required
               />
-              <div className="md:col-span-2 flex justify-end">
+              <div className="sm:col-span-2 flex justify-end">
                 <Button type="submit" disabled={submitting}>
                   {submitting ? 'Redirecting…' : 'Connect via OAuth'}
                 </Button>
@@ -347,10 +347,11 @@ export default function AccountsPage() {
       {loading ? (
         <div className="text-slate-400">Loading…</div>
       ) : (
-        <Table<SocialAccount>
-          rows={rows}
-          emptyMessage="No accounts bound yet."
-          columns={[
+        <div className="overflow-x-auto">
+          <Table<SocialAccount>
+            rows={rows}
+            emptyMessage="No accounts bound yet."
+            columns={[
             { key: 'name', header: 'Account', render: (r) => r.accountName },
             {
               key: 'platform',
@@ -381,8 +382,9 @@ export default function AccountsPage() {
                 return <Badge tone={HEALTH_TONE[found.health]}>{label}</Badge>;
               },
             },
-          ]}
-        />
+            ]}
+          />
+        </div>
       )}
     </div>
   );

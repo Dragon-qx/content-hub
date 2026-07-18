@@ -133,7 +133,6 @@ function PlatformRow({
   const { platform, fits, truncated, bodyLength, maxLength, warnings, hints } =
     adaptation;
 
-  // Show the shortest useful preview of the (possibly truncated) copy.
   const preview = adaptation.adaptedBody.trim()
     ? adaptation.adaptedBody.length > 90
       ? `${adaptation.adaptedBody.slice(0, 90)}…`
@@ -141,18 +140,19 @@ function PlatformRow({
     : '（空正文）';
 
   return (
-    <div className="rounded-lg border border-slate-200 p-4">
+    <div className="rounded-lg border border-slate-200 p-2 sm:p-4">
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-slate-800">{label}</span>
-          <span className="font-mono text-xs text-slate-400">{platform}</span>
+          <span className="text-xs font-semibold text-slate-800 sm:text-sm">{label}</span>
+          <span className="font-mono text-[10px] text-slate-400 sm:text-xs">{platform}</span>
         </div>
         <Badge tone={fits ? 'success' : 'danger'}>
-          {fits ? 'Fits' : 'Needs attention'}
+          <span className="hidden sm:inline">{fits ? 'Fits' : 'Needs attention'}</span>
+          <span className="sm:hidden">{fits ? 'Fit' : 'No'}</span>
         </Badge>
       </div>
 
-      <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+      <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500 sm:text-xs">
         <span>
           Body: {bodyLength}/{maxLength}
           {truncated && <span className="ml-1 text-amber-600">(truncated)</span>}
@@ -161,9 +161,7 @@ function PlatformRow({
           <span>
             Images: {adaptation.imagesUsed}/{adaptation.imageMax}
             {adaptation.imagesDropped > 0 && (
-              <span className="ml-1 text-amber-600">
-                (-{adaptation.imagesDropped})
-              </span>
+              <span className="ml-1 text-amber-600">(-{adaptation.imagesDropped})</span>
             )}
           </span>
         )}
@@ -171,15 +169,13 @@ function PlatformRow({
           <span>
             Videos: {adaptation.videosUsed}/{adaptation.videoMax}
             {adaptation.videosDropped > 0 && (
-              <span className="ml-1 text-amber-600">
-                (-{adaptation.videosDropped})
-              </span>
+              <span className="ml-1 text-amber-600">(-{adaptation.videosDropped})</span>
             )}
           </span>
         )}
       </div>
 
-      <p className="mb-2 rounded bg-slate-50 px-3 py-2 font-mono text-xs text-slate-600">
+      <p className="mb-2 rounded bg-slate-50 px-2 py-1 font-mono text-xs text-slate-600 sm:px-3 sm:py-2">
         {preview}
       </p>
 

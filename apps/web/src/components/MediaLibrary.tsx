@@ -67,33 +67,9 @@ export default function MediaLibrary({ contentId, onSelect, onClose }: MediaLibr
         className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-          <h3 className="text-sm font-semibold text-slate-900">Media library</h3>
-          <div className="flex items-center gap-2">
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as '' | 'IMAGE' | 'VIDEO')}
-              className="rounded-lg border border-slate-200 px-2 py-1 text-xs outline-none focus:border-primary"
-            >
-              <option value="">All</option>
-              <option value="IMAGE">Images</option>
-              <option value="VIDEO">Videos</option>
-            </select>
-            <Button
-              disabled={uploading}
-              onClick={() => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'image/*,video/*';
-                input.onchange = () => {
-                  const f = input.files?.[0];
-                  if (f) void upload(f);
-                };
-                input.click();
-              }}
-            >
-              {uploading ? 'Uploading…' : '+ Upload'}
-            </Button>
+        <div className="border-b border-slate-200">
+          <div className="flex items-center justify-between px-4 py-3 md:px-5">
+            <h3 className="text-sm font-semibold text-slate-900">Media library</h3>
             <button
               type="button"
               onClick={onClose}
@@ -102,6 +78,34 @@ export default function MediaLibrary({ contentId, onSelect, onClose }: MediaLibr
             >
               ✕
             </button>
+          </div>
+          <div className="flex flex-col gap-2 px-4 pb-3 md:flex-row md:items-center md:justify-end md:px-5">
+            <div className="flex gap-2">
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as '' | 'IMAGE' | 'VIDEO')}
+                className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs outline-none focus:border-primary md:w-auto"
+              >
+                <option value="">All</option>
+                <option value="IMAGE">Images</option>
+                <option value="VIDEO">Videos</option>
+              </select>
+              <Button
+                disabled={uploading}
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'image/*,video/*';
+                  input.onchange = () => {
+                    const f = input.files?.[0];
+                    if (f) void upload(f);
+                  };
+                  input.click();
+                }}
+              >
+                {uploading ? 'Uploading…' : '+ Upload'}
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -117,7 +121,7 @@ export default function MediaLibrary({ contentId, onSelect, onClose }: MediaLibr
           ) : (
             <>
               <p className="mb-3 text-xs text-slate-400">{total} item{total === 1 ? '' : 's'}</p>
-              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                 {assets.map((a) => (
                   <button
                     key={a.id}

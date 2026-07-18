@@ -51,7 +51,7 @@ export default function SchedulerPage() {
   };
 
   return (
-    <div>
+    <div className="pb-20 md:pb-8">
       <PageHeader
         title="Scheduler"
         subtitle="Schedule and monitor publish jobs"
@@ -89,17 +89,19 @@ export default function SchedulerPage() {
       {loading ? (
         <div className="text-slate-400">Loading…</div>
       ) : (
-        <Table<PublishJob>
-          rows={rows}
-          emptyMessage="No scheduled jobs."
-          columns={[
-            { key: 'id', header: 'Job', render: (r) => <span className="font-mono text-xs">{r.id}</span> },
-            { key: 'content', header: 'Content', render: (r) => <span className="font-mono text-xs">{r.contentId}</span> },
-            { key: 'status', header: 'Status', render: (r) => <StatusBadge status={r.status} /> },
-            { key: 'scheduled', header: 'Scheduled', render: (r) => new Date(r.scheduledAt).toLocaleString() },
-            { key: 'retries', header: 'Retries', render: (r) => r.retryCount },
-          ]}
-        />
+        <div className="overflow-x-auto">
+          <Table<PublishJob>
+            rows={rows}
+            emptyMessage="No scheduled jobs."
+            columns={[
+              { key: 'id', header: 'Job', render: (r) => <span className="font-mono text-xs">{r.id}</span> },
+              { key: 'content', header: 'Content', render: (r) => <span className="font-mono text-xs">{r.contentId}</span> },
+              { key: 'status', header: 'Status', render: (r) => <StatusBadge status={r.status} /> },
+              { key: 'scheduled', header: 'Scheduled', render: (r) => new Date(r.scheduledAt).toLocaleString() },
+              { key: 'retries', header: 'Retries', render: (r) => r.retryCount },
+            ]}
+          />
+        </div>
       )}
     </div>
   );

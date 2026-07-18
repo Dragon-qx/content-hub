@@ -97,7 +97,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 pb-20 md:pb-8">
       <PageHeader title="Settings" subtitle="Profile and security" />
 
       <Card className="max-w-xl">

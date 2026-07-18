@@ -44,7 +44,7 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div>
+    <div className="pb-20 md:pb-8">
       <PageHeader
         title="Notifications"
         subtitle={`${unread} unread`}
@@ -56,7 +56,7 @@ export default function NotificationsPage() {
       />
 
       <Card className="mb-6">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant={filter === 'all' ? 'primary' : 'secondary'} onClick={() => setFilter('all')}>All</Button>
           <Button variant={filter === 'unread' ? 'primary' : 'secondary'} onClick={() => setFilter('unread')}>Unread</Button>
         </div>
@@ -65,39 +65,41 @@ export default function NotificationsPage() {
       {loading ? (
         <div className="text-slate-400">Loading…</div>
       ) : (
-        <Table<Notification>
-          rows={rows}
-          emptyMessage={filter === 'unread' ? 'No unread notifications.' : 'No notifications.'}
-          columns={[
-            {
-              key: 'type',
-              header: 'Type',
-              render: (r) => <Badge tone={NOTIFICATION_TONE[r.type]}>{r.type}</Badge>,
-            },
-            {
-              key: 'title',
-              header: 'Title',
-              render: (r) => (
-                <button onClick={() => markOne(r.id)} className="text-left hover:underline">
-                  <div className={`text-sm ${r.read ? 'text-slate-600' : 'font-semibold text-slate-900'}`}>{r.title}</div>
-                  <div className="line-clamp-1 text-xs text-slate-400">{r.body}</div>
-                  {r.link && <Link href={r.link} className="text-xs text-primary hover:underline">Open</Link>}
-                </button>
-              ),
-            },
-            { key: 'when', header: 'When', render: (r) => <span className="text-xs text-slate-400">{new Date(r.createdAt).toLocaleString()}</span> },
-            {
-              key: 'state',
-              header: 'State',
-              render: (r) =>
-                r.read ? (
-                  <span className="text-xs text-slate-400">Read</span>
-                ) : (
-                  <Button variant="ghost" onClick={() => markOne(r.id)}>Mark read</Button>
+        <div className="overflow-x-auto">
+          <Table<Notification>
+            rows={rows}
+            emptyMessage={filter === 'unread' ? 'No unread notifications.' : 'No notifications.'}
+            columns={[
+              {
+                key: 'type',
+                header: 'Type',
+                render: (r) => <Badge tone={NOTIFICATION_TONE[r.type]}>{r.type}</Badge>,
+              },
+              {
+                key: 'title',
+                header: 'Title',
+                render: (r) => (
+                  <button onClick={() => markOne(r.id)} className="text-left hover:underline">
+                    <div className={`text-sm ${r.read ? 'text-slate-600' : 'font-semibold text-slate-900'}`}>{r.title}</div>
+                    <div className="line-clamp-1 text-xs text-slate-400">{r.body}</div>
+                    {r.link && <Link href={r.link} className="text-xs text-primary hover:underline">Open</Link>}
+                  </button>
                 ),
-            },
-          ]}
-        />
+              },
+              { key: 'when', header: 'When', render: (r) => <span className="text-xs text-slate-400">{new Date(r.createdAt).toLocaleString()}</span> },
+              {
+                key: 'state',
+                header: 'State',
+                render: (r) =>
+                  r.read ? (
+                    <span className="text-xs text-slate-400">Read</span>
+                  ) : (
+                    <Button variant="ghost" onClick={() => markOne(r.id)}>Mark read</Button>
+                  ),
+              },
+            ]}
+          />
+        </div>
       )}
     </div>
   );

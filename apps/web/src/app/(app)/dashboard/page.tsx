@@ -66,9 +66,9 @@ function KpiCard({
 }) {
   const negative = change?.startsWith('-');
   return (
-    <Card>
-      <div className="text-sm text-slate-500">{label}</div>
-      <div className="mt-2 text-3xl font-semibold text-slate-900">
+    <Card className="p-3 md:p-5">
+      <div className="text-xs md:text-sm text-slate-500 truncate">{label}</div>
+      <div className="mt-2 text-xl md:text-3xl font-semibold text-slate-900 truncate">
         {typeof value === 'number' ? value.toLocaleString() : value}
       </div>
       {change && (
@@ -217,7 +217,7 @@ export default function DashboardPage() {
                 load();
                 ping();
               }}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 min-h-[44px]"
             >
               Refresh
             </button>
@@ -233,7 +233,7 @@ export default function DashboardPage() {
       ) : (
         <>
           {/* KPI cards */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
             <KpiCard
               label="Followers"
               value={overview?.followers.value ?? '—'}
@@ -254,7 +254,7 @@ export default function DashboardPage() {
 
           {/* Trend chart */}
           <Card>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 md:gap-3">
               <h2 className="text-base font-semibold">Trend</h2>
               <div className="flex gap-2">
                 <Select

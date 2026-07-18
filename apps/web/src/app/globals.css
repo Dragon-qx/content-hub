@@ -11,6 +11,10 @@ body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background: #f8fafc;
   color: #1e293b;
+  /* Prevent pull-to-refresh / overscroll on mobile */
+  overscroll-behavior-y: contain;
+  /* Ensure padding for safe areas on notched devices */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .sidebar {
@@ -59,4 +63,33 @@ body {
 .nav-item:hover, .nav-item.active {
   background: rgba(255, 255, 255, 0.1);
   color: white;
+}
+
+/* Dark mode via prefers-color-scheme - minimal */
+@media (prefers-color-scheme: dark) {
+  /* Placeholder for future dark mode support */
+}
+
+/* Touch device optimizations */
+@media (pointer: coarse) {
+  /* Larger touch targets on mobile */
+  .card a,
+  .nav-item,
+  nav a {
+    min-height: 36px;
+  }
+  /* Prevent text size inflation */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+}
+
+/* Hide scrollbar but keep scrolling on mobile bottom nav */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

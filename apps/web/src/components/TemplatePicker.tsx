@@ -61,7 +61,7 @@ export default function TemplatePicker({
 
   return (
     <Card className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-sm font-semibold text-slate-900">Load from template</h3>
         <Button variant="secondary" onClick={onCancel}>
           Close
@@ -84,11 +84,11 @@ export default function TemplatePicker({
           {templates.map((t) => (
             <li
               key={t.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2"
+              className="flex flex-col gap-2 rounded-lg border border-slate-100 p-2 sm:flex-row sm:items-center sm:justify-between sm:px-3 sm:py-2"
             >
               <div className="min-w-0">
-                <div className="truncate text-sm font-medium text-slate-700">{t.title}</div>
-                <div className="text-xs text-slate-400">
+                <div className="truncate text-xs font-medium text-slate-700 sm:text-sm">{t.title}</div>
+                <div className="text-[10px] text-slate-400 sm:text-xs">
                   {t.contentType}
                   {t.tags.length > 0 && <> · {t.tags.join(', ')}</>}
                 </div>

@@ -243,7 +243,7 @@ export default function AnalyticsPage() {
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-base font-semibold">Trend</h2>
               <div className="flex gap-2">
-                <Select value={metric} onChange={(e) => setMetric(e.target.value as AnalyticsMetric)} className="max-w-[180px]">
+                <Select value={metric} onChange={(e) => setMetric(e.target.value as AnalyticsMetric)} className="w-full sm:max-w-[180px]">
                   {ANALYTICS_METRICS.map((m) => (
                     <option key={m} value={m}>{METRIC_LABELS[m]}</option>
                   ))}

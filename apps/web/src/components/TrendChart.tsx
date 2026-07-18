@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 export interface TrendPoint {
   date: string;
   value: number;
@@ -12,15 +14,28 @@ export interface TrendPoint {
  */
 export default function TrendChart({
   data,
-  height = 200,
+  height: baseHeight = 200,
+  heightMd = 240,
   stroke = '#6366f1',
   fill = '#eef2ff',
 }: {
   data: TrendPoint[];
   height?: number;
+  heightMd?: number;
   stroke?: string;
   fill?: string;
 }) {
+  const [mountedHeight, setMountedHeight] = useState(baseHeight);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const update = () => setMountedHeight(mq.matches ? heightMd : baseHeight);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, [baseHeight, heightMd]);
+
+  const height = mountedHeight;
   const width = 720; // internal coordinate system; scaled by viewBox
   const padX = 8;
   const padTop = 16;

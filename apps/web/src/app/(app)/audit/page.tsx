@@ -94,7 +94,7 @@ export default function AuditPage() {
   }, [detail]);
 
   return (
-    <div>
+    <div className="pb-20 md:pb-8">
       <PageHeader
         title="Audit log"
         subtitle={`${total} recorded operation${total === 1 ? '' : 's'}`}
@@ -108,7 +108,7 @@ export default function AuditPage() {
       <Card className="mb-6">
         <form
           onSubmit={(e) => e.preventDefault()}
-          className="grid grid-cols-2 gap-3 lg:grid-cols-5"
+          className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5"
         >
           <Select
             value={filters.action}
@@ -156,10 +156,11 @@ export default function AuditPage() {
       {loading ? (
         <div className="text-slate-400">Loading…</div>
       ) : (
-        <Table<AuditLog>
-          rows={items}
-          emptyMessage="No audit records match the current filters."
-          columns={[
+        <div className="overflow-x-auto">
+          <Table<AuditLog>
+            rows={items}
+            emptyMessage="No audit records match the current filters."
+            columns={[
             {
               key: 'time',
               header: 'Timestamp',
@@ -209,8 +210,9 @@ export default function AuditPage() {
                 </Button>
               ),
             },
-          ]}
-        />
+            ]}
+          />
+        </div>
       )}
 
       <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
@@ -241,7 +243,7 @@ export default function AuditPage() {
           onClick={() => setDetail(null)}
         >
           <div
-            className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl"
+            className="w-full max-w-lg mx-4 rounded-xl bg-white p-4 md:p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="mb-1 text-lg font-semibold text-slate-900">

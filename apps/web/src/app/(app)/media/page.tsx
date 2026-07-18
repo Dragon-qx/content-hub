@@ -87,7 +87,7 @@ export default function MediaPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 pb-20 md:pb-8">
       <PageHeader title="Media" subtitle="Images, video, and audio assets" />
 
       {/* Upload */}
@@ -102,7 +102,7 @@ export default function MediaPage() {
               className="w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100"
             />
           </div>
-          <div className="md:w-56">
+          <div className="w-full md:w-56">
             <span className="mb-1 block text-sm font-medium text-slate-600">Content ID (optional)</span>
             <Input value={contentId} onChange={(e) => setContentId(e.target.value)} placeholder="Attach to content…" />
           </div>
@@ -138,7 +138,7 @@ export default function MediaPage() {
           No media yet. Upload your first asset above.
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {rows.map((m) => (
             <Card key={m.id} className="overflow-hidden p-0">
               <div className="flex h-28 items-center justify-center bg-slate-100 text-3xl">

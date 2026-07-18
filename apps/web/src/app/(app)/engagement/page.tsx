@@ -293,7 +293,7 @@ export default function EngagementPage() {
           <Select
             value={filters.platform}
             onChange={(e) => setFilters((f) => ({ ...f, platform: e.target.value as Platform }))}
-            className="max-w-[180px]"
+            className="w-full sm:max-w-[180px]"
           >
             <option value="">All platforms</option>
             {PLATFORMS.map((p) => (
@@ -305,7 +305,7 @@ export default function EngagementPage() {
             onChange={(e) =>
               setFilters((f) => ({ ...f, sentiment: e.target.value as Sentiment }))
             }
-            className="max-w-[160px]"
+            className="w-full sm:max-w-[160px]"
           >
             <option value="">All sentiment</option>
             {(['POSITIVE', 'NEUTRAL', 'NEGATIVE'] as Sentiment[]).map((s) => (

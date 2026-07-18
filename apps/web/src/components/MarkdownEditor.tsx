@@ -145,7 +145,7 @@ export default function MarkdownEditor({
               type="button"
               title={t.title}
               onClick={t.run}
-              className="h-7 w-7 rounded text-sm font-medium text-slate-600 hover:bg-slate-200"
+              className="rounded text-sm font-medium text-slate-600 hover:bg-slate-200 min-h-[44px] min-w-[44px]"
             >
               {t.label}
             </button>
@@ -157,7 +157,7 @@ export default function MarkdownEditor({
             <button
               type="button"
               onClick={onInsertMedia}
-              className="h-7 rounded px-2 text-xs font-medium text-slate-600 hover:bg-slate-200"
+              className="rounded px-2 text-xs font-medium text-slate-600 hover:bg-slate-200 min-h-[44px]"
             >
               Media library
             </button>
@@ -167,14 +167,14 @@ export default function MarkdownEditor({
             <button
               type="button"
               onClick={() => setPreview(false)}
-              className={`h-7 px-2.5 text-xs font-medium ${!preview ? 'bg-primary text-white' : 'text-slate-600 hover:bg-slate-200'}`}
+              className={`min-h-[44px] px-2.5 text-xs font-medium ${!preview ? 'bg-primary text-white' : 'text-slate-600 hover:bg-slate-200'}`}
             >
               Write
             </button>
             <button
               type="button"
               onClick={() => setPreview(true)}
-              className={`h-7 px-2.5 text-xs font-medium ${preview ? 'bg-primary text-white' : 'text-slate-600 hover:bg-slate-200'}`}
+              className={`min-h-[44px] px-2.5 text-xs font-medium ${preview ? 'bg-primary text-white' : 'text-slate-600 hover:bg-slate-200'}`}
             >
               Preview
             </button>

@@ -224,7 +224,7 @@ export default function ContentPage() {
             {templates.map((t) => (
               <li
                 key={t.id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2"
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2"
               >
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium text-slate-700">{t.title}</div>
@@ -281,7 +281,8 @@ export default function ContentPage() {
       {loading ? (
         <div className="text-slate-400">Loading…</div>
       ) : (
-        <Table<Content>
+        <div className="overflow-x-auto">
+          <Table<Content>
           rows={rows}
           emptyMessage="No content yet. Create your first piece."
           columns={[
@@ -308,6 +309,7 @@ export default function ContentPage() {
             { key: 'updated', header: 'Updated', render: (r) => new Date(r.updatedAt).toLocaleString() },
           ]}
         />
+        </div>
       )}
     </div>
   );

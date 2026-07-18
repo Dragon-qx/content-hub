@@ -142,9 +142,9 @@ export default function ContentCalendarPage() {
         </div>
 
         {/* Weekday header */}
-        <div className="mb-2 grid grid-cols-7 gap-1 text-center text-xs font-medium text-slate-500">
+        <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] md:text-xs font-medium text-slate-500">
           {WEEKDAYS.map((w) => (
-            <div key={w} className="py-1">
+            <div key={w} className="py-1 truncate">
               {w}
             </div>
           ))}
@@ -154,7 +154,7 @@ export default function ContentCalendarPage() {
         {loading ? (
           <div className="grid grid-cols-7 gap-1">
             {Array.from({ length: 42 }).map((_, i) => (
-              <div key={i} className="h-20 rounded-lg bg-slate-50" />
+              <div key={i} className="h-14 md:h-20 rounded-lg bg-slate-50" />
             ))}
           </div>
         ) : (
@@ -169,7 +169,7 @@ export default function ContentCalendarPage() {
                   type="button"
                   onClick={() => setSelected(iso)}
                   className={[
-                    'h-20 rounded-lg border p-1 text-left text-xs transition',
+                    'h-14 md:h-20 rounded-lg border p-0.5 md:p-1 text-left text-xs transition min-h-[44px]',
                     cell.inMonth ? 'bg-white' : 'bg-slate-50 text-slate-400',
                     isSelected
                       ? 'border-primary ring-2 ring-indigo-100'
@@ -241,7 +241,8 @@ export default function ContentCalendarPage() {
             {error}
           </div>
         ) : (
-          <Table<CalendarEvent>
+          <div className="overflow-x-auto">
+            <Table<CalendarEvent>
             rows={selectedDay?.events ?? []}
             emptyMessage={
               selected
@@ -310,7 +311,8 @@ export default function ContentCalendarPage() {
                 ),
               },
             ]}
-          />
+            />
+          </div>
         )}
       </Card>
     </div>

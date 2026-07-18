@@ -38,7 +38,7 @@ export default function AssistantPage() {
             placeholder="Write or paste a draft to get AI suggestions…"
           />
           <div className="flex justify-end">
-            <Select value={contentType} onChange={(e) => setContentType(e.target.value)} className="max-w-xs">
+            <Select value={contentType} onChange={(e) => setContentType(e.target.value)} className="w-full sm:max-w-xs">
               {CONTENT_TYPES.map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}

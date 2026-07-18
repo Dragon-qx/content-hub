@@ -61,7 +61,7 @@ export default function TeamsPage() {
   };
 
   return (
-    <div>
+    <div className="pb-20 md:pb-8">
       <PageHeader
         title="Teams"
         subtitle="Manage your teams and members"
@@ -110,15 +110,17 @@ export default function TeamsPage() {
           </Card>
 
           <div className="lg:col-span-2">
-            <Table<Member>
-              rows={members}
-              emptyMessage={activeTeam ? 'No members in this team.' : 'Select a team.'}
-              columns={[
+            <div className="overflow-x-auto">
+              <Table<Member>
+                rows={members}
+                emptyMessage={activeTeam ? 'No members in this team.' : 'Select a team.'}
+                columns={[
                 { key: 'user', header: 'User', render: (r) => <span className="font-mono text-xs">{r.userId}</span> },
                 { key: 'role', header: 'Role', render: (r) => <StatusBadge status={r.role} /> },
                 { key: 'joined', header: 'Joined', render: (r) => new Date(r.joinedAt).toLocaleDateString() },
-              ]}
-            />
+                ]}
+              />
+            </div>
           </div>
         </div>
       )}
