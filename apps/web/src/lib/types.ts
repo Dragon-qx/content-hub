@@ -461,3 +461,41 @@ export interface EngagementMessage {
   fetchedAt: string;
   account?: { platform: Platform; accountName: string };
 }
+
+/** Result of projecting draft content against one platform (PRD §3.4 平台适配). */
+export interface PlatformAdaptation {
+  platform: Platform;
+  label: string;
+  fits: boolean;
+  truncated: boolean;
+  adaptedBody: string;
+  bodyLength: number;
+  maxLength: number;
+  imagesUsed: number;
+  imagesDropped: number;
+  imageMax: number;
+  videosUsed: number;
+  videosDropped: number;
+  videoMax: number;
+  durationOk: boolean;
+  minDurationSec: number;
+  warnings: string[];
+  hints: string[];
+}
+
+/** Adaptation preview response from POST /adaptation/preview. */
+export interface AdaptationResult {
+  contentType: string;
+  platforms: PlatformAdaptation[];
+}
+
+/** A single platform's static rule from GET /adaptation/rules. */
+export interface PlatformRule {
+  platform: Platform;
+  label: string;
+  maxLength: number;
+  imageMax: number;
+  videoMax: number;
+  minDurationSec: number;
+  hints: string[];
+}

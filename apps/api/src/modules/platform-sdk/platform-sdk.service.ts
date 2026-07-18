@@ -9,6 +9,7 @@ import { Comment, Message, PublishRequest } from '@content-hub/platform-sdk';
 import { PlatformAdapterFactory } from '@content-hub/platform-sdk';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
+import { AdaptationService } from '../adaptation/adaptation.service';
 
 export interface PublishOutcome {
   postId: string;
@@ -75,6 +76,7 @@ export class PlatformSdkService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
+    private readonly adaptation: AdaptationService,
   ) {}
 
   /**
@@ -119,8 +121,21 @@ export class PlatformSdkService {
       expiresAt: credentials.expiresAt as string | number | Date | null,
     });
 
+    // Step ④ of the publish pipeline (PRD §3.4): adapt the copy to the target
+    // platform's limits before it leaves for the adapter. Unknown platforms
+    // fall through unchanged. Truncation is logged as a warning so the author
+    // can shorten the draft manually if the ellipsis is undesirable.
+    const rawBody = content.body ?? content.title;
+    const adapted = this.adaptation.adaptForPublish(account.platform, rawBody);
+    const publishBody = adapted?.adaptedBody ?? rawBody;
+    if (adapted?.warnings.length) {
+      this.logger.warn(
+        `Content ${contentId} adapted for ${account.platform}: ${adapted.warnings.join('; ')}`,
+      );
+    }
+
     const request: PublishRequest = {
-      content: content.body ?? content.title,
+      content: publishBody,
       mediaUrls: (payload.mediaUrls as string[] | undefined) ?? [],
       scheduledAt: payload.scheduledAt
         ? new Date(payload.scheduledAt as string)

@@ -3,6 +3,7 @@ import { Platform, ContentStatus } from '@prisma/client';
 import { PlatformSdkService } from './platform-sdk.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
+import { AdaptationService } from '../adaptation/adaptation.service';
 
 describe('PlatformSdkService', () => {
   let service: PlatformSdkService;
@@ -47,6 +48,9 @@ describe('PlatformSdkService', () => {
         PlatformSdkService,
         { provide: PrismaService, useValue: prisma },
         { provide: CryptoService, useValue: crypto },
+        // Use the real, pure adaptation engine so this suite asserts the
+        // publish pipeline actually truncates over-limit copy (PRD §3.4).
+        AdaptationService,
       ],
     }).compile();
 
@@ -74,6 +78,29 @@ describe('PlatformSdkService', () => {
         data: expect.objectContaining({ status: ContentStatus.PUBLISHED }),
       }),
     );
+  });
+
+  it('adapts an over-limit body to the target platform before publishing', async () => {
+    // A 30000-char body exceeds WeChat Official's 20000-char limit — the
+    // pipeline must hand the adapter the truncated copy (with ellipsis) rather
+    // than the raw draft. This is the §3.4 平台适配 step in the publish loop.
+    const longBody = 'a'.repeat(30000);
+    prisma.content.findUnique.mockResolvedValueOnce({
+      ...content,
+      body: longBody,
+      teamId: 'team-1',
+    });
+
+    await service.publish('c1', Platform.WECHAT_OFFICIAL);
+
+    const fetchMock = (globalThis as any).fetch as jest.Mock;
+    const call = fetchMock.mock.calls.find((c: any) => String(c[0]).includes('draft/add'));
+    expect(call).toBeDefined();
+    const sent = JSON.parse((call[1] as any).body as string) as {
+      articles: { content: string }[];
+    };
+    expect(sent.articles[0].content.length).toBeLessThanOrEqual(20000);
+    expect(sent.articles[0].content.endsWith('…')).toBe(true);
   });
 
   it('should throw when content is missing', async () => {

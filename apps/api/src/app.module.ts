@@ -7,6 +7,7 @@ import { AppService } from './app.service';
 import { CryptoModule } from './common/crypto/crypto.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { AccountModule } from './modules/account/account.module';
+import { AdaptationModule } from './modules/adaptation/adaptation.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ContentModule } from './modules/content/content.module';
 import { MediaModule } from './modules/media/media.module';
@@ -54,6 +55,7 @@ import { HealthModule } from './modules/health/health.module';
     UserModule,
     TeamModule,
     AccountModule,
+    AdaptationModule,
     SchedulerModule,
     PlatformSdkModule,
     AnalyticsModule,

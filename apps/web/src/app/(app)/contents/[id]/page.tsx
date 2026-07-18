@@ -8,6 +8,7 @@ import { Button, Card, Input, Select, Textarea, Badge, StatusBadge } from '@/lib
 import PageHeader from '@/components/PageHeader';
 import MarkdownEditor, { renderMarkdown } from '@/components/MarkdownEditor';
 import MediaLibrary from '@/components/MediaLibrary';
+import AdaptationPreview from '@/components/AdaptationPreview';
 import {
   Content,
   ContentVersion,
@@ -29,6 +30,16 @@ function Preview({ body }: { body: string | undefined }) {
       dangerouslySetInnerHTML={{ __html: renderMarkdown(body) }}
     />
   );
+}
+
+/**
+ * Count Markdown image references `![alt](url)` in the body — the closest live
+ * proxy for attached images without a separate media-asset query, since the
+ * MarkdownEditor inserts picked media as these refs.
+ */
+function countMarkdownImages(body: string): number {
+  const matches = body.match(/!\[[^\]]*\]\([^)]+\)/g);
+  return matches ? matches.length : 0;
 }
 
 function ContentDetail({ id }: { id: string }) {
@@ -276,6 +287,15 @@ function ContentDetail({ id }: { id: string }) {
           <Preview body={content.body} />
         )}
       </Card>
+
+      {/* Platform adaptation preview (PRD §3.4 适配预览) */}
+      <AdaptationPreview
+        body={editing ? body : content.body ?? ''}
+        contentType={contentType}
+        imageCount={countMarkdownImages(editing ? body : content.body ?? '')}
+        videoCount={0}
+        videoDurationSec={0}
+      />
 
       {/* Media library modal */}
       {showMedia && (

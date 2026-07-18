@@ -2,7 +2,7 @@
 
 > 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18（第2次）
 
-> **当前进度（2026-07-18 第4次）**: M1–M22 全部完成 + **M23 内容日历**（PRD §3.3 P1 内容日历 · 日历/列表视图排期）：后端 `ContentService.calendar(year, month)` 聚合 `SCHEDULED/PUBLISHING` 内容 + `QUEUED/RETRYING` PublishJob 按日分组，PublishJob 仅存 `contentId` 故单独查 Content 解析标题；新增 `CalendarQueryDto`（`@IsInt @Min @Max` 校验 year/month）+ `GET /contents/calendar`（置于 `:id` 前避免路由抢占）+ 3 服务单测（网格分组、月份窗口查询、闰年 2 月 29 天）+ 1 控制器单测；前端 `apps/web/src/app/(app)/content/calendar/page.tsx` 月视图 6×7 网格（前后月淡显、今日/选中高亮、事件 chip + 计数），选中日详情 Table（标题/类型/平台/状态/时间），左栏 Sidebar 新增 📅 Calendar 入口；新增前端类型 `CalendarEvent/CalendarDay/CalendarResponse/CALENDAR_EVENT_TONE`。测试 **284 通过 / 29 API 套件**（+4），API + web typecheck 与 build 全绿。
+> **当前进度（2026-07-18 第5次）**: M1–M23 全部完成 + **M24 内容适配引擎**（PRD §3.4 P1 内容适配 · 平台规则 + 发布前自动截断 + 实时预览）：后端新增 `AdaptationModule`（`@Global`），纯函数引擎 `PLATFORM_RULES` 覆盖 8 平台（maxLength / imageMax / videoMax / minDurationSec / 中文 hints），`AdaptationService.adapt()` 按规范顺序投射（正文超限自动截断加 `…`、图片/视频按上限裁剪、短视频_DURATION警告），`adaptForPublish()` 供发布管线调用；`POST /adaptation/preview` + `GET /adaptation/rules`（`JwtAuthGuard`）；`PlatformSdkService.publish()` 在调 `adapter.publish()` 前先 `adaptForPublish()` 适配并 warn 日志；单元测试 **25**（规则目录/投射/截断/媒体裁剪/DURATION/组合 fit + pipeline 便利方法）；`platform-sdk.service.spec` 注入真实 `AdaptationService` 并新增 over-limit 管线截断断言（30000 字 → ≤20000 字草稿 content）；前端 `AdaptationPreview` 组件（防抖 `POST /adaptation/preview`，按平台卡片展示 ✓/✗、正文字数、媒体裁剪、警告 + hints，Badge 汇总 N/M 适配）挂载到 `contents/[id]` 详情页编辑器下方，`lib/types.ts` 新增 `PlatformAdaptation / AdaptationResult / PlatformRule`。测试 **310 通过 / 30 API 套件**（+26），API + web typecheck 与 build 全绿，`@contents/[id]` 动态路由正常。
 >
 > **本轮新增（审查修复 + 平台扩展）**: (1) **审查发现修复** — 调度 `handleFailure` 增加指数退避（`RETRY_BACKOFF_BASE_MS * 2^attempt`，上限 60s），避免轮询器对故障平台紧循环重试；`worker.ts` 移除过时的 `GRACE_MS` 注释；OAuth `@Post(':platform/authorize')` 从 `@Query()` 改为 `@Body()`（前端发送 JSON body，原绑定导致 @MinLength 校验必然 400）；`Media` 上传页改为走共享 api client（统一 401 处理 + 刷新重试）；前端 `api.ts` 新增 refresh token 持久化 + 401 自动刷新一次重试链路（登录/注册/mfaLogin 均持久化 refreshToken，logout 清除）；`decryptCredentials` 解密失败回退时补 debug 日志；治理 `/engagement` 页面无操作的 setter 死代码。(2) **Twitter 适配器** — `TwitterAdapter`（OAuth2 PKCE 授权 / X API v2 发布 / 粉丝指标，评论/私信回退 BaseAdapter 默认抛错）+ 工厂注册 + 5 单元测试。(3) **YouTube 适配器** — `YouTubeAdapter`（OAuth2 授权 / 视频元数据创建 / 频道指标 subs+views / 评论 fetch+reply，私信回退默认抛错）+ 工厂注册 + 7 单元测试。
 
@@ -140,6 +140,19 @@
 - [x] **前端月视图** — `apps/web/src/app/(app)/content/calendar/page.tsx`：6×7 月网格（前后月淡显、今日圈选、选中 ring 高亮、事件 chip + 计数 badge）、月份前后翻瓣 + "Today" 按钮、选中日详情 Table（标题链接到内容详情/作业置为纯文本、类型/平台/状态/时间列）
 - [x] **导航接入** — Sidebar 新增 📅 Calendar 入口（位于 Content 与 Media 之间）
 - [x] **前端类型** — `CalendarEvent` / `CalendarDay` / `CalendarResponse` / `CALENDAR_EVENT_TONE` 纳入 `lib/types`
+
+### M24: V1.1 — 内容适配引擎 (Content Adaptation) (PRD §3.4 P1)
+**目标:** 发布管线按各平台规则自动适配正文/媒体，并提供实时「适配预览」让作者发布前知晓截断与裁剪情况
+
+- [x] **规则目录** — `platform-rules.ts`：8 平台 `PLATFORM_RULES`（maxLength / imageMax / videoMax / minDurationSec / 中文 hints）+ `PLATFORM_ORDER` 规范顺序（PRD 给出的微信/抖音/小红书/B站 + V1.1 微博/Twitter/YouTube/微信视频号补齐）
+- [x] **纯函数引擎** — `AdaptationService.adapt()` 按规范顺序投射：正文超限自动截断（预留 `…` 严格在上限内）、图片/视频按上限裁剪（`min(count, max)`，超出计数并 warning）、短视频_DURATION 低于 minDuration 标 warning（不影响 fits 仅提示）；`adaptForPublish()` 管线便利方法，未知平台返回 `null` 让调用方原样通过
+- [x] **API 端点** — `POST /adaptation/preview`（实时投射）+ `GET /adaptation/rules`（规则目录）+ `JwtAuthGuard`；DTO `PreviewAdaptationDto`（`@IsInt @Min` 校验 body/contentType/imageCount/videoCount/videoDurationSec/platforms）+ `PlatformRulesQueryDto`
+- [x] **发布管线接入** — `PlatformSdkService.publish()` 在调 `adapter.publish()` 前 `adaptForPublish(account.platform, body)`，截断后 publish 并 `logger.warn` 提示作者；`PlatformSdkModule` 导入 `AdaptationModule`
+- [x] **全局模块** — `AdaptationModule` 标 `@Global()`（与 `PrismaModule` 同模式），解决 `EngagementModule/SchedulerModule` 直接注入 `PlatformSdkService` 时的 DI 解析
+- [x] **单元测试** — 25 个（规范目录全平台 + 投射顺序 + 截断 + 媒体裁剪 + DURATION + 组合 fit/warnings/hints + `adaptForPublish` 管线便利方法 + `getRules`）
+- [x] **管线集成断言** — `platform-sdk.service.spec` 注入真实 `AdaptationService`，新增 over-limit 截断用例（30000→≤20000 字草稿 content）
+- [x] **前端预览组件** — `AdaptationPreview.tsx`：防抖 `POST /adaptation/preview`，按平台卡片（✓/✗ Badge、正文字数、图片/视频裁剪、⚠ 警告 + hints），顶部 Badge 汇总 N/M 适配；挂载 `contents/[id]` 编辑器下方（正文取编辑态/展示态，图片数由 Markdown `![]()` 引用计数）
+- [x] **前端类型** — `PlatformAdaptation` / `AdaptationResult` / `PlatformRule` 纳入 `lib/types`
 
 ### M13: 测试 + 部署 + 文档
 **目标：** 生产就绪
