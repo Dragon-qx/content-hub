@@ -10,11 +10,9 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "strictNullChecks": true,
-    "composite": true,
     "paths": {
       "@content-hub/platform-sdk": ["../platform-sdk/src"]
     }
   },
-  "include": ["src/**/*"],
-  "references": [{ "path": "../platform-sdk" }]
+  "include": ["src/**/*"]
 }
