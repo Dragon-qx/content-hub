@@ -4,16 +4,20 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
 FROM base AS deps
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/
 COPY packages/shared-types/package.json ./packages/shared-types/
+COPY packages/platform-sdk/package.json ./packages/platform-sdk/
 RUN pnpm install --frozen-lockfile
 
 FROM base AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN pnpm build --filter=@content-hub/web
+# Build workspace deps first, then web
+RUN pnpm --filter=@content-hub/shared-types build
+RUN pnpm --filter=@content-hub/platform-sdk build
+RUN cd /app/apps/web && pnpm run build
 
 FROM base AS runner
 ENV NODE_ENV=production

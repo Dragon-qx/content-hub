@@ -24,7 +24,7 @@ ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/apps/api/prisma ./prisma
-RUN pnpm --filter=@content-hub/api prisma generate
 
 EXPOSE 3000
 CMD ["node", "dist/main"]
+
