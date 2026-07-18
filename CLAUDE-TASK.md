@@ -23,14 +23,14 @@
 ### 方向 C：SDK 补齐
 补齐平台 SDK 互动层缺失的能力：
 
-- [ ] **小红书 refreshToken** — `XiaoHongShuAdapter` 缺少 `refreshToken()` 实现，参考 `BilibiliAdapter` 或 `WeiboAdapter` 的写法，补充刷新逻辑 + 单元测试
-- [ ] **Controller 暴露评论/私信端点** — `PlatformSdkController` 目前只有 publish/status/metrics/validate，缺少：
-  - `GET /platform-sdk/comments` — 获取评论
-  - `POST /platform-sdk/comments/reply` — 回复评论
-  - `GET /platform-sdk/messages` — 获取私信
-  - 需要配套 DTO（`@nestjs/class-validator`）
-- [ ] **私信回复能力** — 当前整个 `replyToMessage` 链路（Service + Controller + 适配器）未实现，平台 API 限制：除了 B站 外都没有公开私信回复接口，需要在 BaseAdapter 中声明 `replyToMessage()` 默认降级，B站 适配器原生实现
-- [ ] **适配器单元测试补齐** — 微信公众号、微信视频号、小红书、抖音缺少 `publish()`、`fetchMetrics()`、`refreshToken()` 的单元测试
+- [x] **小红书 refreshToken**（M29a） — `XiaoHongShuAdapter` 补齐 `refreshToken()`：`handleCallback` 捕获 `refresh_token`，`refreshToken()` 以 HMAC 签名向 `/api/oauth/v1/token` 发 `grant_type=refresh_token`，`getToken()` 过期时自动回落刷新；+3 单测（捕获 / 旋转 / 无 refresh token 抛错）
+- [x] **Controller 暴露评论/私信端点**（M29b） — `PlatformSdkController` 新增：
+  - `GET /platform-sdk/comments`（`FetchCommentsQueryDto`）→ `service.fetchComments`
+  - `POST /platform-sdk/comments/reply`（`ReplyCommentDto`）→ `service.replyToComment`
+  - `GET /platform-sdk/messages`（`FetchMessagesQueryDto`）→ `service.fetchMessages`
+  - DTO 全部 `@IsString/@MinLength/@IsEnum(Platform)` 校验；+4 控制器单测
+- [x] **私信回复能力**（M29c） — 整条 `replyToMessage` 链路：`PlatformAdapter` 接口新增 `replyToMessage()`；`BaseAdapter` 默认抛错降级（`${platform} does not support replying to private messages`）；`BilibiliAdapter` 原生实现（`web_im/v1/web_im/send_msg`）；`PlatformSdkService.replyToMessage`（`ok/reason` 优雅降级）；`POST /platform-sdk/messages/reply`（`ReplyMessageDto`）；adapter + service + controller 全套单测
+- [x] **适配器单元测试补齐**（M29d） — 补齐 `publish()`、`fetchMetrics()`、`refreshToken()` 单测：微信公众号（publish/fetchMetrics + refreshToken 降级抛错）、微信视频号（publish/fetchMetrics/refreshToken）、小红书（publish/fetchMetrics，refreshToken 在 M29a）、抖音（publish/fetchMetrics，refreshToken 已有）
 
 ### 收尾项
 - [ ] 单元测试覆盖率 ≥ 80%（当前 lines 91.9% / branches 63% / funcs 92.5%，已达目标 ✅）

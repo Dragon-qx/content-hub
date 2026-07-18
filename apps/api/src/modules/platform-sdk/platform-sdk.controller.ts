@@ -21,6 +21,7 @@ import {
   FetchMessagesQueryDto,
   PublishContentDto,
   ReplyCommentDto,
+  ReplyMessageDto,
   ValidateCredentialsDto,
 } from './dto/platform-sdk.dto';
 
@@ -68,6 +69,17 @@ export class PlatformSdkController {
   @Get('messages')
   getMessages(@Query() query: FetchMessagesQueryDto) {
     return this.platformSdk.fetchMessages(query.accountId, query.platform);
+  }
+
+  @ApiOperation({ summary: 'Reply to a private message', description: 'Replies to a private message via the platform adapter.' })
+  @Post('messages/reply')
+  replyToMessage(@Body() dto: ReplyMessageDto) {
+    return this.platformSdk.replyToMessage(
+      dto.accountId,
+      dto.platform,
+      dto.messageId,
+      dto.content,
+    );
   }
 
   @ApiOperation({ summary: 'Get publish status', description: 'Polls the live status of a published post.' })

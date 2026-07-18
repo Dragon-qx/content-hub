@@ -82,6 +82,29 @@ export class ReplyCommentDto {
   content: string;
 }
 
+/** Body for POST /platform-sdk/messages/reply — reply to a private message. */
+export class ReplyMessageDto {
+  @ApiProperty({ description: 'Social account id that received the message' })
+  @IsString()
+  @MinLength(1)
+  accountId: string;
+
+  @ApiProperty({ description: 'Platform', enum: Platform })
+  @IsEnum(Platform)
+  platform: Platform;
+
+  @ApiProperty({ description: 'Message id to reply to' })
+  @IsString()
+  @MinLength(1)
+  messageId: string;
+
+  @ApiProperty({ description: 'Reply text', maxLength: 2000 })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(2000)
+  content: string;
+}
+
 /** Query for GET /platform-sdk/messages — fetch an account's private messages. */
 export class FetchMessagesQueryDto {
   @ApiProperty({ description: 'Social account id to fetch messages for' })

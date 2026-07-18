@@ -17,6 +17,7 @@ describe('PlatformSdkController', () => {
       fetchComments: jest.fn().mockResolvedValue({ items: [], unsupported: false }),
       replyToComment: jest.fn().mockResolvedValue({ ok: true }),
       fetchMessages: jest.fn().mockResolvedValue({ items: [], unsupported: false }),
+      replyToMessage: jest.fn().mockResolvedValue({ ok: true }),
     };
 
     const module = await Test.createTestingModule({
@@ -77,5 +78,15 @@ describe('PlatformSdkController', () => {
   it('getMessages forwards accountId and platform', async () => {
     await controller.getMessages({ accountId: 'acc-1', platform: 'BILIBILI' as any });
     expect(service.fetchMessages).toHaveBeenCalledWith('acc-1', 'BILIBILI');
+  });
+
+  it('replyToMessage forwards accountId, platform, messageId and content', async () => {
+    await controller.replyToMessage({
+      accountId: 'acc-1',
+      platform: 'BILIBILI' as any,
+      messageId: 'msg-1',
+      content: 'got it',
+    });
+    expect(service.replyToMessage).toHaveBeenCalledWith('acc-1', 'BILIBILI', 'msg-1', 'got it');
   });
 });

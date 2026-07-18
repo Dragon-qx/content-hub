@@ -2,7 +2,9 @@
 
 > 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18（第3次）
 
-> **当前进度（2026-07-18 第10次）**: M1–M28 全部完成 + **M28 AI 内容助手**（PRD §3.3 V1.1 AI 辅助写作）：后端 `ContentAssistantService` 纯函数引擎（`optimizeTitles` zh/en 模板策略 + `extractTags` 停用词频排名 + `auditContent` 质量启发式 + 平台限制投射 + 评分评级 + `generateVariants` short/long/formal/social 改写）；`ContentAssistantController`（`POST /assistant/{titles,tags,audit/variants}`，`JwtAuthGuard`）；`ContentAssistantModule` 接入 `AppModule`；单元测试 **33**（服务 26 + 控制器 7）；前端 `ContentAssistant` 四 tab 面板（防抖重投射 + "Use" 应用按钮）挂载编辑器与独立 `/assistant` 草稿工作区、Sidebar 导航入口、共享类型。测试 **367 通过 / 33 API 套件**（+33），API + web typecheck（4 包）与 web build（19 路由）全绿。
+> **当前进度（2026-07-18 第11次）**: M1–M28 全部完成 + **M29 SDK 补齐**（方向 C 互动层缺失能力）：M29a 小红书 `XiaoHongShuAdapter.refreshToken()`（HMAC 签名 `grant_type=refresh_token`，`getToken()` 过期自动回落；+3 单测）；M29b `PlatformSdkController` 新增 `GET /comments` `POST /comments/reply` `GET /messages`（`FetchCommentsQueryDto/ReplyCommentDto/FetchMessagesQueryDto`，`@IsEnum(Platform)` 校验；+4 控制器单测）；M29c 整条 `replyToMessage` 链路（`PlatformAdapter` 接口新增 → `BaseAdapter` 默认抛错降级 → `BilibiliAdapter` web_im 原生实现 → `PlatformSdkService.replyToMessage` ok/reason → `POST /messages/reply` + `ReplyMessageDto`；全套单测）；M29d 补齐微信公众号/视频号/小红书/抖音 `publish()/fetchMetrics()/refreshToken()` 单测（+12）。平台-sdk 包 **43 passed**（+15），API platform-sdk 模块 **20 passed**（+8），sdk typecheck 全绿。预存在 `analytics.controller.ts` / `engagement.controller.spec.ts` / `app.e2e-spec.ts` 的 TS 编译错（与本次 disjoint，已 `git stash` 验证）记入 `docs/BLOCKERS.md`，留待方向 A 处理。
+
+> **此前（第10次）**: M1–M28 全部完成 + **M28 AI 内容助手**（PRD §3.3 V1.1 AI 辅助写作）：后端 `ContentAssistantService` 纯函数引擎（`optimizeTitles` zh/en 模板策略 + `extractTags` 停用词频排名 + `auditContent` 质量启发式 + 平台限制投射 + 评分评级 + `generateVariants` short/long/formal/social 改写）；`ContentAssistantController`（`POST /assistant/{titles,tags,audit/variants}`，`JwtAuthGuard`）；`ContentAssistantModule` 接入 `AppModule`；单元测试 **33**（服务 26 + 控制器 7）；前端 `ContentAssistant` 四 tab 面板（防抖重投射 + "Use" 应用按钮）挂载编辑器与独立 `/assistant` 草稿工作区、Sidebar 导航入口、共享类型。测试 **367 通过 / 33 API 套件**（+33），API + web typecheck（4 包）与 web build（19 路由）全绿。
 
 > **此前（第9次）**: M1–M27 全部完成。剩余收尾：E2E 测试、CI/CD、生产部署配置、Swagger 文档、用户手册。
 >
@@ -29,6 +31,14 @@
 - [x] **编辑器集成** — `/contents/[id]` 编辑态挂载于 AdaptationPreview 下方，含 markdown 图片/视频计数
 - [x] **独立工作区** — `/assistant` 草稿页（标题/正文/类型 + 助手面板），Sidebar "✨ AI assistant" 入口（Content 与 Calendar 之间）
 - [x] **前端类型** — `TitleVariant/TitleOptimizeResult/TagExtractResult/AuditSeverity/AuditFinding/PlatformAudit/ContentAuditResult/VariantStyle/CopyVariant/VariantGenerateResult/VARIANT_STYLE_LABELS/AUDIT_GRADE_LABELS/AUDIT_GRADE_TONE` 纳入 `lib/types.ts`
+
+### M29: V1.1 — SDK 补齐（方向 C：互动层缺失能力）
+**目标:** 补齐平台 SDK 互动层缺失的小红书刷新、评论/私信 Controller 端点、私信回复整条链路，并补全适配器 publish/fetchMetrics/refreshToken 单元测试。
+
+- [x] **M29a 小红书 refreshToken** — `XiaoHongShuAdapter`：`handleCallback` 捕获 `refresh_token`（可选字段，兼容旧响应）；新增 `refreshToken()` 以 `createHmac('sha256', appSecret)` 签名向 `/api/oauth/v1/token` 发 `grant_type=refresh_token` 旋转 access/refresh；`getToken()` 在缓存 token 过期时自动回落 `refreshToken()`；+3 单测（捕获 refresh_token / 旋转 + HMAC 签名校验 / 无 refresh token 抛错）
+- [x] **M29b Controller 评论/私信端点** — `PlatformSdkController` 新增 `GET /comments`（`FetchCommentsQueryDto`）→ `service.fetchComments`；`POST /comments/reply`（`ReplyCommentDto`）→ `service.replyToComment`；`GET /messages`（`FetchMessagesQueryDto`）→ `service.fetchMessages`。DTO 全部 `@IsString/@MinLength(1)/@IsEnum(Platform)` + Swagger 注解；+4 控制器单测（透传 accountId/platform/postExternalId/commentId/content）
+- [x] **M29c 私信回复整条链路** — `PlatformAdapter` 接口新增 `replyToMessage(accountId, messageId, content): Promise<void>`；`BaseAdapter.replyToMessage` 默认抛 `${platform} does not support replying to private messages`；`BilibiliAdapter.replyToMessage` 原生实现 `web_im/v1/web_im/send_msg`（msg_type=1 纯文本）；`PlatformSdkService.replyToMessage`（解析账号→构造适配器→try/catch 返回 `ReplyOutcome { ok, reason }` 优雅降级）；`POST /messages/reply` + `ReplyMessageDto`；adapter（Bilibili 原生 + 降级）+ service（ok + degrade）+ controller 全套单测（+5）
+- [x] **M29d 适配器单元测试补齐** — 补齐 `publish()/fetchMetrics()/refreshToken()` 单测（M29d：WechatOfficial publish/fetchMetrics + refreshToken 降级抛错、WechatVideo publish/fetchMetrics/refreshToken、XHS publish/fetchMetrics（refreshToken 在 M29a）、Douyin publish/fetchMetrics（refreshToken 已有）；共 +12）
 
 ## 一、项目现状评估
 

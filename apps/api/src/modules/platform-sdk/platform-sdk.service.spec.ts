@@ -153,6 +153,32 @@ describe('PlatformSdkService', () => {
     expect(typeof result.unsupported).toBe('boolean');
   });
 
+  it('replyToMessage routes to the adapter and reports ok', async () => {
+    // Seed a stored access token so the freshly-built Bilibili adapter is
+    // authenticated via setCredentials (mirrors a real persisted account).
+    crypto.decrypt.mockReturnValueOnce({ accessToken: 'AT', refreshToken: 'RT' });
+    prisma.socialAccount.findUnique.mockResolvedValue({
+      id: 'acc-2',
+      platform: Platform.BILIBILI,
+      accountId: 'ext-2',
+      credentials: 'v1:iv:tag:ct',
+    });
+    const result = await service.replyToMessage('acc-2', Platform.BILIBILI, 'msg-1', 'got it');
+    expect(result.ok).toBe(true);
+  });
+
+  it('replyToMessage degrades gracefully on unsupported adapters', async () => {
+    prisma.socialAccount.findUnique.mockResolvedValue({
+      id: 'acc-2',
+      platform: Platform.DOUYIN,
+      accountId: 'ext-2',
+      credentials: {},
+    });
+    const result = await service.replyToMessage('acc-2', Platform.DOUYIN, 'msg-1', 'got it');
+    expect(result.ok).toBe(false);
+    expect(typeof result.reason).toBe('string');
+  });
+
   it('replyToComment resolves to a conformant outcome', async () => {
     prisma.socialAccount.findUnique.mockResolvedValue({
       id: 'acc-2',

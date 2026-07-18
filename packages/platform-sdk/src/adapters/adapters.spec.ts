@@ -1,5 +1,6 @@
 import { Platform } from '../types';
 import { PlatformAdapterFactory } from '../adapter-factory';
+import { WechatOfficialAdapter } from '../wechat-official';
 import { WechatVideoAdapter } from './wechat-video';
 import { DouyinAdapter } from './douyin';
 import { XiaoHongShuAdapter } from './xiaohongshu';
@@ -196,6 +197,32 @@ describe('BilibiliAdapter', () => {
     expect(messages[1].sentByMe).toBe(true);
     expect(messages[0].conversationId).toBe('99');
     spy.mockRestore();
+  });
+});
+
+describe('replyToMessage', () => {
+  it('Bilibili replies to a private message via the web_im send_msg endpoint', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'AT', refresh_token: 'RT', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({}));
+    const adapter = new BilibiliAdapter({ accessKey: 'AK', secretKey: 'SK', accountId: 'a' });
+    await adapter.handleCallback('code');
+    await adapter.replyToMessage('a', 'msg-1', 'got it');
+    expect(spy).toHaveBeenCalledTimes(2);
+    const replyUrl = spy.mock.calls[1][0];
+    expect(String(replyUrl)).toContain('/web_im/v1/web_im/send_msg');
+    const init = spy.mock.calls[1][1] as RequestInit;
+    const body = JSON.parse((init.body as string) ?? '{}');
+    expect(body.reply_mid).toBe('msg-1');
+    expect(body.receiver_id).toBe('a');
+    spy.mockRestore();
+  });
+
+  it('degrades on adapters without a message-reply surface', async () => {
+    const adapter = new DouyinAdapter({ clientKey: 'K', clientSecret: 'S', openId: 'o' });
+    await expect(
+      adapter.replyToMessage('a', 'msg-1', 'hi'),
+    ).rejects.toThrow(/does not support replying to private messages/);
   });
 });
 
@@ -418,6 +445,143 @@ describe('YouTubeAdapter', () => {
     const replyBody = JSON.parse(((spy.mock.calls[1][1] as RequestInit).body as string) ?? '{}');
     expect(replyBody.snippet.parentId).toBe('thread-1');
     expect(replyBody.snippet.textOriginal).toBe('thanks!');
+    spy.mockRestore();
+  });
+});
+
+describe('XiaoHongShuAdapter publish + fetchMetrics', () => {
+  it('publishes a note with a signed body and returns its id + url', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'AT', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({ note_id: 'nh-42' }));
+    const adapter = new XiaoHongShuAdapter({ appKey: 'AK', appSecret: 'AS', accountId: 'a' });
+    await adapter.handleCallback('code');
+    const result = await adapter.publish({ content: 'hello red', mediaUrls: ['https://img/x.jpg'] });
+    expect(result.externalId).toBe('nh-42');
+    expect(result.externalUrl).toContain('nh-42');
+    // The create call must carry the HMAC signature header.
+    const init = spy.mock.calls[1][1] as RequestInit;
+    expect((init.headers as Record<string, string>)['X-Signature']).toMatch(/^[0-9a-f]{64}$/);
+    spy.mockRestore();
+  });
+
+  it('fetches insights and maps them to the normalised shape', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'AT', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({ data: { exposure: 100, like: 5, collect: 3, comment: 2, share: 1, view: 90, fans: 50 } }));
+    const adapter = new XiaoHongShuAdapter({ appKey: 'AK', appSecret: 'AS', accountId: 'a' });
+    await adapter.handleCallback('code');
+    const metrics = await adapter.fetchMetrics('a', { start: new Date(), end: new Date() });
+    expect(metrics.impressions).toBe(100);
+    expect(metrics.likes).toBe(5);
+    expect(metrics.engagements).toBe(10); // like + collect + comment
+    expect(metrics.followerCount).toBe(50);
+    spy.mockRestore();
+  });
+});
+
+describe('DouyinAdapter publish + fetchMetrics', () => {
+  it('creates a video item and returns its id + share url', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ data: { access_token: 'AT', refresh_token: 'RT', expires_in: 3600, open_id: 'oid' } }))
+      .mockResolvedValueOnce(jsonResponse({ data: { item_id: 'it-99', share_url: 'https://v.douyin.it/99' } }));
+    const adapter = new DouyinAdapter({ clientKey: 'K', clientSecret: 'S', openId: 'oid' });
+    await adapter.handleCallback('code');
+    const result = await adapter.publish({ content: 'caption' });
+    expect(result.externalId).toBe('it-99');
+    expect(result.externalUrl).toBe('https://v.douyin.it/99');
+    spy.mockRestore();
+  });
+
+  it('fetches fan statistics and maps them', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ data: { access_token: 'AT', refresh_token: 'RT', expires_in: 3600, open_id: 'oid' } }))
+      .mockResolvedValueOnce(jsonResponse({ data: { statistics: { total_play: 200, total_like: 10, total_comment: 4, total_share: 2, total_fans: 80 } } }));
+    const adapter = new DouyinAdapter({ clientKey: 'K', clientSecret: 'S', openId: 'oid' });
+    await adapter.handleCallback('code');
+    const metrics = await adapter.fetchMetrics('a', { start: new Date(), end: new Date() });
+    expect(metrics.impressions).toBe(200);
+    expect(metrics.views).toBe(200);
+    expect(metrics.engagements).toBe(16); // like + comment + share
+    expect(metrics.followerCount).toBe(80);
+    spy.mockRestore();
+  });
+});
+
+describe('WechatOfficialAdapter publish + fetchMetrics + refreshToken', () => {
+  it('creates a draft then submits it for publishing', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'AT', expires_in: 7200 }))
+      .mockResolvedValueOnce(jsonResponse({ media_id: 'mid-1' }))
+      .mockResolvedValueOnce(jsonResponse({ publish_id: 'pub-1' }));
+    const adapter = new WechatOfficialAdapter({ appid: 'APP', secret: 'SEC', rawId: 'raw' });
+    const result = await adapter.publish({ content: 'article body', extra: { title: 'T' } });
+    expect(result.externalId).toBe('pub-1');
+    expect(result.externalUrl).toContain('pub-1');
+    // draft/add then freepublish/submit in order.
+    expect(String(spy.mock.calls[1][0])).toContain('draft/add');
+    expect(String(spy.mock.calls[2][0])).toContain('freepublish/submit');
+    spy.mockRestore();
+  });
+
+  it('fetches the follower count as its primary metric', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'AT', expires_in: 7200 }))
+      .mockResolvedValueOnce(jsonResponse({ total: 12345 }));
+    const adapter = new WechatOfficialAdapter({ appid: 'APP', secret: 'SEC', rawId: 'raw' });
+    // WechatOfficial's fetchMetrics ignores the date range (no public impression
+    // endpoint) and reports the follower count as the primary metric.
+    const metrics = await adapter.fetchMetrics();
+    expect(metrics.followerCount).toBe(12345);
+    expect(metrics.impressions).toBe(0);
+    spy.mockRestore();
+  });
+
+  it('degrades for refreshToken (client-credential grant has no refresh)', async () => {
+    const adapter = new WechatOfficialAdapter({ appid: 'APP', secret: 'SEC', rawId: 'raw' });
+    await expect(adapter.refreshToken()).rejects.toThrow(/WECHAT_OFFICIAL does not support token refresh/);
+  });
+});
+
+describe('WechatVideoAdapter publish + fetchMetrics + refreshToken', () => {
+  it('submits content and returns the publish id + url', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'AT', refresh_token: 'RT', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({ publish_id: 'wvid-7' }));
+    const adapter = new WechatVideoAdapter({ clientKey: 'K', clientSecret: 'S', accountId: 'a' });
+    await adapter.handleCallback('code');
+    const result = await adapter.publish({ content: 'video caption', extra: { title: 'V' } });
+    expect(result.externalId).toBe('wvid-7');
+    expect(result.externalUrl).toContain('wvid-7');
+    spy.mockRestore();
+  });
+
+  it('fetches channel basics and maps them', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'AT', refresh_token: 'RT', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({ play_cnt: 300, like_cnt: 20, comment_cnt: 6, share_cnt: 3, fans_cnt: 60 }));
+    const adapter = new WechatVideoAdapter({ clientKey: 'K', clientSecret: 'S', accountId: 'a' });
+    await adapter.handleCallback('code');
+    const metrics = await adapter.fetchMetrics('a', { start: new Date(), end: new Date() });
+    expect(metrics.views).toBe(300);
+    expect(metrics.impressions).toBe(300);
+    expect(metrics.likes).toBe(20);
+    expect(metrics.followerCount).toBe(60);
+    spy.mockRestore();
+  });
+
+  it('rotates the token by re-running the code exchange with the refresh token', async () => {
+    const spy = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'T1', refresh_token: 'R1', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'T2', refresh_token: 'R2', expires_in: 3600 }));
+    const adapter = new WechatVideoAdapter({ clientKey: 'K', clientSecret: 'S', accountId: 'a' });
+    await adapter.handleCallback('code');
+    (adapter as unknown as { tokenExpire: number }).tokenExpire = 0;
+    const creds = await adapter.refreshToken();
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(creds.accessToken).toBe('T2');
+    // Refresh reuses the code/pass_token exchange endpoint with the refresh token.
+    expect(String(spy.mock.calls[1][0])).toContain('sns/oauth2/access_token');
     spy.mockRestore();
   });
 });

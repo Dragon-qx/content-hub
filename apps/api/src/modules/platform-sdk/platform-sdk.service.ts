@@ -406,6 +406,49 @@ export class PlatformSdkService {
     }
   }
 
+  /**
+   * Reply to a private message via the platform adapter.
+   *
+   * Resolves the account, builds the seeded adapter and calls
+   * adapter.replyToMessage(). Returns ok:false with a reason when the adapter
+   * has no message-reply surface, rather than throwing, so the engagement
+   * layer can present a graceful UX fallback.
+   */
+  async replyToMessage(
+    accountId: string,
+    platform: Platform | string,
+    messageId: string,
+    content: string,
+  ): Promise<ReplyOutcome> {
+    const account = await this.prisma.socialAccount.findUnique({
+      where: { id: accountId },
+    });
+    if (!account) {
+      throw new NotFoundException(`Social account ${accountId} not found`);
+    }
+
+    const credentials = this.decryptCredentials(account.credentials);
+    const adapter = PlatformAdapterFactory.create(
+      platform as Platform,
+      credentials,
+    );
+    if (!adapter) {
+      throw new BadRequestException(`Platform ${platform} is not supported`);
+    }
+    adapter.setCredentials({
+      accessToken: credentials.accessToken as string | null,
+      refreshToken: credentials.refreshToken as string | null,
+      expiresAt: credentials.expiresAt as string | number | Date | null,
+    });
+
+    try {
+      await adapter.replyToMessage(account.accountId, messageId, content);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, reason: (err as Error).message ?? 'Reply failed' };
+    }
+  }
+
   /** Fetch the latest status for an external post via its platform adapter. */
   async getStatus(externalId: string, platform: Platform | string) {
     const post = await this.prisma.platformPost.findFirst({
