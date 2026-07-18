@@ -95,7 +95,7 @@
 
 - [ ] **真实 AI 接入** — ContentAssistant/适配器/异常检测当前全是确定性启发式，需接入真实 LLM（OpenAI/Claude API）
 - [ ] **WYSIWYG 编辑器** — PRD §3.3 要求 Markdown + 所见即所得双模式，当前仅 Markdown（可集成 TipTap/Slate）
-- [ ] **OAuth callback 硬编码修正** — 当前oauth callback 写死 `https://your-domain.com/callback/...`，需改为环境变量配置
+- [x] **OAuth callback 硬编码修正**（M39 ✅）：新增 `packages/platform-sdk/src/oauth-callback.ts`：`OAUTH_CALLBACK_BASE = process.env.OAUTH_CALLBACK_BASE?.replace(/\/+$/,{}) ?? 'https://your-domain.com'` + `callbackUrlFor(platform) = ${BASE}/callback/${platform.toLowerCase()}` + `encodedCallbackFor`；`AdapterBase.callbackFor(platform)` 受保 helper 复用；所有 8 个适配器（douyin/twitter/weibo/bilibili/wechat-official/wechat-video/youtube/xiaohongshu）均从内联 `https://your-domain.com/callback/{platform}` 改为 `this.callbackFor()`（Twitter/Weibo/YouTube 同时修 query+body 两处）；`.env.example` 增 `OAUTH_CALLBACK_BASE=` 注释；单测 `oauth-callback.spec.ts` 3（默认宿/路径拼接/小写 slug）；`platform-sdk` 包现有适配测试 43 + 新 3 = 46 全绿；API 527 不变
 - [ ] **平台 SDK mock→真实调用** — 抖音/小红书/公众号/视频号/微博 publish() 返回占位 URL，逐步接入真实平台 API
 - [ ] **数据库迁移 SQL 文件** — 当前仅 Prisma schema，缺少版本化 migration 文件
 
