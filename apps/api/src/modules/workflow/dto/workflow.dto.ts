@@ -1,6 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+
+export const TIMEOUT_ACTIONS = ['APPROVE', 'REJECT', 'ESCALATE'] as const;
+export type TimeoutAction = (typeof TIMEOUT_ACTIONS)[number];
 
 export class CreateWorkflowDto {
   @ApiPropertyOptional({ description: 'Content id to submit for approval' })
@@ -31,6 +34,34 @@ export class WorkflowActionDto {
   @IsString()
   @MaxLength(1000)
   comment?: string;
+}
+
+export class WorkflowTimeoutConfigDto {
+  @ApiProperty({ description: 'Timeout window in hours (null = no timeout)' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(720)
+  timeoutHours?: number | null;
+
+  @ApiProperty({ description: 'Action to take when timeout fires', enum: TIMEOUT_ACTIONS })
+  @IsOptional()
+  @IsIn(TIMEOUT_ACTIONS)
+  timeoutAction?: TimeoutAction;
+
+  @ApiPropertyOptional({ description: 'User id to escalate to (required when action=ESCALATE)' })
+  @IsOptional()
+  @IsString()
+  escalateTo?: string;
+}
+
+export class TimeoutSummaryQueryDto {
+  @ApiPropertyOptional({ description: 'Hours before timeout to flag as approaching (default: 24)' })
+  @IsOptional()
+  @Transform(({ value }) => parseInt(value, 10))
+  @IsInt()
+  @Min(1)
+  windowHours?: number = 24;
 }
 
 export class ListWorkflowQueryDto {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -10,11 +10,14 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { WorkflowService } from './workflow.service';
+import { WorkflowTimeoutService } from './workflow-timeout.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   CreateWorkflowDto,
   ListWorkflowQueryDto,
+  TimeoutSummaryQueryDto,
   WorkflowActionDto,
+  WorkflowTimeoutConfigDto,
 } from './dto/workflow.dto';
 
 @ApiTags('Workflow')
@@ -22,7 +25,10 @@ import {
 @Controller('workflow')
 @UseGuards(JwtAuthGuard)
 export class WorkflowController {
-  constructor(private readonly workflow: WorkflowService) {}
+  constructor(
+    private readonly workflow: WorkflowService,
+    private readonly workflowTimeout: WorkflowTimeoutService,
+  ) {}
 
   @ApiOperation({ summary: 'Submit content for approval', description: 'Creates an approval workflow (PENDING) for a content item assigned to an approver.' })
   @ApiCreatedResponse({ description: 'Workflow created (status PENDING).' })
@@ -71,5 +77,21 @@ export class WorkflowController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.workflow.findOne(id);
+  }
+
+  @ApiOperation({ summary: 'Set timeout config for a workflow' })
+  @ApiParam({ name: 'id', description: 'Workflow id' })
+  @ApiOkResponse({ description: 'Timeout config updated.' })
+  @ApiBadRequestResponse({ description: 'Invalid config (e.g. ESCALATE without escalateTo).' })
+  @Patch(':id/timeout-config')
+  setTimeoutConfig(@Param('id') id: string, @Body() dto: WorkflowTimeoutConfigDto) {
+    return this.workflowTimeout.setConfig(id, dto);
+  }
+
+  @ApiOperation({ summary: 'List workflows grouped by timeout status (overdue / approaching / ok)' })
+  @ApiOkResponse({ description: 'Timeout summary.' })
+  @Get('timeout-summary')
+  timeoutSummary(@Query() query: TimeoutSummaryQueryDto) {
+    return this.workflowTimeout.getTimeoutSummary(query.windowHours ?? 24);
   }
 }

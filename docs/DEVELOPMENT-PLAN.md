@@ -2,7 +2,9 @@
 
 > 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18（第3次）
 
-> **当前进度（2026-07-18 第11次）**: M1–M28 全部完成 + **M29 SDK 补齐**（方向 C 互动层缺失能力）：M29a 小红书 `XiaoHongShuAdapter.refreshToken()`（HMAC 签名 `grant_type=refresh_token`，`getToken()` 过期自动回落；+3 单测）；M29b `PlatformSdkController` 新增 `GET /comments` `POST /comments/reply` `GET /messages`（`FetchCommentsQueryDto/ReplyCommentDto/FetchMessagesQueryDto`，`@IsEnum(Platform)` 校验；+4 控制器单测）；M29c 整条 `replyToMessage` 链路（`PlatformAdapter` 接口新增 → `BaseAdapter` 默认抛错降级 → `BilibiliAdapter` web_im 原生实现 → `PlatformSdkService.replyToMessage` ok/reason → `POST /messages/reply` + `ReplyMessageDto`；全套单测）；M29d 补齐微信公众号/视频号/小红书/抖音 `publish()/fetchMetrics()/refreshToken()` 单测（+12）。平台-sdk 包 **43 passed**（+15），API platform-sdk 模块 **20 passed**（+8），sdk typecheck 全绿。预存在 `analytics.controller.ts` / `engagement.controller.spec.ts` / `app.e2e-spec.ts` 的 TS 编译错（与本次 disjoint，已 `git stash` 验证）记入 `docs/BLOCKERS.md`，留待方向 A 处理。
+> **当前进度（2026-07-18 第12次）**: M1–M31d 全部完成 + **M31d 审批超时处理**（PRD §3.7 P0）：Prisma schema 新增 `timeoutHours Int? @default(48)` / `timeoutAction String?`（APPROVE|REJECT|ESCALATE）/ `escalateTo String?` / `firstReminderAt DateTime?` + `@@index([status,createdAt])`；迁移 `20260718150000_workflow_timeout`；`WorkflowTimeoutService`（`processTimeouts()` 扫描到期 PENDING 工作流执行自动动作 + `sendReminders()` 临期 24h 提醒 + `getTimeoutSummary()` 分组汇总）；`WorkflowController` 新增 `PATCH /workflow/:id/timeout-config`（`WorkflowTimeoutConfigDto` + DTO 验证，ESCALATE 必须带 escalateTo）+ `GET /workflow/timeout-summary`（`TimeoutSummaryQueryDto`）；`WorkflowModule` 接入 `NotificationModule` + `AuditModule`；单元测试 **10**（setConfig 成功/NotFound/BadRequest + processTimeouts 三动作/跳过/错误 + sendReminders 发送/跳过 + getTimeoutSummary 分组）；31 tests / 3 suites 全绿，typecheck 全绿。
+
+> **此前（第11次）**: M1–M28 全部完成 + **M29 SDK 补齐**（方向 C 互动层缺失能力）：M29a 小红书 `XiaoHongShuAdapter.refreshToken()`（HMAC 签名 `grant_type=refresh_token`，`getToken()` 过期自动回落；+3 单测）；M29b `PlatformSdkController` 新增 `GET /comments` `POST /comments/reply` `GET /messages`（`FetchCommentsQueryDto/ReplyCommentDto/FetchMessagesQueryDto`，`@IsEnum(Platform)` 校验；+4 控制器单测）；M29c 整条 `replyToMessage` 链路（`PlatformAdapter` 接口新增 → `BaseAdapter` 默认抛错降级 → `BilibiliAdapter` web_im 原生实现 → `PlatformSdkService.replyToMessage` ok/reason → `POST /messages/reply` + `ReplyMessageDto`；全套单测）；M29d 补齐微信公众号/视频号/小红书/抖音 `publish()/fetchMetrics()/refreshToken()` 单测（+12）。平台-sdk 包 **43 passed**（+15），API platform-sdk 模块 **20 passed**（+8），sdk typecheck 全绿。
 
 > **此前（第10次）**: M1–M28 全部完成 + **M28 AI 内容助手**（PRD §3.3 V1.1 AI 辅助写作）：后端 `ContentAssistantService` 纯函数引擎（`optimizeTitles` zh/en 模板策略 + `extractTags` 停用词频排名 + `auditContent` 质量启发式 + 平台限制投射 + 评分评级 + `generateVariants` short/long/formal/social 改写）；`ContentAssistantController`（`POST /assistant/{titles,tags,audit/variants}`，`JwtAuthGuard`）；`ContentAssistantModule` 接入 `AppModule`；单元测试 **33**（服务 26 + 控制器 7）；前端 `ContentAssistant` 四 tab 面板（防抖重投射 + "Use" 应用按钮）挂载编辑器与独立 `/assistant` 草稿工作区、Sidebar 导航入口、共享类型。测试 **367 通过 / 33 API 套件**（+33），API + web typecheck（4 包）与 web build（19 路由）全绿。
 
@@ -39,6 +41,16 @@
 - [x] **M29b Controller 评论/私信端点** — `PlatformSdkController` 新增 `GET /comments`（`FetchCommentsQueryDto`）→ `service.fetchComments`；`POST /comments/reply`（`ReplyCommentDto`）→ `service.replyToComment`；`GET /messages`（`FetchMessagesQueryDto`）→ `service.fetchMessages`。DTO 全部 `@IsString/@MinLength(1)/@IsEnum(Platform)` + Swagger 注解；+4 控制器单测（透传 accountId/platform/postExternalId/commentId/content）
 - [x] **M29c 私信回复整条链路** — `PlatformAdapter` 接口新增 `replyToMessage(accountId, messageId, content): Promise<void>`；`BaseAdapter.replyToMessage` 默认抛 `${platform} does not support replying to private messages`；`BilibiliAdapter.replyToMessage` 原生实现 `web_im/v1/web_im/send_msg`（msg_type=1 纯文本）；`PlatformSdkService.replyToMessage`（解析账号→构造适配器→try/catch 返回 `ReplyOutcome { ok, reason }` 优雅降级）；`POST /messages/reply` + `ReplyMessageDto`；adapter（Bilibili 原生 + 降级）+ service（ok + degrade）+ controller 全套单测（+5）
 - [x] **M29d 适配器单元测试补齐** — 补齐 `publish()/fetchMetrics()/refreshToken()` 单测（M29d：WechatOfficial publish/fetchMetrics + refreshToken 降级抛错、WechatVideo publish/fetchMetrics/refreshToken、XHS publish/fetchMetrics（refreshToken 在 M29a）、Douyin publish/fetchMetrics（refreshToken 已有）；共 +12）
+
+### M31d: V1.1 — 审批超时处理 (Approval Timeout Handling) (PRD §3.7 P0)
+**目标:** 审批超时自动通过/驳回/升级，补齐 PRD §3.7 要求的核心缺失功能
+
+- [x] **Prisma schema 扩展** — `Workflow` 新增 `timeoutHours Int? @default(48)` / `timeoutAction String?`（APPROVE|REJECT|ESCALATE）/ `escalateTo String?` / `firstReminderAt DateTime?` + `@@index([status,createdAt])`；迁移 `20260718150000_workflow_timeout`
+- [x] **WorkflowTimeoutService** — `processTimeouts()` 扫描到期 PENDING 工作流执行自动动作（APPROVE→状态改 APPROVED / REJECT→状态改 REJECTED / ESCALATE→重新指派给 escalateTo 用户）；`sendReminders()` 临期 24h 提醒（首次提醒标记 `firstReminderAt` 防重复）；`getTimeoutSummary()` 分组汇总（overdue/approaching/ok）；所有动作写 `AuditLog` + `broadcastToTeam` 通知
+- [x] **API 端点** — `PATCH /workflow/:id/timeout-config`（`WorkflowTimeoutConfigDto`，`@IsIn(['APPROVE','REJECT','ESCALATE'])` 校验，ESCALATE 必须带 escalateTo）；`GET /workflow/timeout-summary`（`TimeoutSummaryQueryDto`，`@IsInt @Min(1)` windowHours）
+- [x] **模块接线** — `WorkflowModule` 接入 `NotificationModule` + `AuditModule`；`WorkflowController` 注入 `WorkflowTimeoutService`
+- [x] **单元测试** — **10**（setConfig 成功/NotFound/BadRequest + processTimeouts 三动作/跳过未到期/错误记录 + sendReminders 发送/跳过 + getTimeoutSummary 分组）；31 tests / 3 suites 全绿
+- [x] **typecheck** — `pnpm --filter=@content-hub/api typecheck` 全绿
 
 ## 一、项目现状评估
 
@@ -148,7 +160,7 @@
 - [ ] 账号分组（PRD §3.2 P0）— 按项目/品牌/平台分组
 - [ ] 视频转码 + 封面裁剪（PRD §3.3 P0）
 - [ ] 图片在线裁剪 + 加水印 + 滤镜（PRD §3.3 P0）
-- [ ] 审批超时处理（PRD §3.7）— 超时自动通过/驳回/升级
+- [x] 审批超时处理（PRD §3.7）— 超时自动通过/驳回/升级 ✅ M31d
 
 ### 🟡 中优先级（P2，体验提升）
 - [ ] CSV 批量导入账号（PRD §3.2 P2）

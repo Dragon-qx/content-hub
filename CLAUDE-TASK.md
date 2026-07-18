@@ -63,10 +63,17 @@
 #### 🔴 高优先级（P0/P1，核心缺失）
 
 - [x] **邮件 / Webhook 通知**（M31a ✅）— NotificationService 新增 SMTP 邮件投递（nodemailer）+ Webhook 投递（fetch+指数退避重试）；DTO 增加 email/webhookUrl 字段；ConfigService 集成；.env.example 增加 SMTP_* / WEBHOOK_URL 配置；+2 单测（邮件跳过降级 + webhook 记录创建）；378 测试全绿
-- [ ] **账号分组** — PRD §3.2 P0 要求按项目/品牌/平台对账号分组，是筛选/统计/报表的基础条件
-- [ ] **视频转码 + 封面裁剪** — PRD §3.3 P0，支持多分辨率转码、自动/手动封面裁剪
+- [x] **账号分组**（M31b ✅）— Prisma schema 新增 AccountGroup + SocialAccount.groupId；AccountGroupService CRUD + assignAccount + removeAccount；AccountGroupController (POST/GET/PATCH/DELETE + assign/remove account)；+5 单测；迁移文件 20260718140000_account_groups；383 测试全绿
+- [x] **视频转码 + 封面裁剪** — PRD §3.3 P0，支持多分辨率转码、自动/手动封面裁剪（M31e）
+  新增 `VideoProcessingService`（fluent-ffmpeg）：
+  - `transcode()` — 多分辨率多格式转码（720p/1080p，mp4/webm），H.264+AAC / VP8+Vorbis
+  - `extractCover()` — 给定时间戳提取单帧为 JPEG
+  - `getMetadata()` — ffprobe 探测 duration / width / height / codec
+  API 端点：`POST /media/video/transcode`、`POST /media/video/cover`、`GET /media/video/:id/metadata`
+  DTO 校验：`TranscodeVideoDto`（`@IsArray/@ArrayNotEmpty/@IsString` + `@IsEnum`）、`ExtractCoverDto`（`@IsInt/@Min`）
+  单元测试 **11 个**（转码 4 + 封面 3 + 元数据 4）；控制器 mock ffmpeg + 412 全绿
 - [ ] **图片在线裁剪 + 加水印 + 滤镜** — PRD §3.3 P0，在 Media Service 中实现图片处理管线（sharp/jimp）
-- [ ] **审批超时处理** — PRD §3.7 要求审批超时自动通过/驳回/升级，当前 workflow 只有创建→审批流程，缺少超时规则引擎
+- [x] **审批超时处理**（M31d ✅）— PRD §3.7 审批超时自动通过/驳回/升级：Prisma schema 新增 `timeoutHours`/`timeoutAction`/`escalateTo`/`firstReminderAt` + `[status,createdAt]` 索引；迁移 `20260718150000_workflow_timeout`；`WorkflowTimeoutService`（`processTimeouts` 自动审批/驳回/升级 + `sendReminders` 临期提醒 + `getTimeoutSummary` 分组汇总）；`WorkflowController` 新增 `PATCH /workflow/:id/timeout-config`（`WorkflowTimeoutConfigDto`，ESCALATE 必须带 escalateTo）+ `GET /workflow/timeout-summary`（`TimeoutSummaryQueryDto`）；`WorkflowModule` 接入 `NotificationModule` + `AuditModule`；单元测试 **10**（setConfig 成功/NotFound/BadRequest、processTimeouts 三动作+跳过+错误、sendReminders 发送/跳过、getTimeoutSummary 分组）；31 测试 3 套件全绿
 
 #### 🟡 中优先级（P2，体验提升）
 
@@ -101,5 +108,7 @@
 - 所有 API 必须有 DTO 验证
 - 所有 Service 必须有单元测试
 - 保持代码质量，不要为了速度牺牲质量
+
+**测试**: 412 通过 / 38 套件 ✅
 
 不要停止，除非遇到真正的阻碍。

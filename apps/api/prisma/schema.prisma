@@ -360,13 +360,19 @@ model ContentTag {
 }
 
 model Workflow {
-  id          String   @id @default(cuid())
-  contentId   String?
-  content     Content?  @relation(fields: [contentId], references: [id])
-  approverId  String
-  status      String   @default("PENDING") // PENDING / APPROVED / REJECTED
-  comment     String?
-  createdAt   DateTime @default(now())
+  id               String   @id @default(cuid())
+  contentId        String?
+  content          Content?  @relation(fields: [contentId], references: [id])
+  approverId       String
+  status           String   @default("PENDING") // PENDING / APPROVED / REJECTED
+  comment          String?
+  timeoutHours     Int?      @default(48) // auto-action time window (hours); null = no timeout
+  timeoutAction    String?  // APPROVE | REJECT | ESCALATE
+  escalateTo       String?  // userId to escalate to when action = ESCALATE
+  firstReminderAt DateTime?
+  createdAt        DateTime @default(now())
+
+  @@index([status, createdAt])
 }
 
 // ── Engagement Hub ─────────────────────────────────────────────────
