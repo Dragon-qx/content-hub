@@ -21,10 +21,3 @@ export interface ApiErrorDetail {
   field: string;
   message: string;
 }
-
-export type {
-  PlatformAdapter,
-  PublishRequest,
-  PublishResult,
-  MetricsResult,
-} from '@content-hub/platform-sdk';
