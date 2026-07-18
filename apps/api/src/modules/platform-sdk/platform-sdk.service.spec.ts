@@ -16,6 +16,7 @@ describe('PlatformSdkService', () => {
     body: 'World',
     teamId: 'team-1',
     status: ContentStatus.DRAFT,
+    mediaUrls: ['https://example.com/cover.jpg'],
   };
   const account = {
     id: 'acc-1',
@@ -57,20 +58,26 @@ describe('PlatformSdkService', () => {
     service = module.get(PlatformSdkService);
 
     // Platform adapters call the real fetch; stub it so publish is deterministic.
-    (globalThis as any).fetch = jest.fn((url: string) => {
-      const u = String(url);
+    (globalThis as any).fetch = jest.fn((_url: string, opts?: any) => {
+      const u = String(_url);
       let body: any = {};
       if (u.includes('cgi-bin/token')) body = { access_token: 'tok', expires_in: 7200 };
+      else if (u.includes('material/add_material')) body = { media_id: 'mid', url: 'https://example.com/material.jpg' };
       else if (u.includes('draft/add')) body = { media_id: 'mid' };
       else if (u.includes('freepublish/submit')) body = { publish_id: 'pid' };
-      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(body),
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+      } as Response);
     });
 
     jest.clearAllMocks();
   });
 
   it('should publish content and mark it PUBLISHED', async () => {
-    const outcome = await service.publish('c1', Platform.WECHAT_OFFICIAL);
+    const outcome = await service.publish('c1', Platform.WECHAT_OFFICIAL, { mediaUrls: ['https://example.com/cover.jpg'] });
     expect(outcome.status).toBe('PUBLISHED');
     expect(outcome.postId).toBe('post-1');
     expect(prisma.content.update).toHaveBeenCalledWith(
@@ -91,7 +98,7 @@ describe('PlatformSdkService', () => {
       teamId: 'team-1',
     });
 
-    await service.publish('c1', Platform.WECHAT_OFFICIAL);
+    await service.publish('c1', Platform.WECHAT_OFFICIAL, { mediaUrls: ['https://example.com/cover.jpg'] });
 
     const fetchMock = (globalThis as any).fetch as jest.Mock;
     const call = fetchMock.mock.calls.find((c: any) => String(c[0]).includes('draft/add'));

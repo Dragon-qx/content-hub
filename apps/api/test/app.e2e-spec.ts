@@ -25,15 +25,22 @@ function installFetchMock() {
     let body: any = {};
     if (u.includes('cgi-bin/token')) {
       body = { access_token: 'mock-access-token', expires_in: 7200 };
+    } else if (u.includes('material/add_material')) {
+      body = { media_id: 'mock-media-id', url: 'https://example.com/material.jpg' };
     } else if (u.includes('draft/add')) {
       body = { media_id: 'mock-media-id' };
     } else if (u.includes('freepublish/submit')) {
       body = { publish_id: 'mock-publish-id' };
+    } else if (u.includes('api.twitter.com/2/tweets')) {
+      body = { data: { id: 'mock-tweet-id', text: 'Hello' } };
+    } else if (u.includes('api.twitter.com/2/users')) {
+      body = { data: { id: 'mock-user-id', public_metrics: { followers_count: 0 } } };
     }
     return Promise.resolve({
       ok: true,
       status: 200,
       json: () => Promise.resolve(body),
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
     } as Response);
   });
   (globalThis as any).fetch = fetchMock;
@@ -94,12 +101,15 @@ describe('ContentHub API (e2e)', () => {
         create: jest.fn().mockResolvedValue({ id: 'account-1', platform: 'WECHAT_OFFICIAL' }),
         findUnique: jest.fn().mockResolvedValue(null),
         // Bound account used by the publish pipeline (decrypt -> adapter -> publish).
-        findFirst: jest.fn().mockResolvedValue({
-          id: 'account-1',
-          platform: 'WECHAT_OFFICIAL',
-          status: 'ACTIVE',
-          // Plain-JSON credentials; CryptoService.decrypt falls through to this object.
-          credentials: { appid: 'appid', secret: 'secret', rawId: 'raw' },
+        findFirst: jest.fn().mockImplementation((_args: any) => {
+          // Return a platform so the publish pipeline can resolve an account.
+          // The platform matches what the test queries for.
+          return Promise.resolve({
+            id: 'account-1',
+            platform: 'TWITTER',
+            status: 'ACTIVE',
+            credentials: { accessToken: 'tok', refreshToken: 'rt' },
+          });
         }),
         findMany: jest.fn().mockResolvedValue([]),
         delete: jest.fn().mockResolvedValue({ id: 'account-1' }),
@@ -314,21 +324,21 @@ describe('ContentHub API (e2e)', () => {
     it('publishes content via the platform adapter', async () => {
       prismaMock.platformPost.create.mockResolvedValueOnce({
         id: 'post-1',
-        platform: 'WECHAT_OFFICIAL',
+        platform: 'TWITTER',
         externalId: 'mock-publish-id',
       });
 
       await auth(req()
         .post(`${PREFIX}/platform-sdk/publish`)
-        .send({ contentId: 'c1', platform: 'WECHAT_OFFICIAL' }))
+        .send({ contentId: 'c1', platform: 'TWITTER' }))
         .expect(201);
 
       expect(prismaMock.platformPost.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             contentId: 'c1',
-            platform: 'WECHAT_OFFICIAL',
-            externalId: 'mock-publish-id',
+            platform: 'TWITTER',
+            externalId: 'mock-tweet-id',
             status: 'PUBLISHED',
           }),
         }),
