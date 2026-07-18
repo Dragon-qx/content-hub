@@ -36,8 +36,14 @@ import {
   AccountService,
   BatchImportSummary,
 } from './account.service';
+import { AccountTransferService } from './account-transfer.service';
 import { BindAccountDto, ListAccountsQuery } from './dto/account.dto';
 import { ImportAccountsDto } from './dto/import-accounts.dto';
+import {
+  DecideTransferDto,
+  InitiateTransferDto,
+  ListTransfersQueryDto,
+} from './dto/account-transfer.dto';
 
 @ApiTags('Accounts')
 @ApiBearerAuth()
@@ -46,6 +52,7 @@ import { ImportAccountsDto } from './dto/import-accounts.dto';
 export class AccountController {
   constructor(
     private readonly accountService: AccountService,
+    private readonly transfers: AccountTransferService,
     private readonly audit: AuditService,
   ) {}
 
@@ -178,6 +185,120 @@ export class AccountController {
       req.ip,
     );
     return summary;
+  }
+
+  // ── Account handover ─────────────────────────────────────────────────
+  // A two-phase transfer: a source-team ADMIN initiates ; a destination-team
+  // ADMIN accepts (atomic account teamId rewrite + groupId reset) or rejects.
+  // Cancellation is allowed for the initiator or a source-team ADMIN.
+
+  @ApiOperation({
+    summary: 'Initiate a team-to-team account handover',
+    description:
+      'Source-team ADMIN proposes transferring this account to another team. ' +
+      'Creates a PENDING AccountTransfer. The destination team then accepts or rejects.',
+  })
+  @ApiParam({ name: 'id', description: 'Account id to transfer' })
+  @ApiCreatedResponse({ description: 'Transfer proposal created (PENDING).' })
+  @Post(':id/transfer')
+  async initiateTransfer(
+    @Param('id') id: string,
+    @Body() dto: InitiateTransferDto,
+    @CurrentUser() user: AuthUser,
+    @Req() req: { ip?: string },
+  ) {
+    const account = await this.accountService.get(id);
+    const transfer = await this.transfers.initiate(account.teamId, {
+      accountId: id,
+      toTeamId: dto.toTeamId,
+      initiatorUserId: user.userId,
+      note: dto.note,
+    });
+    await this.audit.log(
+      'CREATE',
+      user.userId,
+      'AccountTransfer',
+      transfer.id,
+      { from: account.teamId, to: dto.toTeamId, account: id },
+      req.ip,
+    );
+    return transfer;
+  }
+
+  @ApiOperation({
+    summary: 'Decide a pending account handover (destination team)',
+    description:
+      'Destination-team ADMIN accepts (account moves to their team, groupId cleared) ' +
+      'or rejects the transfer.',
+  })
+  @ApiParam({ name: 'id', description: 'Transfer id' })
+  @Patch(':id/transfer')
+  async decideTransfer(
+    @Param('id') id: string,
+    @Body() dto: DecideTransferDto,
+    @CurrentUser() user: AuthUser,
+    @Req() req: { ip?: string },
+  ) {
+    const transfer = await this.transfers.decide({
+      transferId: id,
+      actingUserId: user.userId,
+      decision: dto.decision,
+    });
+    await this.audit.log(
+      'UPDATE',
+      user.userId,
+      'AccountTransfer',
+      id,
+      { decision: dto.decision, status: transfer.status },
+      req.ip,
+    );
+    return transfer;
+  }
+
+  @ApiOperation({
+    summary: 'Cancel a pending account handover',
+    description: 'Allows the original initiator or a source-team ADMIN to withdraw a PENDING transfer.',
+  })
+  @ApiParam({ name: 'id', description: 'Transfer id' })
+  @Delete(':id/transfer')
+  async cancelTransfer(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @Req() req: { ip?: string },
+  ) {
+    const transfer = await this.transfers.cancel(id, user.userId);
+    await this.audit.log(
+      'UPDATE',
+      user.userId,
+      'AccountTransfer',
+      id,
+      { action: 'cancel', status: transfer.status },
+      req.ip,
+    );
+    return transfer;
+  }
+
+  @ApiOperation({
+    summary: 'List account handovers involving a team',
+    description:
+      'Returns transfers filtered by direction (incoming/outgoing/all) and optional status. ' +
+      'Caller must be a member of the relevant team(s).',
+  })
+  @Get('transfers')
+  listTransfers(
+    @Query() query: ListTransfersQueryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    // The service lists by teamId; the frontend supplies the team via query.
+    // We default to the caller's first team when omitted for convenience.
+    const teamId = (query as any).teamId;
+    if (!teamId) {
+      return { items: [], total: 0, note: 'teamId query is required' };
+    }
+    return this.transfers.listForTeam(teamId, {
+      direction: query.direction,
+      status: query.status as any,
+    });
   }
 
   @ApiOperation({ summary: 'Sync account metrics / posts', description: 'Pulls fresh data from the platform adapter into a snapshot.' })

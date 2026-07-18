@@ -7,6 +7,7 @@ import {
 } from './account.service';
 import { AuditService } from '../audit/audit.service';
 import { AccountController } from './account.controller';
+import { AccountTransferService } from './account-transfer.service';
 
 const validSummary = (over: Partial<BatchImportSummary> = {}): BatchImportSummary => ({
   total: 1,
@@ -38,6 +39,7 @@ describe('AccountController (batch import)', () => {
       controllers: [AccountController],
       providers: [
         { provide: AccountService, useValue: accountService },
+        { provide: AccountTransferService, useValue: { initiate: jest.fn(), decide: jest.fn(), cancel: jest.fn(), listForTeam: jest.fn().mockResolvedValue([]) } },
         { provide: AuditService, useValue: { log: jest.fn() } },
       ],
     }).compile();

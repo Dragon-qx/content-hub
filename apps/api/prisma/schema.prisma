@@ -90,6 +90,7 @@ model SocialAccount {
   comments        EngagementComment[]
   messages        EngagementMessage[]
   anomalyAlerts   AnomalyAlert[]
+  transfers       AccountTransfer[]
 
   @@unique([platform, accountId])
 }
@@ -272,6 +273,33 @@ enum AccountStatus {
   EXPIRED
   SUSPENDED
   REVOKED
+}
+
+/// Lifecycle of an account handover between teams. One active (PENDING)
+/// transfer per account is enforced by the service layer.
+enum TransferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+model AccountTransfer {
+  id            String         @id @default(cuid())
+  accountId     String
+  account       SocialAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  fromTeamId    String
+  toTeamId      String
+  initiatorId   String         // user who requested the handover
+  note          String?
+  status        TransferStatus @default(PENDING)
+  decidedById   String?        // user at the destination team who accepted/rejected
+  decidedAt     DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([accountId, status])
+  @@index([toTeamId, status])
 }
 
 enum ContentType {
