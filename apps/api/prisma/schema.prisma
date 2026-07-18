@@ -39,6 +39,7 @@ model Team {
   sentimentKeywords SentimentKeyword[]
   templates         ContentTemplate[]
   wallet            Wallet?
+  healthThreshold   HealthThreshold?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 }
@@ -84,6 +85,8 @@ model SocialAccount {
   followingCount  Int?
   postCount       Int?
   lastSyncedAt    DateTime?
+  authFailCount   Int             @default(0)
+  apiRateLimitPct Float?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   analytics       AnalyticsSnapshot[]
@@ -93,6 +96,7 @@ model SocialAccount {
   anomalyAlerts   AnomalyAlert[]
   transfers       AccountTransfer[]
   receipts        PublishReceipt[]
+  health          AccountHealth?
 
   @@unique([platform, accountId])
 }
@@ -278,6 +282,62 @@ enum AccountStatus {
   EXPIRED
   SUSPENDED
   REVOKED
+}
+
+enum HealthStatus {
+  OK
+  WARNING
+  CRITICAL
+}
+
+/// Computed health snapshot per social account. Recomputed on each scan;
+/// the `alertSignature` enables the same turnstile-dedup as AnomalyAlert so
+/// a persistent issue does not spam the team on every tick.
+model AccountHealth {
+  id              String       @id @default(cuid())
+  accountId      String       @unique
+  account        SocialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  teamId         String
+
+  // Per-dimension status
+  tokenStatus    HealthStatus @default(OK)
+  tokenExpiresAt DateTime?
+  apiRateStatus  HealthStatus @default(OK)
+  apiRateLimitPct Float?
+  syncStatus     HealthStatus @default(OK)
+  lastSyncedAt   DateTime?
+  authStatus     HealthStatus @default(OK)
+  authFailCount  Int          @default(0)
+  publishStatus  HealthStatus @default(OK)
+  publishFailCount Int        @default(0)
+
+  // Overall roll-up
+  overallStatus  HealthStatus @default(OK)
+
+  // Alert dedup
+  lastAlertAt    DateTime?
+  lastAlertSignature String?
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([teamId])
+  @@index([overallStatus])
+  @@index([teamId, overallStatus])
+}
+
+/// Team-level thresholds that drive the health scan. One row per team.
+model HealthThreshold {
+  id                   String   @id @default(cuid())
+  teamId               String   @unique
+  team                 Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  tokenExpireDays      Int      @default(7)
+  apiRateLimitPct      Float    @default(80)
+  syncStaleDays        Int      @default(7)
+  authFailThreshold    Int      @default(3)
+  publishFailThreshold Int      @default(3)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 /// Lifecycle of an account handover between teams. One active (PENDING)
@@ -509,6 +569,28 @@ model PublishReceipt {
 
   @@index([contentId])
   @@index([platformPostId])
+}
+
+/// A custom drag-and-drop report saved by a user (PRD §3.5).
+model CustomReport {
+  id          String   @id @default(cuid())
+  teamId      String
+  name        String
+  description String?
+  /// Selected field ids, in display order.
+  fieldIds    String[]
+  /// Optional filter config (JSON string for portability).
+  filtersJson String?  @default("{}")
+  /// Group-by field id, if any.
+  groupBy     String?
+  /// Sort field id and direction (`asc` | `desc`).
+  sortBy      String?
+  sortDir     String   @default("desc")
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([teamId])
 }
 
 // Sentiment label derived from content at ingest time.
