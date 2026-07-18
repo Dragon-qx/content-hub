@@ -1,0 +1,68 @@
+export interface PlatformAdapter {
+    platform: Platform;
+    getAuthUrl(state: string): string;
+    handleCallback(code: string): Promise<Credentials>;
+    refreshToken(refreshToken: string): Promise<Credentials>;
+    publish(post: PublishRequest): Promise<PublishResult>;
+    fetchMetrics(accountId: string, dateRange: DateRange): Promise<MetricsResult>;
+    fetchComments(accountId: string, postId: string): Promise<Comment[]>;
+    replyToComment(accountId: string, commentId: string, content: string): Promise<void>;
+    fetchMessages(accountId: string): Promise<Message[]>;
+    replyToMessage(accountId: string, messageId: string, content: string): Promise<void>;
+}
+export interface PublishRequest {
+    content: string;
+    mediaUrls?: string[];
+    scheduledAt?: Date;
+    extra?: Record<string, any>;
+}
+export interface PublishResult {
+    externalId: string;
+    externalUrl: string;
+    publishedAt: Date;
+}
+export interface MetricsResult {
+    impressions: number;
+    engagements: number;
+    likes: number;
+    comments: number;
+    shares: number;
+    views: number;
+    followerCount: number;
+}
+export interface Credentials {
+    accessToken: string;
+    refreshToken?: string;
+    expiresAt?: Date;
+}
+export interface DateRange {
+    start: Date;
+    end: Date;
+}
+export interface Comment {
+    id: string;
+    authorId: string;
+    authorName: string;
+    content: string;
+    createdAt: Date;
+    replyToId?: string;
+}
+export interface Message {
+    id: string;
+    authorId: string;
+    authorName: string;
+    content: string;
+    createdAt: Date;
+    conversationId?: string;
+    sentByMe?: boolean;
+}
+export declare enum Platform {
+    WECHAT_OFFICIAL = "WECHAT_OFFICIAL",
+    WECHAT_VIDEO = "WECHAT_VIDEO",
+    DOUYIN = "DOUYIN",
+    XIAOHONGSHU = "XIAOHONGSHU",
+    BILIBILI = "BILIBILI",
+    WEIBO = "WEIBO",
+    TWITTER = "TWITTER",
+    YOUTUBE = "YOUTUBE"
+}

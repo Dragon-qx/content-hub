@@ -1,0 +1,114 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.BilibiliAdapter = void 0;
+const adapter_base_1 = require("../adapter-base");
+const types_1 = require("../types");
+/**
+ * B站 (Bilibili) 开放平台 adapter — 创作姬 / 个人空间发布能力。
+ * See: https://open.bilibili.com/doc
+ */
+class BilibiliAdapter extends adapter_base_1.BaseAdapter {
+    constructor(config) {
+        super();
+        this.config = config;
+        this.platform = types_1.Platform.BILIBILI;
+        this.accessToken = null;
+        this.tokenExpire = 0;
+        this.refreshTokenValue = null;
+    }
+    getAuthUrl(state) {
+        const redirect = encodeURIComponent(this.callbackFor());
+        return `https://passport.bilibili.com/register/pc_oauth2.html#/?client_id=${encodeURIComponent(this.config.accessKey)}&return_url=${redirect}&state=${encodeURIComponent(state)}`;
+    }
+    async handleCallback(code) {
+        const data = await this.call('https://api.bilibili.com/x/account-oauth2/v1/token', { method: 'POST', body: JSON.stringify({ client_id: this.config.accessKey, client_secret: this.config.secretKey, code, grant_type: 'authorization_code' }) });
+        this.accessToken = data.access_token;
+        this.refreshTokenValue = data.refresh_token;
+        this.tokenExpire = Date.now() + data.expires_in * 1000;
+        return { accessToken: data.access_token, refreshToken: data.refresh_token, expiresAt: new Date(this.tokenExpire) };
+    }
+    async refreshToken() {
+        if (!this.refreshTokenValue)
+            throw new Error('No refresh token for Bilibili');
+        const data = await this.call('https://api.bilibili.com/x/account-oauth2/v1/token/refresh', { method: 'POST', body: JSON.stringify({ client_id: this.config.accessKey, client_secret: this.config.secretKey, refresh_token: this.refreshTokenValue }) });
+        this.accessToken = data.access_token;
+        this.tokenExpire = Date.now() + data.expires_in * 1000;
+        return { accessToken: data.access_token, refreshToken: data.refresh_token, expiresAt: new Date(this.tokenExpire) };
+    }
+    async getToken() {
+        const injected = this.getInjectedAccessToken();
+        if (injected)
+            return injected;
+        if (this.accessToken && Date.now() < this.tokenExpire - 60000)
+            return this.accessToken;
+        if (this.refreshTokenValue)
+            return (await this.refreshToken()).accessToken;
+        throw new Error('Bilibili adapter is not authenticated');
+    }
+    async publish(post) {
+        const token = await this.getToken();
+        const data = await this.call('https://member.bilibili.com/x/web/archive/post/add', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ title: post.content.slice(0, 80), content: post.content, type: 2 }),
+        });
+        return { externalId: data.bvid, externalUrl: `https://www.bilibili.com/video/${data.bvid}`, publishedAt: new Date() };
+    }
+    async fetchMetrics(accountId, dateRange) {
+        const token = await this.getToken();
+        const data = await this.call(`https://member.bilibili.com/x/web/archive/stats/overview`, { method: 'GET', headers: { Authorization: `Bearer ${token}` } });
+        return {
+            impressions: Number(data.data.view ?? 0),
+            engagements: Number((data.data.like ?? 0) + (data.data.reply ?? 0) + (data.data.share ?? 0)),
+            likes: Number(data.data.like ?? 0),
+            comments: Number(data.data.reply ?? 0),
+            shares: Number(data.data.share ?? 0),
+            views: Number(data.data.view ?? 0),
+            followerCount: Number(data.data.fans ?? 0),
+        };
+    }
+    async fetchComments(accountId, postId) {
+        const data = await this.call(`https://api.bilibili.com/x/v2/reply?type=1&oid=${encodeURIComponent(postId)}&sort=0`);
+        return (data.data?.replies ?? []).map((r) => ({
+            id: String(r.rpid),
+            authorId: r.member.uname,
+            authorName: r.member.uname,
+            content: r.content.message,
+            createdAt: new Date(r.ctime * 1000),
+        }));
+    }
+    async replyToComment(accountId, commentId, message) {
+        const token = await this.getToken();
+        await this.call('https://api.bilibili.com/x/v2/reply/add', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ type: 1, oid: accountId, rpid: commentId, message }),
+        });
+    }
+    // B站 exposes a real message-reply surface (the web_im send_msg endpoint);
+    // every other platform degrades via the BaseAdapter default below.
+    async replyToMessage(accountId, messageId, content) {
+        const token = await this.getToken();
+        // The receiver is derived from the message being replied to. We encode the
+        // reply as JSON like the real platform expects (msg_type 1 = plain text).
+        await this.call('https://api.vc.bilibili.com/web_im/v1/web_im/send_msg', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ receiver_id: accountId, reply_mid: messageId, content: JSON.stringify({ content }), msg_type: 1 }),
+        });
+    }
+    async fetchMessages(accountId) {
+        const data = await this.call(`https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions?session_type=1&mid=${encodeURIComponent(accountId)}`);
+        return (data.data?.messages ?? []).map((m) => ({
+            id: String(m.id),
+            authorId: String(m.talker_id),
+            authorName: m.talker_name,
+            content: m.content,
+            createdAt: new Date(m.session_ts * 1000),
+            conversationId: String(m.talker_id),
+            sentByMe: m.is_sender === 1,
+        }));
+    }
+}
+exports.BilibiliAdapter = BilibiliAdapter;
+//# sourceMappingURL=bilibili.js.map
