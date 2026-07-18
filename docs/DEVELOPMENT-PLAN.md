@@ -2,7 +2,9 @@
 
 > 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18（第3次）
 
-> **当前进度（2026-07-18 第12次）**: M1–M31d 全部完成 + **M31d 审批超时处理**（PRD §3.7 P0）：Prisma schema 新增 `timeoutHours Int? @default(48)` / `timeoutAction String?`（APPROVE|REJECT|ESCALATE）/ `escalateTo String?` / `firstReminderAt DateTime?` + `@@index([status,createdAt])`；迁移 `20260718150000_workflow_timeout`；`WorkflowTimeoutService`（`processTimeouts()` 扫描到期 PENDING 工作流执行自动动作 + `sendReminders()` 临期 24h 提醒 + `getTimeoutSummary()` 分组汇总）；`WorkflowController` 新增 `PATCH /workflow/:id/timeout-config`（`WorkflowTimeoutConfigDto` + DTO 验证，ESCALATE 必须带 escalateTo）+ `GET /workflow/timeout-summary`（`TimeoutSummaryQueryDto`）；`WorkflowModule` 接入 `NotificationModule` + `AuditModule`；单元测试 **10**（setConfig 成功/NotFound/BadRequest + processTimeouts 三动作/跳过/错误 + sendReminders 发送/跳过 + getTimeoutSummary 分组）；31 tests / 3 suites 全绿，typecheck 全绿。
+> **当前进度（2026-07-18 第13次）**: M1–M31e 全部完成 + **M31e 视频转码 + 封面裁剪**（PRD §3.3 P0）：`VideoProcessingService`（fluent-ffmpeg）多分辨率转码（720p/1080p，mp4/webm，H.264+AAC / libvpx+libvorbis）+ `extractCover()` 时间戳提取单帧 + `getMetadata()` ffprobe 探测；API 端点 `POST /media/video/transcode`、`POST /media/video/cover`、`GET /media/video/:id/metadata`（DTO 校验，`JwtAuthGuard` 保护）；`MediaModule` providers 接入；单元测试 **11 个**；412 测试 / 38 套族全绿，新增 `fluent-ffmpeg` + `@types/fluent-ffmpeg` 依赖。
+
+> **此前（第12次）**: M1–M31d 全部完成 + **M31d 审批超时处理**（PRD §3.7 P0）：Prisma schema 新增 `timeoutHours Int? @default(48)` / `timeoutAction String?`（APPROVE|REJECT|ESCALATE）/ `escalateTo String?` / `firstReminderAt DateTime?` + `@@index([status,createdAt])`；迁移 `20260718150000_workflow_timeout`；`WorkflowTimeoutService`（`processTimeouts()` 扫描到期 PENDING 工作流执行自动动作 + `sendReminders()` 临期 24h 提醒 + `getTimeoutSummary()` 分组汇总）；`WorkflowController` 新增 `PATCH /workflow/:id/timeout-config`（`WorkflowTimeoutConfigDto` + DTO 验证，ESCALATE 必须带 escalateTo）+ `GET /workflow/timeout-summary`（`TimeoutSummaryQueryDto`）；`WorkflowModule` 接入 `NotificationModule` + `AuditModule`；单元测试 **10**（setConfig 成功/NotFound/BadRequest + processTimeouts 三动作/跳过/错误 + sendReminders 发送/跳过 + getTimeoutSummary 分组）；31 tests / 3 suites 全绿，typecheck 全绿。
 
 > **此前（第11次）**: M1–M28 全部完成 + **M29 SDK 补齐**（方向 C 互动层缺失能力）：M29a 小红书 `XiaoHongShuAdapter.refreshToken()`（HMAC 签名 `grant_type=refresh_token`，`getToken()` 过期自动回落；+3 单测）；M29b `PlatformSdkController` 新增 `GET /comments` `POST /comments/reply` `GET /messages`（`FetchCommentsQueryDto/ReplyCommentDto/FetchMessagesQueryDto`，`@IsEnum(Platform)` 校验；+4 控制器单测）；M29c 整条 `replyToMessage` 链路（`PlatformAdapter` 接口新增 → `BaseAdapter` 默认抛错降级 → `BilibiliAdapter` web_im 原生实现 → `PlatformSdkService.replyToMessage` ok/reason → `POST /messages/reply` + `ReplyMessageDto`；全套单测）；M29d 补齐微信公众号/视频号/小红书/抖音 `publish()/fetchMetrics()/refreshToken()` 单测（+12）。平台-sdk 包 **43 passed**（+15），API platform-sdk 模块 **20 passed**（+8），sdk typecheck 全绿。
 
@@ -34,8 +36,28 @@
 - [x] **独立工作区** — `/assistant` 草稿页（标题/正文/类型 + 助手面板），Sidebar "✨ AI assistant" 入口（Content 与 Calendar 之间）
 - [x] **前端类型** — `TitleVariant/TitleOptimizeResult/TagExtractResult/AuditSeverity/AuditFinding/PlatformAudit/ContentAuditResult/VariantStyle/CopyVariant/VariantGenerateResult/VARIANT_STYLE_LABELS/AUDIT_GRADE_LABELS/AUDIT_GRADE_TONE` 纳入 `lib/types.ts`
 
-### M29: V1.1 — SDK 补齐（方向 C：互动层缺失能力）
-**目标:** 补齐平台 SDK 互动层缺失的小红书刷新、评论/私信 Controller 端点、私信回复整条链路，并补全适配器 publish/fetchMetrics/refreshToken 单元测试。
+### M31e: V1.1 — 视频转码 + 封面裁剪 (Video Transcoding + Cover Extraction) (PRD §3.3 P0)
+**目标:** 视频转码管线 + 封面帧提取 + 元数据探测，补齐 PRD §3.3 P0 核心缺失
+
+- [x] **`VideoProcessingService`（`apps/api/src/modules/media/video-processing.service.ts`）**——`fluent-ffmpeg` 封装：
+  - `transcode(inputPath, {resolutions, format})` → 多分辨率多格式；H.264+AAC（mp4）/ libvpx+libvorbis（webm）；输出 `{basename}_transcoded/` 目录
+  - `extractCover(videoPath, timeSeconds)` → `seekInput().frames(1)` 提取帧到 `{basename}_cover.jpg`
+  - `getMetadata(videoPath)` → `ffprobe` 探测 duration/width/height/codec；视频流缺失时回退 0/空
+  - 私有 `assertFileExists` → `NotFoundException`
+  - 错误 → `BadRequestException`（ffmpeg 错误友好透传）
+- [x] **API 端点** — `MediaController` 新增三路，`JwtAuthGuard` 保护：
+  - `POST /media/video/transcode`（multipart: file + `TranscodeVideoDto` body）→ 异步转码，返回 `outputDir`
+  - `POST /media/video/cover`（multipart: file + `ExtractCoverDto` body）→ 返回 `coverPath`
+  - `GET /media/video/:id/metadata` → `findOne(id)` + 构造视频路径 + `getMetadata`
+- [x] **DTO 校验** — `TranscodeVideoDto`（`@IsOptional @IsArray @ArrayNotEmpty @IsString(each) @Transform` + `@IsEnum(TRANSCODE_FORMATS)`）、`ExtractCoverDto`（`@IsInt @Min(0) timeSeconds`），Swagger 注解
+- [x] **`MediaModule`** — providers 新增 `VideoProcessingService`，exports 同步
+- [x] **单元测试** — `video-processing.service.spec.ts` **11 个**（转码 2+1+1 / 封面 1+1+1 / 元数据 2+1+1）；`media.controller.spec.ts` 注入 mock + findOne 返回 url
+- [x] **依赖** — 安装 `fluent-ffmpeg` `@types/fluent-ffmpeg`
+- [x] **测试** — 412 通过 / 38 套件 ✅（+11 视频单测，+1 控制器）
+- [x] **typecheck** — 仅 `workflow-timeout.service.ts` 预存错（disjoint，已记入 BLOCKERS）
+
+### M30: V1.1 — 审批超时处理 (Approval Timeout Handling) (PRD §3.7 P0)
+**目标:** 审批超时自动通过/驳回/升级，补齐 PRD §3.7 要求的核心缺失功能。
 
 - [x] **M29a 小红书 refreshToken** — `XiaoHongShuAdapter`：`handleCallback` 捕获 `refresh_token`（可选字段，兼容旧响应）；新增 `refreshToken()` 以 `createHmac('sha256', appSecret)` 签名向 `/api/oauth/v1/token` 发 `grant_type=refresh_token` 旋转 access/refresh；`getToken()` 在缓存 token 过期时自动回落 `refreshToken()`；+3 单测（捕获 refresh_token / 旋转 + HMAC 签名校验 / 无 refresh token 抛错）
 - [x] **M29b Controller 评论/私信端点** — `PlatformSdkController` 新增 `GET /comments`（`FetchCommentsQueryDto`）→ `service.fetchComments`；`POST /comments/reply`（`ReplyCommentDto`）→ `service.replyToComment`；`GET /messages`（`FetchMessagesQueryDto`）→ `service.fetchMessages`。DTO 全部 `@IsString/@MinLength(1)/@IsEnum(Platform)` + Swagger 注解；+4 控制器单测（透传 accountId/platform/postExternalId/commentId/content）
