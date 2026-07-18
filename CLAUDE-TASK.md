@@ -90,7 +90,7 @@
 
 - [x] **自定义报表（拖拽生成）** — PRD §3.5 P2（M41 ✅）
   - 已完成：CustomReport model + AnalyticsService getAvailableFields / generateReport + 前端页面 + Controller API + 单元测试 + commit push
-- [ ] **账号健康度指标阈值告警** — PRD §3.2：健康度低于阈值自动告警
+- [x] **账号健康度指标阈值告警** — PRD §3.2 健康度低于阈值自动告警（M30c ✅）
   - 待子代理推进：HealthMonitorService.checkThresholdAlerts + NotificationService 集成 + 邮件/Webhook
   - 待推进：`HealthMonitorService` 的阈值告警扩展（新增 `threshold_alert` 级别，自动发通知）
 

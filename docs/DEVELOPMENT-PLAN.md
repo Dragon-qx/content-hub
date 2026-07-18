@@ -68,6 +68,36 @@
 
 ---
 
+### M30c: V1.1 — 账号健康度指标阈值告警 (Account Health Threshold Alerting) (PRD §3.2)
+**目标:** アカウント健康度スコアを算出し、チームしきい値以下に対して自動通知。全計算は導出（derived）で、既存の `SocialAccount.lastSyncedAt` ・ `PublishJob(status=FAILED)` ・ `User.credentials` から算出し、スキーマ変更は不要。
+
+- [x] **`HealthService`（`apps/api/src/modules/health/health.service.ts`）** — 純粋ヘルス評価ロジック：
+  - `evaluateAccount(accountId)` → `AccountHealth`（`HEALTHY|WARNING|CRITICAL` + スコア 0-100 + signals）
+  - `evaluateTeam(teamId)` → `TeamHealthSummary`（全アカウント + `totals` 集計）
+  - `runTeamCheck(teamId, notify)` → チーム全体チェック +  Broadcast
+  - `computeScore(signals)` → 警告10点・深刻25点減点しクランプ（純粋関数）
+  - `scoreToLevel(score, config)` → スコアclassListify。`config` は環境変数 or プロセス内オーバーライド
+  - `get/setThresholdConfig(teamId?)` / `setTeamThresholdConfig` → `HEALTH_CRITICAL_THRESHOLD` (default 40) / `HEALTH_WARNING_THRESHOLD` (default 65) + in-memory override
+  - `listActiveAlerts(teamId)` / `checkThresholdAlerts(teamId, notify)` → しきい値スイープ + Broadcast 一次性通知（`notified` を返却）
+  - `evaluate(account, now)` → 純粋コア（clock injectable）
+  - 信号: `TOKEN_EXPIRED` / `TOKEN_EXPIRES_SOON` / `API_LIMIT_HIGH` / `STALE_DATA` / `RECENT_PUBLISH_FAILURES` / `CONSECUTIVE_FAILURES` / `ACCOUNT_INACTIVE`
+
+- [x] **`HealthModule`（`apps/api/src/modules/health/health.module.ts`）— `NotificationModule` 依存**
+- [x] **`HealthController`（`apps/api/src/modules/health/health.controller.ts`）** — `JwtAuthGuard` 保護エンドポイント:
+  - `GET health-monitor/accounts/:id` → 単一アカウント評価
+  - `GET health-monitor/teams/:teamId` → チームサマリー
+  - `POST health-monitor/teams/:teamId/run` → チーム実行 + Broadcast
+  - `GET health-monitor/teams/:teamId/alerts` → しきい値アラート（dry-run）
+  - `POST health-monitor/teams/:teamId/threshold-check` → しきい値スイープ + Broadcast
+  - `PATCH health-monitor/teams/:teamId/threshold-config` → しきい値上書き
+
+- [x] **DTO — `dto/health.dto.ts`** — `@IsString @MinLength(1)` / `@IsInt @Min(0) @Max(100)` バリデーション＋ Swagger
+- [x] **`QueueService.runThresholdScanTick()`** — `teams` ループ → `HealthService.checkThresholdAlerts(teamId, true)` → `{teams, alerts, teamsNotified}` 返却。失敗チームはログのみ続行
+- [x] **`worker.ts` — `THRESHOLD_SCAN_INTERVAL_MS` (30min) — スロットル。開始ログに `threshold scan every ~ms`、tick で `X alert(s), Y team(s) notified` 出力**
+- [x] **`queue.service.spec.ts` — `runThresholdScanTick` 2 テスト（0 返却 / チーム横断 counting）**
+- [x] **`.env.example` — `WORKER_HEALTH_SCAN_INTERVAL_MS=1800000` 追加**
+- [x] **ユニットテスト — 17 passing**（`HealthService` 12 + `QueueService` 2 new + 3 pre-existing threshold tests in `app.e2e-spec.ts`)
+
 ### M28: V1.1 — AI 内容助手 (Content Assistant) (PRD §3.3 V1.1)
 **目标:** 为作者提供确定性、无依赖的 AI 写作辅助：标题优化、关键词提取、内容审核、多平台文案改写——与异常检测引擎/内容适配引擎相同的纯函数形态（后续可替换为真实 LLM 而不动 DTO/控制器）。
 
