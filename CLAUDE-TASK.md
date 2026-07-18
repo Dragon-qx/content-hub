@@ -20,6 +20,18 @@
 
 ## 剩余任务
 
+### 方向 C：SDK 补齐
+补齐平台 SDK 互动层缺失的能力：
+
+- [ ] **小红书 refreshToken** — `XiaoHongShuAdapter` 缺少 `refreshToken()` 实现，参考 `BilibiliAdapter` 或 `WeiboAdapter` 的写法，补充刷新逻辑 + 单元测试
+- [ ] **Controller 暴露评论/私信端点** — `PlatformSdkController` 目前只有 publish/status/metrics/validate，缺少：
+  - `GET /platform-sdk/comments` — 获取评论
+  - `POST /platform-sdk/comments/reply` — 回复评论
+  - `GET /platform-sdk/messages` — 获取私信
+  - 需要配套 DTO（`@nestjs/class-validator`）
+- [ ] **私信回复能力** — 当前整个 `replyToMessage` 链路（Service + Controller + 适配器）未实现，平台 API 限制：除了 B站 外都没有公开私信回复接口，需要在 BaseAdapter 中声明 `replyToMessage()` 默认降级，B站 适配器原生实现
+- [ ] **适配器单元测试补齐** — 微信公众号、微信视频号、小红书、抖音缺少 `publish()`、`fetchMetrics()`、`refreshToken()` 的单元测试
+
 ### 收尾项
 - [ ] 单元测试覆盖率 ≥ 80%（当前 lines 91.9% / branches 63% / funcs 92.5%，已达目标 ✅）
 - [ ] E2E 测试
