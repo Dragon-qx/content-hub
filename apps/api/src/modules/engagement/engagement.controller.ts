@@ -11,6 +11,8 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
@@ -78,6 +80,7 @@ export class EngagementController {
   /** Pull fresh comments for a social account from its platform adapter. */
   @ApiOperation({ summary: 'Ingest comments', description: 'Pulls the latest comments for an account / post from the platform adapter.' })
   @Post('ingest')
+  @ApiCreatedResponse({ description: 'Comments ingested.' })
   ingest(@Body() dto: IngestCommentsDto) {
     return this.engagement.ingest(dto.accountId, dto.postExternalId);
   }
@@ -95,6 +98,7 @@ export class EngagementController {
 
   /** Unified message inbox with filters + pagination. */
   @ApiOperation({ summary: 'List private messages', description: 'Paginated message inbox with platform / conversation filters.' })
+  @ApiOkResponse({ description: 'Paginated message list.' })
   @Get('messages')
   async listMessages(
     @CurrentUser() user: AuthUser,
@@ -124,6 +128,7 @@ export class EngagementController {
    */
   @ApiOperation({ summary: 'Sync a team', description: 'Manually triggers comment + message ingestion for the acting team.' })
   @Post('sync')
+  @ApiCreatedResponse({ description: 'Sync complete.' })
   async sync(@CurrentUser() user: AuthUser, @Body() dto: SyncTeamDto) {
     const teamId =
       dto.teamId && dto.teamId.trim()

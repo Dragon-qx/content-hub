@@ -16,6 +16,9 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiConsumes,
+  ApiCreatedResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
@@ -43,6 +46,7 @@ export class MediaController {
     },
   })
   @Post('upload')
+  @ApiCreatedResponse({ description: 'Media asset uploaded.' })
   @UseInterceptors(FileInterceptor('file'))
   upload(@UploadedFile() file: UploadedMultipartFile | undefined, @Body('contentId') contentId?: string) {
     if (!file) {
@@ -64,6 +68,8 @@ export class MediaController {
 
   @ApiOperation({ summary: 'Get media asset by id' })
   @ApiParam({ name: 'id', description: 'Media asset id' })
+  @ApiOkResponse({ description: 'Media asset detail.' })
+  @ApiNotFoundResponse({ description: 'Media asset not found.' })
   @Get(':id') findOne(@Param('id') id: string) { return this.media.findOne(id); }
 
   @ApiOperation({ summary: 'Delete media asset' })

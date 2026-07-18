@@ -9,7 +9,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
@@ -27,6 +31,8 @@ export class SchedulerController {
   constructor(private readonly scheduler: SchedulerService) {}
 
   @ApiOperation({ summary: 'Schedule a publish job', description: 'Creates a QUEUED job to publish a piece of content to a platform at a given time.' })
+  @ApiCreatedResponse({ description: 'Job created (status QUEUED).' })
+  @ApiBadRequestResponse({ description: 'Validation error.' })
   @Post()
   schedule(@Body() dto: SchedulePublishDto) {
     return this.scheduler.schedule(
@@ -44,6 +50,8 @@ export class SchedulerController {
 
   @ApiOperation({ summary: 'Get publish job by id' })
   @ApiParam({ name: 'id', description: 'Publish job id' })
+  @ApiOkResponse({ description: 'Publish job detail.' })
+  @ApiNotFoundResponse({ description: 'Job not found.' })
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.scheduler.findOne(id);

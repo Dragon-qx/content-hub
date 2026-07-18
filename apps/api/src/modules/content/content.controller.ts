@@ -11,11 +11,16 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiQuery,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { ContentService } from './content.service';
 import { AuditService } from '../audit/audit.service';
@@ -45,6 +50,8 @@ export class ContentController {
   ) {}
 
   @ApiOperation({ summary: 'Create content', description: 'Creates a DRAFT piece of content scoped to a team.' })
+  @ApiCreatedResponse({ description: 'Content created (status DRAFT).' })
+  @ApiBadRequestResponse({ description: 'Validation error.' })
   @Post()
   async create(
     @CurrentUser() user: AuthUser,
@@ -64,6 +71,7 @@ export class ContentController {
   }
 
   @ApiOperation({ summary: 'List / search content', description: 'Paginated listing with status, team and free-text filters.' })
+  @ApiOkResponse({ description: 'Paginated content list.' })
   @Get()
   findAll(@Query() query: ListContentQueryDto) {
     return this.content.findAll({
@@ -84,6 +92,8 @@ export class ContentController {
 
   @ApiOperation({ summary: 'Get content by id' })
   @ApiParam({ name: 'id', description: 'Content id' })
+  @ApiOkResponse({ description: 'Content detail.' })
+  @ApiNotFoundResponse({ description: 'Content not found.' })
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.content.findOne(id);
@@ -174,6 +184,8 @@ export class ContentController {
   /** Submit a draft for review (DRAFT → IN_REVIEW). */
   @ApiOperation({ summary: 'Submit content for review', description: 'Transitions DRAFT → IN_REVIEW and assigns an approver.' })
   @ApiParam({ name: 'id', description: 'Content id' })
+  @ApiCreatedResponse({ description: 'Submitted; status is now IN_REVIEW.' })
+  @ApiBadRequestResponse({ description: 'Not a DRAFT or no approver resolvable.' })
   @Post(':id/submit')
   async submit(
     @Param('id') id: string,
@@ -200,6 +212,8 @@ export class ContentController {
   /** Approve content under review (IN_REVIEW → APPROVED). */
   @ApiOperation({ summary: 'Approve content', description: 'Transitions IN_REVIEW → APPROVED.' })
   @ApiParam({ name: 'id', description: 'Content id' })
+  @ApiCreatedResponse({ description: 'Approved; status is now APPROVED.' })
+  @ApiBadRequestResponse({ description: 'Not in IN_REVIEW.' })
   @Post(':id/approve')
   async approve(
     @Param('id') id: string,

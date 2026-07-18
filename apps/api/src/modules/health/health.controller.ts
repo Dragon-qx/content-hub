@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
@@ -30,6 +31,7 @@ export class HealthController {
   /** Evaluate a single account's health. */
   @ApiOperation({ summary: 'Account health', description: 'Evaluates a single account as HEALTHY / WARNING / CRITICAL from its signals.' })
   @ApiParam({ name: 'id', description: 'Account id' })
+  @ApiOkResponse({ description: 'Account health evaluation.' })
   @Get('accounts/:id')
   getAccountHealth(
     @Param() { id }: AccountIdParam,
@@ -40,6 +42,7 @@ export class HealthController {
   /** Evaluate every account in a team and roll up status totals. */
   @ApiOperation({ summary: 'Team health', description: 'Evaluates every account in a team and rolls up status totals.' })
   @ApiParam({ name: 'teamId', description: 'Team id' })
+  @ApiOkResponse({ description: 'Team health summary.' })
   @Get('teams/:teamId')
   getTeamHealth(
     @Param() { teamId }: TeamIdParam,

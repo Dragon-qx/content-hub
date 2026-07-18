@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import {
+  ApiBadRequestResponse,
   ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
@@ -33,6 +34,8 @@ export class AuthController {
     description:
       'Returns access + refresh tokens when MFA is off, or `{ mfaRequired: true, mfaToken }` when it is on.',
   })
+  @ApiOkResponse({ description: 'Session tokens (or MFA challenge).' })
+  @ApiBadRequestResponse({ description: 'Validation error.' })
   @Post('login')
   login(@Body() dto: LoginDto): Promise<LoginResult> {
     return this.authService.login(dto);
@@ -95,6 +98,8 @@ export class AuthController {
 
   @ApiOperation({ summary: 'Current session user' })
   @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Current user principal.' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid token.' })
   @Get('me')
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: AuthUser) {

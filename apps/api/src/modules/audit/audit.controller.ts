@@ -13,6 +13,8 @@ import {
 import type { Response } from 'express';
 import {
   ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
@@ -36,6 +38,7 @@ export class AuditController {
   constructor(private readonly audit: AuditService) {}
 
   @ApiOperation({ summary: 'Append an audit entry', description: 'Records an opaque audit event (also emitted automatically by the content pipeline).' })
+  @ApiCreatedResponse({ description: 'Audit entry appended.' })
   @Post()
   log(@Body() dto: CreateAuditDto, @Req() req: { ip?: string }) {
     return this.audit.log(

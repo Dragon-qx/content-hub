@@ -97,7 +97,7 @@ export class CreateKeywordDto {
 
 /** Manually trigger a comment sync for the acting team. */
 export class SyncTeamDto {
-  @ApiPropertyOptional({ description: 'Team id (defaults to the caller's first team)' })
+  @ApiPropertyOptional({ description: 'Team id (defaults to the callers first team)' })
   @IsOptional()
   @IsString()
   teamId?: string;

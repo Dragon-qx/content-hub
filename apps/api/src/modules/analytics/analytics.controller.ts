@@ -2,6 +2,8 @@ import { Controller, Get, Header, Param, Post, Body, Query, Res, UseGuards } fro
 import type { Response } from 'express';
 import {
   ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
@@ -68,9 +70,10 @@ export class AnalyticsController {
   }
 
   /** 手动触发快照采集 */
-  @ApiOperation({ summary: 'Record a metric snapshot', description: 'Persists a manual snapshot of an account's metrics for trending.' })
+  @ApiOperation({ summary: 'Record a metric snapshot', description: 'Persists a manual snapshot of account metrics for trending.' })
   @ApiParam({ name: 'accountId', description: 'Account id' })
   @Post('snapshot/:accountId')
+  @ApiCreatedResponse({ description: 'Metric snapshot recorded.' })
   recordSnapshot(
     @Param('accountId') accountId: string,
     @Body() dto: SnapshotCreateDto,
@@ -81,9 +84,10 @@ export class AnalyticsController {
   // ── Anomaly detection (PRD §3.5) ───────────────────────────────────────
 
   /** Detect anomalies for one account across all monitored metrics. */
-  @ApiOperation({ summary: 'Detect anomalies for an account', description: 'Runs the 5-rule anomaly detector over an account's recent metrics.' })
+  @ApiOperation({ summary: 'Detect anomalies for an account', description: 'Runs the 5-rule anomaly detector over an accounts recent metrics.' })
   @ApiParam({ name: 'accountId', description: 'Account id' })
   @Get('anomalies/:accountId')
+  @ApiOkResponse({ description: 'Detected anomalies for the account.' })
   async getAnomalies(@Param('accountId') accountId: string) {
     const anomalies = await this.analytics.detectAccountAnomalies(accountId);
     return { accountId, anomalies, generatedAt: new Date().toISOString() };
@@ -96,6 +100,7 @@ export class AnalyticsController {
    */
   @ApiOperation({ summary: 'Scan anomalies (one / all)', description: 'Runs the detector on demand. Optionally broadcasts alerts to the team.' })
   @Post('anomalies/scan')
+  @ApiCreatedResponse({ description: 'Scan complete; lists anomalies (optionally broadcast).' })
   async scanAnomalies(@Body() dto: ScanAnomalyDto) {
     if (dto.accountId) {
       const anomalies = await this.analytics.detectAccountAnomalies(

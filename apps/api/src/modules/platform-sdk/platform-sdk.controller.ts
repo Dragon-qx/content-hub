@@ -8,7 +8,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiQuery,
@@ -34,6 +37,8 @@ export class PlatformSdkController {
 
   @ApiOperation({ summary: 'Publish content', description: 'Publishes a piece of content to a platform (optionally through a specific account).' })
   @ApiQuery({ name: 'accountId', required: false, description: 'Override the account to publish through' })
+  @ApiCreatedResponse({ description: 'Published; returns the platform post record.' })
+  @ApiBadRequestResponse({ description: 'Validation error or content not APPROVED.' })
   @Post('publish')
   publish(@Body() dto: PublishContentDto, @Query('accountId') accountId?: string) {
     return this.platformSdk.publish(
@@ -45,6 +50,7 @@ export class PlatformSdkController {
   }
 
   @ApiOperation({ summary: 'Fetch comments', description: 'Fetches the recent comments for a social account / post from its platform adapter.' })
+  @ApiOkResponse({ description: 'List of comments.' })
   @Get('comments')
   getComments(@Query() query: FetchCommentsQueryDto) {
     return this.platformSdk.fetchComments(
@@ -55,6 +61,7 @@ export class PlatformSdkController {
   }
 
   @ApiOperation({ summary: 'Reply to a comment', description: 'Replies to a single comment via the platform adapter.' })
+  @ApiCreatedResponse({ description: 'Reply posted.' })
   @Post('comments/reply')
   replyToComment(@Body() dto: ReplyCommentDto) {
     return this.platformSdk.replyToComment(
@@ -66,12 +73,14 @@ export class PlatformSdkController {
   }
 
   @ApiOperation({ summary: 'Fetch private messages', description: 'Fetches the recent private messages for a social account from its platform adapter.' })
+  @ApiOkResponse({ description: 'List of messages.' })
   @Get('messages')
   getMessages(@Query() query: FetchMessagesQueryDto) {
     return this.platformSdk.fetchMessages(query.accountId, query.platform);
   }
 
   @ApiOperation({ summary: 'Reply to a private message', description: 'Replies to a private message via the platform adapter.' })
+  @ApiCreatedResponse({ description: 'Reply sent.' })
   @Post('messages/reply')
   replyToMessage(@Body() dto: ReplyMessageDto) {
     return this.platformSdk.replyToMessage(
@@ -105,6 +114,7 @@ export class PlatformSdkController {
   }
 
   @ApiOperation({ summary: 'Validate credentials', description: 'Dry-runs credential validation without persisting an account.' })
+  @ApiCreatedResponse({ description: 'Credentials validation result.' })
   @Post('validate')
   validate(@Body() dto: ValidateCredentialsDto) {
     return this.platformSdk.validate(dto.platform, dto.credentials);

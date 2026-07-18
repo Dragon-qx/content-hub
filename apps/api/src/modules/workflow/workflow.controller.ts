@@ -1,6 +1,10 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import {
+  ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
@@ -21,6 +25,8 @@ export class WorkflowController {
   constructor(private readonly workflow: WorkflowService) {}
 
   @ApiOperation({ summary: 'Submit content for approval', description: 'Creates an approval workflow (PENDING) for a content item assigned to an approver.' })
+  @ApiCreatedResponse({ description: 'Workflow created (status PENDING).' })
+  @ApiBadRequestResponse({ description: 'Validation error or duplicate pending flow.' })
   @Post('approval')
   createApproval(@Body() dto: CreateWorkflowDto) {
     return this.workflow.createApprovalFlow(
@@ -32,6 +38,8 @@ export class WorkflowController {
 
   @ApiOperation({ summary: 'Approve a workflow', description: 'Marks the workflow APPROVED and cascades to the content.' })
   @ApiParam({ name: 'id', description: 'Workflow id' })
+  @ApiCreatedResponse({ description: 'Workflow APPROVED.' })
+  @ApiBadRequestResponse({ description: 'Workflow not PENDING.' })
   @Post(':id/approve')
   approve(@Param('id') id: string, @Body() dto: WorkflowActionDto) {
     return this.workflow.approve(id, dto.approverId, dto.comment);
@@ -58,6 +66,8 @@ export class WorkflowController {
 
   @ApiOperation({ summary: 'Get workflow by id' })
   @ApiParam({ name: 'id', description: 'Workflow id' })
+  @ApiOkResponse({ description: 'Workflow detail.' })
+  @ApiNotFoundResponse({ description: 'Workflow not found.' })
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.workflow.findOne(id);

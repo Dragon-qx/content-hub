@@ -4,6 +4,7 @@ import { Controller } from '@nestjs/common';
 import { Response } from 'express';
 import {
   ApiBearerAuth,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
@@ -60,6 +61,7 @@ export class OAuthAuthorizeController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Post(':platform/authorize')
+  @ApiOkResponse({ description: 'Returns `{ authUrl }` to redirect the user to.' })
   async authorize(
     @CurrentUser() user: AuthUser,
     @Param('platform') platform: string,

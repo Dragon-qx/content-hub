@@ -3,7 +3,7 @@ import { IsString, Length, MinLength } from 'class-validator';
 
 /** Code submitted to verify or complete an MFA-protected login. */
 export class MfaCodeDto {
-  @ApiProperty({ description: '6-digit TOTP code', length: 6, example: '123456' })
+  @ApiProperty({ description: '6-digit TOTP code', minLength: 6, maxLength: 6, example: '123456' })
   @IsString()
   @Length(6, 6, { message: '验证码必须为 6 位数字' })
   code: string;
@@ -19,7 +19,7 @@ export class MfaLoginDto {
   @MinLength(1)
   mfaToken: string;
 
-  @ApiProperty({ description: '6-digit TOTP code', length: 6, example: '123456' })
+  @ApiProperty({ description: '6-digit TOTP code', minLength: 6, maxLength: 6, example: '123456' })
   @IsString()
   @Length(6, 6, { message: '验证码必须为 6 位数字' })
   code: string;

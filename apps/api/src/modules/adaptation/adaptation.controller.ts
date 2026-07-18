@@ -1,6 +1,8 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
@@ -28,6 +30,7 @@ export class AdaptationController {
       'Projects a draft across target platforms without writing anything. Used by the live preview pane as the author edits.',
   })
   @Post('preview')
+  @ApiCreatedResponse({ description: 'Adapted preview per platform.' })
   preview(@Body() dto: PreviewAdaptationDto) {
     return this.adaptation.adapt({
       body: dto.body,
@@ -41,6 +44,7 @@ export class AdaptationController {
 
   /** The static rule catalog backing the preview (limits + hints). */
   @ApiOperation({ summary: 'List platform rules', description: 'Returns the static catalog of per-platform limits + hints (single platform or all).' })
+  @ApiOkResponse({ description: 'Platform rule catalog.' })
   @Get('rules')
   rules(@Query() query: PlatformRulesQueryDto) {
     return this.adaptation.getRules(query.platform);

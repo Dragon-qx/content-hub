@@ -1,6 +1,8 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
@@ -22,12 +24,14 @@ export class NotificationController {
 
   /** Create a notification for the acting user (or a target user, for admins). */
   @ApiOperation({ summary: 'Create a notification' })
+  @ApiCreatedResponse({ description: 'Notification created.' })
   @Post()
   create(@Body() dto: CreateNotificationDto) {
     return this.notifications.create(dto);
   }
 
   @ApiOperation({ summary: 'List my notifications', description: 'Paginated listing with an unread-only filter.' })
+  @ApiOkResponse({ description: 'Paginated notification list.' })
   @Get()
   listForUser(
     @CurrentUser() user: AuthUser,

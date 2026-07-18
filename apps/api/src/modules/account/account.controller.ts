@@ -12,6 +12,9 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
@@ -47,12 +50,15 @@ export class AccountController {
 
   @ApiOperation({ summary: 'Get account by id' })
   @ApiParam({ name: 'id', description: 'Account id' })
+  @ApiOkResponse({ description: 'Account detail.' })
+  @ApiNotFoundResponse({ description: 'Account not found.' })
   @Get(':id')
   get(@Param('id') id: string) {
     return this.accountService.get(id);
   }
 
   @ApiOperation({ summary: 'Bind a platform account', description: 'Stores credentials for a social platform account under a team.' })
+  @ApiCreatedResponse({ description: 'Account bound.' })
   @Post()
   async bind(
     @CurrentUser() user: AuthUser,

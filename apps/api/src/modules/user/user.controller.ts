@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
@@ -57,6 +58,7 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @ApiOperation({ summary: 'Current user profile' })
+  @ApiOkResponse({ description: 'Current user profile.' })
   @Get('me')
   me(@CurrentUser() user: AuthUser) {
     return this.userService.findById(user.userId);
@@ -68,7 +70,8 @@ export class UserController {
     return this.userService.update(user.userId, dto);
   }
 
-  @ApiOperation({ summary: 'List users (admin/owner only)', description: 'Paginated, searchable listing of the organization's users.' })
+  @ApiOperation({ summary: 'List users (admin/owner only)', description: 'Paginated, searchable listing of the organizations users.' })
+  @ApiOkResponse({ description: 'Paginated user list.' })
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserRole.OWNER, UserRole.ADMIN)

@@ -11,6 +11,8 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
@@ -35,6 +37,7 @@ export class TeamController {
   ) {}
 
   @ApiOperation({ summary: 'Create a team', description: 'The creator becomes the OWNER of the new team.' })
+  @ApiCreatedResponse({ description: 'Team created.' })
   @Post()
   async create(
     @CurrentUser() user: AuthUser,
@@ -61,6 +64,7 @@ export class TeamController {
 
   @ApiOperation({ summary: 'Get team by id' })
   @ApiParam({ name: 'id', description: 'Team id' })
+  @ApiOkResponse({ description: 'Team detail.' })
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.teamService.findById(id);
@@ -110,6 +114,7 @@ export class TeamController {
   @ApiOperation({ summary: 'Add member to team' })
   @ApiParam({ name: 'id', description: 'Team id' })
   @Post(':id/members')
+  @ApiCreatedResponse({ description: 'Member added.' })
   async addMember(
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,

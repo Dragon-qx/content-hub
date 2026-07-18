@@ -12,6 +12,9 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
@@ -38,6 +41,7 @@ export class ContentTemplateController {
   ) {}
 
   @ApiOperation({ summary: 'Create template', description: 'Creates a reusable, team-scoped content template.' })
+  @ApiCreatedResponse({ description: 'Template created.' })
   @Post()
   async create(
     @CurrentUser() user: AuthUser,
@@ -78,6 +82,8 @@ export class ContentTemplateController {
 
   @ApiOperation({ summary: 'Get template by id' })
   @ApiParam({ name: 'id', description: 'Template id' })
+  @ApiOkResponse({ description: 'Template detail.' })
+  @ApiNotFoundResponse({ description: 'Template not found.' })
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.templates.findOne(id);
@@ -132,6 +138,7 @@ export class ContentTemplateController {
   @ApiOperation({ summary: 'Apply template', description: 'Seeds a new draft from a template. Returns the input shape for content creation.' })
   @ApiParam({ name: 'id', description: 'Template id' })
   @Post(':id/apply')
+  @ApiCreatedResponse({ description: 'Seed shape for a new draft.' })
   async apply(
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
