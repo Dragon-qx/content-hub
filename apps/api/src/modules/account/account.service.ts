@@ -14,8 +14,39 @@ import { CryptoService } from '../../common/crypto/crypto.service';
 import { OauthStatePayload } from '../../common/crypto/crypto.service';
 import { PlatformAdapterFactory } from '@content-hub/platform-sdk';
 import { BindAccountDto } from './dto/account.dto';
+import { AccountImportRecord } from './dto/import-accounts.dto';
 import { OAuthAuthorizeDto } from './dto/oauth.dto';
+import { credentialsFromRecord, parseCsv } from './csv-parser';
 import { WechatOfficialAdapter } from '@content-hub/platform-sdk';
+
+/**
+ * A single normalised CSV import row, after the header record is stripped.
+ * `Accepts both the per-column credential keys and an optional JSON blob.
+ */
+export interface AccountImportRow {
+  platform: string;
+  accountId: string;
+  accountName: string;
+  accountHandle?: string;
+  credentials?: Record<string, unknown>;
+}
+
+/** Per-row outcome of a batch import — either a bound account or an error. */
+export interface ImportRowResult {
+  /** Source line number (1-based from the first data row), when available. */
+  line?: number;
+  status: 'ok' | 'error';
+  account?: PublicAccount;
+  error?: string;
+}
+
+/** Aggregate summary returned by `batchImport`. */
+export interface BatchImportSummary {
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: ImportRowResult[];
+}
 
 const PUBLIC_SELECT = {
   id: true,
@@ -292,6 +323,125 @@ export class AccountService {
     await this.get(id);
     await this.prisma.socialAccount.delete({ where: { id } });
     return { deleted: true, id };
+  }
+
+  // ── Batch import ──────────────────────────────────────────────────────
+  // Two front-ends consume this core:
+  //   1. POST /accounts/import        — multipart CSV upload (controller
+  //      parses, normalises, then calls `batchImport` with the row list)
+  //   2. POST /accounts/import/json   — JSON body with a pre-validated
+  //      `AccountImportRecord[]` array (already class-validated by the DTO)
+  //
+  // `batchImport` never throws on a single bad row — it records the failure
+  // in `results` and continues, so a 99-row import with one typo still binds
+  // the other 98 and reports exactly which row failed.
+
+  /**
+   * Validate and bind a single import row. Returns either a `PublicAccount`
+   * on success or a string error reason on failure. Never throws.
+   */
+  private async importOne(
+    teamId: string,
+    row: AccountImportRow,
+  ): Promise<{ account?: PublicAccount; error?: string }> {
+    const { platform, accountId, accountName } = row;
+
+    if (!platform || !accountId || !accountName) {
+      return { error: 'platform, accountId and accountName are required' };
+    }
+    if (!Object.values(Platform).includes(platform as Platform)) {
+      return { error: `Unsupported platform: ${platform}` };
+    }
+    if (accountId.trim().length === 0 || accountName.trim().length === 0) {
+      return { error: 'accountId and accountName must not be blank' };
+    }
+
+    const existing = await this.prisma.socialAccount.findUnique({
+      where: { platform_accountId: { platform: platform as Platform, accountId } },
+    });
+    if (existing) {
+      return { error: `${platform} account ${accountId} is already bound` };
+    }
+
+    try {
+      const credentials = this.crypto.encrypt(
+        this.composeCredentials({
+          platform: platform as Platform,
+          credentials: row.credentials,
+        } as BindAccountDto),
+      );
+      const account = await this.prisma.socialAccount.create({
+        data: {
+          teamId,
+          platform: platform as Platform,
+          accountId,
+          accountName,
+          accountHandle: row.accountHandle,
+          credentials: credentials as unknown as Prisma.InputJsonValue,
+          status: AccountStatus.ACTIVE,
+        },
+        select: PUBLIC_SELECT,
+      });
+      return { account };
+    } catch (err) {
+      this.logger.warn(`Batch import row failed: ${err?.message ?? err}`);
+      return { error: err?.message ?? 'Failed to persist account' };
+    }
+  }
+
+  /**
+   * Batch-bind many accounts under a single team. Each row is validated and
+   * bound independently. Returns an aggregate summary plus a per-row `results`
+   // array so the controller can report partial success.
+   */
+  async batchImport(
+    teamId: string,
+    rows: AccountImportRow[],
+  ): Promise<BatchImportSummary> {
+    const results: ImportRowResult[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const { account, error } = await this.importOne(teamId, row);
+      if (account) {
+        results.push({ line: i + 1, status: 'ok', account });
+      } else {
+        results.push({ line: i + 1, status: 'error', error });
+      }
+    }
+
+    return {
+      total: rows.length,
+      succeeded: results.filter((r) => r.status === 'ok').length,
+      failed: results.filter((r) => r.status === 'error').length,
+      results,
+    };
+  }
+
+  /**
+   * Parse a CSV upload into import rows. Thin wrapper around the pure
+   // `parseCsv` + `credentialsFromRecord` helpers so the controller stays
+   // a single line. CSV-format errors (ragged rows) are collected on the
+   // returned summary as line-0 failures; content-level errors surface after
+   // binding via `batchImport`.
+   */
+  parseImportCsv(
+    csv: string,
+  ): { rows: AccountImportRow[]; parseErrors: ImportRowResult[] } {
+    const { rows, errors } = parseCsv(csv);
+    const parseErrors: ImportRowResult[] = errors.map((e) => ({
+      line: e.line,
+      status: 'error',
+      error: e.reason,
+    }));
+    const importRows: AccountImportRow[] = rows.map((rec) => ({
+      platform: String(rec.platform ?? '').trim(),
+      accountId: String(rec.accountId ?? '').trim(),
+      accountName: String(rec.accountName ?? '').trim(),
+      accountHandle: rec.accountHandle ? String(rec.accountHandle).trim() : undefined,
+      credentials: credentialsFromRecord(String(rec.platform ?? ''), rec),
+    }));
+    return { rows: importRows, parseErrors };
   }
 
   // ── OAuth2 authorization-code flow ────────────────────────────────────

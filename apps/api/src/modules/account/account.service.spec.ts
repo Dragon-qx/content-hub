@@ -183,4 +183,106 @@ describe('AccountService', () => {
       expect(result).toHaveProperty('success');
     });
   });
+
+  describe('parseImportCsv', () => {
+    it('maps CSV rows into AccountImportRow objects', () => {
+      const csv =
+        'platform,accountId,accountName,appid,secret\n' +
+        'WECHAT_OFFICIAL,wx1,Brand,myappid,mysecret\n' +
+        'DOUYIN,dy1,Douyin,ck,cs';
+      const { rows, parseErrors } = service.parseImportCsv(csv);
+      expect(parseErrors).toHaveLength(0);
+      expect(rows).toHaveLength(2);
+      expect(rows[0]).toMatchObject({
+        platform: 'WECHAT_OFFICIAL',
+        accountId: 'wx1',
+        accountName: 'Brand',
+        credentials: { appid: 'myappid', secret: 'mysecret' },
+      });
+    });
+
+    it('surfaces ragged rows as parse errors but still parses the good ones', () => {
+      const csv =
+        'platform,accountId,accountName\n' +
+        'WECHAT_OFFICIAL,wx1\n' + // missing column
+        'DOUYIN,dy1,Douyin';
+      const { rows, parseErrors } = service.parseImportCsv(csv);
+      expect(rows).toHaveLength(1);
+      expect(parseErrors).toHaveLength(1);
+    });
+  });
+
+  describe('batchImport', () => {
+    beforeEach(() => {
+      prisma.socialAccount.findUnique.mockResolvedValue(null);
+      prisma.socialAccount.create.mockImplementation(({ data }: any) =>
+        Promise.resolve({ id: `acc-${data.accountId}`, ...data }),
+      );
+    });
+
+    it('binds every row on a happy path and reports success counts', async () => {
+      const summary = await service.batchImport('team-1', [
+        { platform: 'WECHAT_OFFICIAL', accountId: 'wx1', accountName: 'Brand' },
+        { platform: 'DOUYIN', accountId: 'dy1', accountName: 'Douyin' },
+      ]);
+      expect(summary.total).toBe(2);
+      expect(succeeded(summary)).toBe(2);
+      expect(failed(summary)).toBe(0);
+      expect(crypto.encrypt).toHaveBeenCalledTimes(2);
+    });
+
+    it('skips rows with an invalid platform and records the error', async () => {
+      const summary = await service.batchImport('team-1', [
+        { platform: 'WECHAT_OFFICIAL', accountId: 'wx1', accountName: 'Brand' },
+        { platform: 'NOT_A_PLATFORM', accountId: 'bad', accountName: 'Bad' },
+      ]);
+      expect(succeeded(summary)).toBe(1);
+      expect(failed(summary)).toBe(1);
+      expect(summary.results[1].error).toMatch(/Unsupported platform/);
+    });
+
+    it('skips rows that are missing required fields', async () => {
+      const summary = await service.batchImport('team-1', [
+        { platform: 'WECHAT_OFFICIAL', accountId: '', accountName: 'Brand' },
+      ]);
+      expect(failed(summary)).toBe(1);
+      expect(summary.results[0].error).toMatch(/accountId and accountName/);
+    });
+
+    it('skips already-bound accounts and records the error without throwing', async () => {
+      prisma.socialAccount.findUnique.mockResolvedValue(null);
+      prisma.socialAccount.findUnique
+        .mockResolvedValueOnce(null)            // first row — not bound
+        .mockResolvedValueOnce({ id: 'existing' }); // second row — already bound
+      const summary = await service.batchImport('team-1', [
+        { platform: 'WECHAT_OFFICIAL', accountId: 'wx1', accountName: 'Brand' },
+        { platform: 'DOUYIN', accountId: 'dy1', accountName: 'Douyin' },
+      ]);
+      expect(succeeded(summary)).toBe(1);
+      expect(failed(summary)).toBe(1);
+      expect(summary.results[1].error).toMatch(/already bound/);
+    });
+
+    it('continues when a persist failure occurs and reports it', async () => {
+      prisma.socialAccount.create
+        .mockResolvedValueOnce({ id: 'acc-wx1' })
+        .mockRejectedValueOnce(new Error('db down'));
+      const summary = await service.batchImport('team-1', [
+        { platform: 'WECHAT_OFFICIAL', accountId: 'wx1', accountName: 'Brand' },
+        { platform: 'DOUYIN', accountId: 'dy1', accountName: 'Douyin' },
+      ]);
+      expect(succeeded(summary)).toBe(1);
+      expect(failed(summary)).toBe(1);
+      expect(summary.results[1].error).toBe('db down');
+    });
+
+    it('returns zeroes for an empty input array', async () => {
+      const summary = await service.batchImport('team-1', []);
+      expect(summary.total).toBe(0);
+      expect(summary.results).toEqual([]);
+    });
+  });
 });
+
+function succeeded(s: { succeeded: number }) { return s.succeeded; }
+function failed(s: { failed: number }) { return s.failed; }
