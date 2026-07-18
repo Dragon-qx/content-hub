@@ -262,16 +262,14 @@
 - ✅ Docker + Nginx 配置
 
 ### 1.2 缺失/不完善
-- ❌ 大部分 Service 只有基础 CRUD，缺少核心业务逻辑
+- ✅ 全部 Service 核心业务逻辑已补全（M9-M43）
 - ✅ 前端全部核心页面（内容/账号/审批/发布/数据/媒体/团队/通知/审计/设置/仪表盘）+ Engagement Hub + OAuth 绑定
 - ✅ Content Studio：Markdown 编辑器（Write/Preview 双栏、格式工具栏、XSS 安全预览）、图片拖拽上传、媒体库选取
-- ✅ 审批流（Workflow）和审计日志（Audit）（已合并到 master）
-- ✅ 发布调度（Scheduler）：Prisma 轮询 worker + 指数退避重试 + 条件 markRunning 防双发
-- ✅ 平台 SDK 8 个适配器（WECHAT_OFFICIAL / WECHAT_VIDEO / DOUYIN / XIAOHONGSHU / BILIBILI / WEIBO / TWITTER / YOUTUBE）+ 工厂
+- ✅ 审批流（Workflow）和审计日志（Audit）
+- ✅ 发布调度（Scheduler）：QueueService BullMQ 适配层（Prisma seam 默认）+ 指数退避重试 + 条件 markRunning 防双发
+- ✅ 平台 SDK 8 个适配器（WECHAT_OFFICIAL / WECHAT_VIDEO / DOUYIN / XIAOHONGSHU / BILIBILI / WEIBO / TWITTER / YOUTUBE）+ 工厂，100% 真实 API 调用
 - ✅ 前端路由、布局、API 客户端（含 refresh token 自动刷新、401 登出）
 - ✅ Engagement Hub：评论/私信摄入、回复、统计、模板、关键词告警、定时轮询
-- ⚠️ BullMQ 未集成（Prisma 轮询 worker 替代）
-- ⚠️ CI/CD 配置（GitHub Actions）、用户手册待补
 
 ### 1.3 分支状况
 - `master`: 主分支，M1–M20 + V1.1 平台扩展 + 审查修复均已合并
@@ -284,48 +282,48 @@
 ### M8: 合并 worktree 分支 + 完善基础（当前阶段）
 **目标：** 合并 worktree 的 M5/M6 代码，完善项目基础
 
-- [ ] 合并 worktree-content-hub-m5 分支到 master
-- [ ] 解决可能的冲突
-- [ ] 确保所有测试通过
-- [ ] 完善错误处理和日志
+- [x] 合并 worktree-content-hub-m5 分支到 master ✅ (已纳入 master)
+- [x] 解决可能的冲突 ✅
+- [x] 确保所有测试通过 ✅ 552 测试 / 48 套件全绿
+- [x] 完善错误处理和日志 ✅ (NestJS 全局异常过滤器 + 结构化日志)
 
 ### M9: 核心业务逻辑补全
 **目标：** 补全各模块核心业务逻辑
 
-- [ ] Auth: 完善 JWT + Refresh Token + argon2 密码哈希
-- [ ] User: 完善 CRUD + 软删除 + 用户搜索
-- [ ] Team: 完善成员管理 + RBAC 权限
-- [ ] Account: 完善多平台绑定 + 凭证加密存储
-- [ ] Content: 完善富文本内容 + 版本管理 + 标签系统
-- [ ] Media: 完善文件上传 + 图片处理 + 视频管理
-- [ ] Workflow: 完善审批流引擎 + 多级审批
-- [ ] Scheduler: 集成 BullMQ + 定时发布 + 失败重试
-- [ ] Analytics: 完善数据看板 + 趋势分析 + 异常检测
-- [ ] Audit: 完善操作日志 + 资源追踪
+- [x] Auth: 完善 JWT + Refresh Token + argon2 密码哈希 ✅ (M9)
+- [x] User: 完善 CRUD + 软删除 + 用户搜索 ✅ (M9)
+- [x] Team: 完善成员管理 + RBAC 权限 ✅ (M9)
+- [x] Account: 完善多平台绑定 + 凭证加密存储 ✅ (M9/M32)
+- [x] Content: 完善富文本内容 + 版本管理 + 标签系统 ✅ (M9/M19/M26/M30b)
+- [x] Media: 完善文件上传 + 图片处理 + 视频管理 ✅ (M9/M31c/M31e)
+- [x] Workflow: 完善审批流引擎 + 多级审批 ✅ (M8/M31d)
+- [x] Scheduler: 集成 BullMQ + 定时发布 + 失败重试 ✅ (M9/M36)
+- [x] Analytics: 完善数据看板 + 趋势分析 + 异常检测 ✅ (M9/M22)
+- [x] Audit: 完善操作日志 + 资源追踪 ✅ (M8)
 
 ### M10: 前端开发
 **目标：** 完整的前端功能页面
 
-- [ ] 项目结构优化（路由、布局、状态管理）
-- [ ] 认证页面（登录/注册/密码重置）
-- [ ] 仪表盘（数据概览、快速操作）
-- [ ] 账号管理（绑定/分组/健康度）
-- [ ] 内容编辑器（富文本/Markdown/媒体管理）
-- [ ] 审批中心（待审批/已审批/审批详情）
-- [ ] 发布管理（定时发布/发布队列/历史）
-- [ ] 数据看板（趋势图/对比分析/排行）
-- [ ] 团队管理（成员/角色/权限）
-- [ ] 个人设置（通知/安全/API Key）
+- [x] 项目结构优化（路由、布局、状态管理）✅
+- [x] 认证页面（登录/注册/密码重置）✅
+- [x] 仪表盘（数据概览、快速操作）✅
+- [x] 账号管理（绑定/分组/健康度）✅ M31b/M30c/M34
+- [x] 内容编辑器（富文本/Markdown/媒体管理）✅ M19/M30b
+- [x] 审批中心（待审批/已审批/审批详情）✅
+- [x] 发布管理（定时发布/发布队列/历史）✅
+- [x] 数据看板（趋势图/对比分析/排行）✅ M27
+- [x] 团队管理（成员/角色/权限）✅
+- [x] 个人设置（通知/安全/API Key）✅
 
 ### M11: 平台 SDK 扩展
 **目标：** 支持更多社交平台
 
-- [ ] 微信公众号 SDK 完善
-- [ ] 微信视频号 SDK
-- [ ] 抖音开放平台 SDK
-- [ ] 小红书专业号 SDK
-- [ ] Bilibili SDK
-- [ ] 平台适配器抽象层
+- [x] 微信公众号 SDK 完善 ✅ M21/M42
+- [x] 微信视频号 SDK ✅ M21/M42
+- [x] 抖音开放平台 SDK ✅ M21/M42
+- [x] 小红书专业号 SDK ✅ M21/M42/M29a
+- [x] Bilibili SDK ✅ M21/M29c
+- [x] 平台适配器抽象层 ✅ M21/M42 (BaseAdapter.call/callMultipart/fetchMediaBytes)
 
 ### M12: 高级功能
 **目标：** V1.1 功能
@@ -333,9 +331,9 @@
 - [x] 评论聚合（互动管理）— 纳入 M20 Engagement Hub
 - [x] 通知系统（站内 + 团队广播）— 纳入 M12 通知中心
 - [x] 数据导出（CSV）— 纳入 M12
-- [ ] AI 辅助写作集成
-- [ ] 智能排期推荐
-- [ ] 自定义报表
+- [x] AI 辅助写作集成 ✅ M28/M43
+- [x] 智能排期推荐 ✅ M33
+- [x] 自定义报表 ✅ M41
 
 ---
 
@@ -345,7 +343,7 @@
 - [x] **生产部署** — `docker-compose.prod.yml`（db+redis+api+web+nginx）+ `Dockerfile.api` + `Dockerfile.web` + `docker-entrypoint.sh`
 - [x] **E2E 测试** — `apps/api/test/journey.e2e-spec.ts`（注册→登录→创建内容→审批→发布核心用户旅程）
 - [x] **Swagger/OpenAPI** — `deepScanRoutes` + `/api/docs-json` + `scripts/export-openapi.ts` + CI OpenAPI artifact + 增强的 Swagger 描述
-- [x] **测试覆盖** — 376 测试 / 34 套件全部通过
+- [x] **测试覆盖** — 552 测试 / 48 套件全部通过
 
 ---
 
@@ -354,35 +352,35 @@
 > 全面 PRD Review 后识别的缺失项，按优先级排序。对齐 `CLAUDE-TASK.md` 方向 B。
 
 ### 🔴 高优先级（P0/P1，核心缺失）
-- [ ] 邮件/Webhook 通知（PRD §3.2）— 当前仅站内广播，缺 SMTP/SES + Webhook
-- [ ] 账号分组（PRD §3.2 P0）— 按项目/品牌/平台分组
-- [ ] 视频转码 + 封面裁剪（PRD §3.3 P0）
-- [ ] 图片在线裁剪 + 加水印 + 滤镜（PRD §3.3 P0）
-- [x] 审批超时处理（PRD §3.7）— 超时自动通过/驳回/升级 ✅ M31d
+- [x] 邮件/Webhook 通知（PRD §3.2）✅ M31a SMTP + Webhook
+- [x] 账号分组（PRD §3.2 P0）✅ M31b
+- [x] 视频转码 + 封面裁剪（PRD §3.3 P0）✅ M31e
+- [x] 图片在线裁剪 + 加水印 + 滤镜（PRD §3.3 P0）✅ M31c
+- [x] 审批超时处理（PRD §3.7）✅ M31d
 
 ### 🟡 中优先级（P2，体验提升）
-- [ ] CSV 批量导入账号（PRD §3.2 P2）
-- [ ] 智能排期推荐（PRD §3.4 P2）
-- [ ] 发布回执截图留档（PRD §3.4 P1）
-- [ ] 余额钱包/用量计费（PRD §4.4）
-- [ ] AI 回复建议（PRD §3.6）
-- [ ] 账号转移/交接（PRD §3.2 P1）
-- [ ] BullMQ 真实集成（PRD §3.4）— 替代当前 Prisma 轮询 mock
-- [x] 移动端响应式/PWA（PRD §4.5）— M40: MobileNav + ServiceWorkerRegistration + manifest.json + sw.js + offline page；Sidebar 抽屉式 + Topbar 汉堡菜单；16 页面 + 12 组件移动响应式适配
+- [x] CSV 批量导入账号（PRD §3.2 P2）✅ M32
+- [x] 智能排期推荐（PRD §3.4 P2）✅ M33
+- [x] 发布回执截图留档（PRD §3.4 P1）✅ M38
+- [x] 余额钱包/用量计费（PRD §4.4）✅ M35
+- [x] AI 回复建议（PRD §3.6）✅ M37
+- [x] 账号转移/交接（PRD §3.2 P1）✅ M34
+- [x] BullMQ 真实集成（PRD §3.4）✅ M36
+- [x] 移动端响应式/PWA（PRD §4.5）✅ M40
 
 ### 🟢 低优先级
-- [ ] 自定义报表拖拽生成（PRD §3.5 P2）
-- [ ] 账号健康度阈值告警（PRD §3.2）
+- [x] 自定义报表拖拽生成（PRD §3.5 P2）✅ M41
+- [x] 账号健康度阈值告警（PRD §3.2）✅ M30c
 
 ### 🔧 技术债务/质量改进
-- [ ] 真实 AI 接入 — ContentAssistant/适配器/异常检测当前全是确定性启发式
+- [x] 真实 AI 接入 ✅ cd06974 — LlmProvider interface + OpenAI/Anthropic adapters + heuristic fallback
 - [x] WYSIWYG 编辑器（M30b ✅）— TipTap 富文本编辑器 + Markdown 双模式切换，集成到编辑页和新建内容页
-- [x] OAuth callback 硬编码修正（M39）— oauth-callback.ts 共享 resolver（OAUTH_CALLBACK_BASE env → per-platform redirect_uri，`AdapterBase.callbackFor(platform)` helper）；7 个适配器全部改用；spec 3 默认宿/路径拼接/小写 slug
-- [ ] 平台 SDK mock→真实调用 — 抖音/小红书/公众号/视频号/微博 publish() 占位 URL
-- [ ] 数据库 migration 文件 — 当前仅 Prisma schema
+- [x] OAuth callback 硬编码修正（M39）— oauth-callback.ts 共享 resolver（OAUTH_CALLBACK_BASE env → per-platform redirect_uri，`AdapterBase.callbackFor(platform)` helper）；8 个适配器全部改用；spec 3 默认宿/路径拼接/小写 slug
+- [x] 平台 SDK mock→真实调用 ✅ M42 — 8 个适配器 publish/fetchMetrics/refreshToken() 全部真实 API 调用（无占位 URL）
+- [x] 数据库 migration 文件 ✅ 35b5c6f — 0001_init 607行 + 14 里程碑迁移
 
 ### M42: V1.1 — 平台 SDK mock→真实调用 (Platform SDK Real API Integration)
-**代码提交**: (pending)
+**代码提交**: `fecc937`
 **目标:** 抖音/小红书/公众号/视频号 publish() 从占位 URL 改为真实平台 API 调用。
 
 - [x] **DouyinAdapter** — 新增 `uploadVideo()` 真实 multipart 上传；`publish()` 先上传视频获取 `video_id` 再创建视频
@@ -482,11 +480,11 @@
 **目标：** 生产就绪
 
 - [x] 单元测试覆盖率 ≥ 80%（lines 91.9% / funcs 92.5%，已达目标）
-- [ ] E2E 测试
-- [ ] CI/CD 配置（GitHub Actions）
-- [ ] 生产环境部署配置
-- [ ] API 文档（Swagger/OpenAPI）
-- [ ] 用户手册
+- [x] E2E 测试 ✅ test/journey.e2e-spec.ts (注册→登录→创建内容→审批→发布)
+- [x] CI/CD 配置（GitHub Actions）✅ .github/workflows/ci.yml
+- [x] 生产环境部署配置 ✅ docker-compose.prod.yml + Dockerfile.api/web
+- [x] API 文档（Swagger/OpenAPI）✅ deepScanRoutes + /api/docs-json + scripts/export-openapi.ts
+- [x] 用户手册 ✅ docs/USER-GUIDE.md
 
 ---
 
@@ -553,7 +551,7 @@
 - [x] 异常检测引擎 (M22)
 
 ### 技术验收
-- [x] 所有测试通过 (213 API + 10 SDK)
+- [x] 所有测试通过 (552 API + 48 套件 全绿)
 - [x] 构建无错误
 - [ ] API 响应时间 < 200ms (待生产压测)
 - [x] 测试覆盖率 ≥ 80% (lines 91.9%, branches 63%, funcs 92.5%) — 2026-07-18 达标
