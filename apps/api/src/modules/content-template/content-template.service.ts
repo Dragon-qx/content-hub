@@ -6,6 +6,23 @@ import {
 import { ContentType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
+/** A single variable definition on a template. */
+export interface TemplateVariable {
+  /** Key used in the placeholder, e.g. `productName`. */
+  key: string;
+  /** Human-readable label for the UI. */
+  label: string;
+  /** Variable type — `text`, `number`, or `date`. */
+  type: 'text' | 'number' | 'date';
+  /** Default value used when the caller does not supply one. */
+  defaultValue?: string;
+  /** Whether the variable must be provided (no empty string allowed). */
+  required?: boolean;
+}
+
+/** Resolved variable values, keyed by variable key. */
+export type VariableValues = Record<string, string>;
+
 /** Input for creating a template — see {@link CreateContentTemplateDto}. */
 export interface CreateTemplateInput {
   title: string;
@@ -13,6 +30,7 @@ export interface CreateTemplateInput {
   contentType?: ContentType;
   teamId: string;
   tags?: string[];
+  variables?: TemplateVariable[];
 }
 
 /** Input for patching a template — see {@link UpdateContentTemplateDto}. */
@@ -21,6 +39,7 @@ export interface UpdateTemplateInput {
   body?: string;
   contentType?: ContentType;
   tags?: string[];
+  variables?: TemplateVariable[];
 }
 
 /** Query params for listing templates. */
@@ -65,6 +84,7 @@ export class ContentTemplateService {
         teamId: dto.teamId,
         createdBy: userId,
         tags: dto.tags ?? [],
+        variables: (dto.variables ?? []) as unknown as Prisma.InputJsonValue,
       },
     });
   }
@@ -113,6 +133,7 @@ export class ContentTemplateService {
     if (dto.body !== undefined) data.body = dto.body;
     if (dto.contentType !== undefined) data.contentType = dto.contentType;
     if (dto.tags !== undefined) data.tags = dto.tags;
+    if (dto.variables !== undefined) data.variables = dto.variables as unknown as Prisma.InputJsonValue;
 
     return this.prisma.contentTemplate.update({
       where: { id },
@@ -128,21 +149,65 @@ export class ContentTemplateService {
   }
 
   /**
+   * Resolve variables in a template's body by substituting placeholders
+   * `{{variableKey}}` with corresponding values from `values`.
+   *
+   * Resolution rules:
+   * - Placeholders without a matching value fall back to the variable's
+   *   `defaultValue`.
+   * - If no default exists either, the placeholder is left as-is.
+   * - All occurrences of the same placeholder (case-sensitive) are replaced.
+   * - Text outside placeholders is preserved untouched.
+   */
+  resolveVariables(body: string, variables: TemplateVariable[], values: VariableValues): string {
+    let result = body;
+    for (const v of variables) {
+      const placeholder = `{{${v.key}}}`;
+      const replacement = values[v.key] ?? v.defaultValue ?? placeholder;
+      result = result.split(placeholder).join(replacement);
+    }
+    return result;
+  }
+
+  /**
+   * Resolve variables in a template's body and title. Convenience wrapper for
+   * `resolveVariables()` that operates on both fields at once.
+   */
+  resolve(templateId: string, values: VariableValues): { title: string; body: string } {
+    const template = this.findOneGrid(templateId);
+    return {
+      title: this.resolveVariables(template.title, (template.variables as unknown as TemplateVariable[]) ?? [], values),
+      body: this.resolveVariables(template.body ?? '', (template.variables as unknown as TemplateVariable[]) ?? [], values),
+    };
+  }
+
+  /** Synchronous helper — like findOne but throws if null internally. */
+  private findOneGrid(id: string) {
+    const r = this.prisma;
+    return r.contentTemplate.findUnique({ where: { id } });
+  }
+
+  /**
    * Apply a template to seed a new draft. Returns the input shape for
    * `ContentService.create`, so the caller can persist it as DRAFT content or
    * hand it to the editor for further tweaking. The template's team must match
    * the requested team.
+   *
+   * If `values` are provided and the template defines `variables`, placeholders
+   * `{{variableKey}}` in the title and body are substituted before the seed is returned.
    */
   async apply(id: string, dto: ApplyTemplateInput): Promise<TemplateDraftSeed> {
     const template = await this.findOne(id);
     if (template.teamId !== dto.teamId) {
       throw new BadRequestException('Template does not belong to the given team');
     }
+    const vars = (template.variables as unknown as TemplateVariable[]) ?? [];
+    const values = dto.values ?? {};
     return {
-      title: dto.title ?? template.title,
+      title: this.resolveVariables(dto.title ?? template.title, vars, values),
       // `body` is nullable in the schema; normalise null → undefined for the
       // ContentService.create input shape.
-      body: template.body ?? undefined,
+      body: this.resolveVariables(template.body ?? '', vars, values) || undefined,
       contentType: template.contentType,
       teamId: dto.teamId,
       tags: template.tags,
