@@ -16,8 +16,8 @@ COPY . .
 # Build workspace deps first, then build api directly (avoids pnpm exec binary resolution issues)
 RUN pnpm --filter=@content-hub/shared-types build
 RUN pnpm --filter=@content-hub/platform-sdk build
+RUN cd /app/apps/api && pnpm exec prisma generate
 RUN cd /app/apps/api && pnpm run build
-RUN pnpm --filter=@content-hub/api prisma generate
 
 FROM base AS runner
 ENV NODE_ENV=production
