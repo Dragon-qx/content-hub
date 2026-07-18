@@ -8,6 +8,7 @@ import { CryptoModule } from './common/crypto/crypto.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { AccountModule } from './modules/account/account.module';
 import { AdaptationModule } from './modules/adaptation/adaptation.module';
+import { ContentAssistantModule } from './modules/content-assistant/content-assistant.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ContentModule } from './modules/content/content.module';
 import { ContentTemplateModule } from './modules/content-template/content-template.module';
@@ -26,6 +27,7 @@ import { HealthModule } from './modules/health/health.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ContentAssistantModule,
     // Global rate limiting: in-memory sliding window, keyed by authenticated
     // user id (falls back to client IP). Limits are env-tunable. Replace the
     // storage with a Redis-backed one (ThrottlerStorageRedisService) for a

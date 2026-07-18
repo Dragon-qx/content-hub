@@ -10,6 +10,7 @@ import MarkdownEditor, { renderMarkdown } from '@/components/MarkdownEditor';
 import MediaLibrary from '@/components/MediaLibrary';
 import AdaptationPreview from '@/components/AdaptationPreview';
 import TemplatePicker from '@/components/TemplatePicker';
+import ContentAssistant from '@/components/ContentAssistant';
 import {
   Content,
   ContentVersion,
@@ -41,6 +42,17 @@ function Preview({ body }: { body: string | undefined }) {
  */
 function countMarkdownImages(body: string): number {
   const matches = body.match(/!\[[^\]]*\]\([^)]+\)/g);
+  return matches ? matches.length : 0;
+}
+
+/**
+ * Detect an embedded video in the body (markdown link whose destination ends in
+ * a video extension, e.g. `[video](…/mp4)`). A live proxy for video count.
+ */
+function countMarkdownVideos(body: string): number {
+  const matches = body.match(
+    /\[[^\]]*\]\([^)]*\.(mp4|mov|avi|mkv|webm)(?:[^)]*)\)/gi,
+  );
   return matches ? matches.length : 0;
 }
 
@@ -202,6 +214,18 @@ function ContentDetail({ id }: { id: string }) {
     setShowTemplates(false);
   }, []);
 
+  /** Apply an AI-generated title variant. */
+  const applyAssistantTitle = useCallback((next: string) => {
+    setTitle(next);
+    setEditing(true);
+  }, []);
+
+  /** Apply an AI-generated body variant (e.g. short/formal/social rewrite). */
+  const applyAssistantBody = useCallback((next: string) => {
+    setBody(next);
+    setEditing(true);
+  }, []);
+
   if (loading) return <div className="text-slate-400">Loading…</div>;
   if (error && !content) return <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>;
   if (!content) return null;
@@ -338,6 +362,18 @@ function ContentDetail({ id }: { id: string }) {
         videoCount={0}
         videoDurationSec={0}
       />
+
+      {/* AI Content Assistant (PRD §3.3 V1.1 AI 辅助写作) */}
+      {editing && (
+        <ContentAssistant
+          body={body}
+          contentType={contentType}
+          imageCount={countMarkdownImages(body)}
+          videoCount={countMarkdownVideos(body)}
+          onApplyTitle={applyAssistantTitle}
+          onApplyBody={applyAssistantBody}
+        />
+      )}
 
       {/* Media library modal */}
       {showMedia && (

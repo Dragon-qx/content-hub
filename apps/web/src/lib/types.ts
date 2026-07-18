@@ -570,3 +570,96 @@ export interface PlatformRule {
   minDurationSec: number;
   hints: string[];
 }
+
+// ── Content Assistant: AI writing helpers (PRD §3.3 V1.1) ────────────────
+
+/** One generated title variant from POST /assistant/titles. */
+export interface TitleVariant {
+  title: string;
+  strategy: string;
+}
+
+/** Response of POST /assistant/titles. */
+export interface TitleOptimizeResult {
+  contentType: string;
+  locale: 'zh' | 'en';
+  variants: TitleVariant[];
+}
+
+/** Response of POST /assistant/tags. */
+export interface TagExtractResult {
+  tags: string[];
+}
+
+export type AuditSeverity = 'info' | 'warning' | 'error';
+
+/** A single quality/platform finding from POST /assistant/audit. */
+export interface AuditFinding {
+  code: string;
+  severity: AuditSeverity;
+  message: string;
+  platform?: string;
+}
+
+/** Per-platform projection from POST /assistant/audit. */
+export interface PlatformAudit {
+  platform: Platform;
+  label: string;
+  fits: boolean;
+  bodyLength: number;
+  maxLength: number;
+  truncated: boolean;
+  imagesUsed: number;
+  imagesDropped: number;
+  imageMax: number;
+  videosUsed: number;
+  videosDropped: number;
+  videoMax: number;
+  durationOk: boolean;
+  minDurationSec: number;
+  warnings: string[];
+}
+
+/** Response of POST /assistant/audit. */
+export interface ContentAuditResult {
+  contentType: string;
+  score: number;
+  grade: 'good' | 'needs-work' | 'poor';
+  findings: AuditFinding[];
+  platforms: PlatformAudit[];
+}
+
+export type VariantStyle = 'short' | 'long' | 'formal' | 'social';
+
+/** One generated copy variant from POST /assistant/variants. */
+export interface CopyVariant {
+  style: VariantStyle;
+  label: string;
+  body: string;
+}
+
+/** Response of POST /assistant/variants. */
+export interface VariantGenerateResult {
+  contentType: string;
+  locale: 'zh' | 'en';
+  variants: CopyVariant[];
+}
+
+export const VARIANT_STYLE_LABELS: Record<VariantStyle, string> = {
+  short: 'Short',
+  long: 'Long',
+  formal: 'Formal',
+  social: 'Social',
+};
+
+export const AUDIT_GRADE_LABELS: Record<string, string> = {
+  good: 'Good',
+  'needs-work': 'Needs work',
+  poor: 'Poor',
+};
+
+export const AUDIT_GRADE_TONE: Record<string, 'success' | 'warning' | 'danger'> = {
+  good: 'success',
+  'needs-work': 'warning',
+  poor: 'danger',
+};
