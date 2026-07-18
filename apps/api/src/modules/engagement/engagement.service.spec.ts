@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Platform, Sentiment, Prisma } from '@prisma/client';
 import { EngagementService } from './engagement.service';
+import { AiReplySuggestionsService } from './ai-reply-suggestions.service';
 import {
   PlatformSdkService,
   FetchCommentsResult,
@@ -79,6 +80,7 @@ describe('EngagementService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: PlatformSdkService, useValue: sdk },
         { provide: NotificationService, useValue: notifications },
+        { provide: AiReplySuggestionsService, useValue: { suggest: jest.fn() } },
       ],
     }).compile();
 
@@ -602,6 +604,47 @@ describe('EngagementService', () => {
       prisma.member.findFirst.mockResolvedValue(null);
       prisma.team.findFirst.mockResolvedValue(null);
       await expect(service.firstTeamForUser('nobody')).rejects.toThrow(/not a member of any team/);
+    });
+  });
+
+  describe('aiSuggestReplies', () => {
+    it('returns NotFound when the comment is missing', async () => {
+      prisma.engagementComment.findUnique.mockResolvedValue(null);
+      await expect(service.aiSuggestReplies('nope')).rejects.toThrow(/not found/i);
+    });
+
+    it('assembles the signal and delegates to AiReplySuggestionsService', async () => {
+      prisma.engagementComment.findUnique.mockResolvedValue({
+        id: 'c1',
+        content: 'This product is broken, want a refund',
+        sentiment: Sentiment.NEGATIVE,
+        sentimentScore: -0.8,
+        likeCount: 3,
+        replied: false,
+        metadata: { isPurchaser: true },
+      } as any);
+
+      const aiMock = { suggest: jest.fn().mockResolvedValue({ id: 'c1', suggestions: [] }) };
+      // Re-inject a typed mock via the underlying provider.
+      const TestingModuleRef = await Test.createTestingModule({
+        providers: [
+          EngagementService,
+          { provide: PrismaService, useValue: prisma },
+          { provide: PlatformSdkService, useValue: sdk },
+          { provide: NotificationService, useValue: notifications },
+          { provide: AiReplySuggestionsService, useValue: aiMock },
+        ],
+      }).compile();
+      const svc = TestingModuleRef.get(EngagementService);
+
+      await svc.aiSuggestReplies('c1');
+
+      expect(aiMock.suggest).toHaveBeenCalledWith('c1', expect.objectContaining({
+        sentiment: Sentiment.NEGATIVE,
+        sentimentScore: -0.8,
+        likeCount: 3,
+        isPurchaser: true,
+      }));
     });
   });
 });

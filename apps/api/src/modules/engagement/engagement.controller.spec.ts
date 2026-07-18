@@ -25,6 +25,9 @@ describe('EngagementController', () => {
         .fn()
         .mockResolvedValue({ id: 'k1', teamId: 'team1', keyword: 'refund' }),
       deleteKeyword: jest.fn().mockResolvedValue({ deleted: true }),
+      aiSuggestReplies: jest
+        .fn()
+        .mockResolvedValue({ commentId: 'c1', suggestions: [{ variant: 'grateful', confidence: 0.9, text: 'Thanks!' }] }),
     };
 
     const module = await Test.createTestingModule({
@@ -102,5 +105,11 @@ describe('EngagementController', () => {
     const out = await controller.ingestMessages({ accountId: 'acc1' } as any);
     expect(service.ingestMessages).toHaveBeenCalledWith('acc1');
     expect(out).toEqual({ stored: 4, unsupported: false, platform: 'BILIBILI' });
+  });
+
+  it('suggestReplies delegates a comment to the service engine', async () => {
+    const out: any = await controller.suggestReplies('c1');
+    expect(service.aiSuggestReplies).toHaveBeenCalledWith('c1');
+    expect(out.suggestions[0].variant).toBe('grateful');
   });
 });

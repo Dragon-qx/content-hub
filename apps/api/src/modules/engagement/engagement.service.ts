@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Platform, Prisma, Sentiment } from '@prisma/client';
+import { AiReplySuggestionsService } from './ai-reply-suggestions.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import {
   PlatformSdkService,
@@ -89,6 +90,7 @@ export class EngagementService {
     private readonly prisma: PrismaService,
     private readonly platformSdk: PlatformSdkService,
     private readonly notifications: NotificationService,
+    private readonly aiReplies: AiReplySuggestionsService,
   ) {}
 
   /**
@@ -246,6 +248,30 @@ export class EngagementService {
     ]);
 
     return { items, total, skip: params.skip ?? 0, take: params.take ?? DEFAULT_TAKE };
+  }
+
+  /**
+   * Generate AI reply-suggestion variants for a comment. Loads the comment row
+   * by id, builds the sentiment+intent signal, and delegates to the deterministic
+   * AiReplySuggestionsService engine (no external LLM).
+   */
+  async aiSuggestReplies(commentId: string) {
+    const comment = await this.prisma.engagementComment.findUnique({
+      where: { id: commentId },
+    });
+    if (!comment) {
+      throw new NotFoundException(`Comment ${commentId} not found`);
+    }
+
+    return this.aiReplies.suggest(comment.id, {
+      sentiment: comment.sentiment,
+      sentimentScore: comment.sentimentScore,
+      content: comment.content,
+      likeCount: comment.likeCount,
+      replied: comment.replied,
+      isVerified: (comment.metadata as Record<string, unknown> | null)?.isVerified as boolean,
+      isPurchaser: (comment.metadata as Record<string, unknown> | null)?.isPurchaser as boolean,
+    });
   }
 
   /**

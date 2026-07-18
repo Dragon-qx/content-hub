@@ -85,6 +85,19 @@ export class EngagementController {
     return this.engagement.ingest(dto.accountId, dto.postExternalId);
   }
 
+  /** AI-suggested reply drafts for a single comment. */
+  @ApiOperation({
+    summary: 'AI reply suggestions for a comment',
+    description:
+      'Deterministic, fully-local generation of up-to-two reply drafts, ' +
+      'classified by sentiment/intent. No external LLM is called.',
+  })
+  @ApiParam({ name: 'id', description: 'Comment id' })
+  @Get('comments/:id/reply-suggestions')
+  async suggestReplies(@Param('id') id: string) {
+    return this.engagement.aiSuggestReplies(id);
+  }
+
   /** Reply to a single comment. */
   @ApiOperation({ summary: 'Reply to a comment' })
   @ApiParam({ name: 'id', description: 'Comment id' })
