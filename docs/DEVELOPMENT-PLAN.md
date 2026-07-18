@@ -2,7 +2,7 @@
 
 > 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18（第2次）
 
-> **当前进度（2026-07-18 第3次）**: M1–M21 全部完成 + **M22 异常检测引擎**（PRD §3.5 P1 5 规则：突降/突增/持续下滑/断崖/粉丝异常；纯函数检测器 + AnalyticsService 编排 + 团队通知广播 + 签名去重 + Prisma AnomalyAlert 模型 + 迁移 + worker 慢周期轮询；`GET /analytics/anomalies/:accountId` + `POST /analytics/anomalies/scan` + `GET /analytics/anomaly-alerts`；前端 Analytics 页异常面板含 Scan 按钮 + 严重度 Badge）。测试 **280 通过 / 29 API 套件**（+23）+ **SDK 28 通过**，typecheck 全绿。
+> **当前进度（2026-07-18 第4次）**: M1–M22 全部完成 + **M23 内容日历**（PRD §3.3 P1 内容日历 · 日历/列表视图排期）：后端 `ContentService.calendar(year, month)` 聚合 `SCHEDULED/PUBLISHING` 内容 + `QUEUED/RETRYING` PublishJob 按日分组，PublishJob 仅存 `contentId` 故单独查 Content 解析标题；新增 `CalendarQueryDto`（`@IsInt @Min @Max` 校验 year/month）+ `GET /contents/calendar`（置于 `:id` 前避免路由抢占）+ 3 服务单测（网格分组、月份窗口查询、闰年 2 月 29 天）+ 1 控制器单测；前端 `apps/web/src/app/(app)/content/calendar/page.tsx` 月视图 6×7 网格（前后月淡显、今日/选中高亮、事件 chip + 计数），选中日详情 Table（标题/类型/平台/状态/时间），左栏 Sidebar 新增 📅 Calendar 入口；新增前端类型 `CalendarEvent/CalendarDay/CalendarResponse/CALENDAR_EVENT_TONE`。测试 **284 通过 / 29 API 套件**（+4），API + web typecheck 与 build 全绿。
 >
 > **本轮新增（审查修复 + 平台扩展）**: (1) **审查发现修复** — 调度 `handleFailure` 增加指数退避（`RETRY_BACKOFF_BASE_MS * 2^attempt`，上限 60s），避免轮询器对故障平台紧循环重试；`worker.ts` 移除过时的 `GRACE_MS` 注释；OAuth `@Post(':platform/authorize')` 从 `@Query()` 改为 `@Body()`（前端发送 JSON body，原绑定导致 @MinLength 校验必然 400）；`Media` 上传页改为走共享 api client（统一 401 处理 + 刷新重试）；前端 `api.ts` 新增 refresh token 持久化 + 401 自动刷新一次重试链路（登录/注册/mfaLogin 均持久化 refreshToken，logout 清除）；`decryptCredentials` 解密失败回退时补 debug 日志；治理 `/engagement` 页面无操作的 setter 死代码。(2) **Twitter 适配器** — `TwitterAdapter`（OAuth2 PKCE 授权 / X API v2 发布 / 粉丝指标，评论/私信回退 BaseAdapter 默认抛错）+ 工厂注册 + 5 单元测试。(3) **YouTube 适配器** — `YouTubeAdapter`（OAuth2 授权 / 视频元数据创建 / 频道指标 subs+views / 评论 fetch+reply，私信回退默认抛错）+ 工厂注册 + 7 单元测试。
 
@@ -128,6 +128,18 @@
 - [x] **API 端点** — `GET /analytics/anomalies/:accountId`、`POST /analytics/anomalies/scan`（单账号/全量 + notify 开关）、`GET /analytics/anomaly-alerts`（审计/列表）；DTO 校验（`class-validator`）+ `JwtAuthGuard`
 - [x] **worker 慢周期轮询** — `ANOMALY_SCAN_INTERVAL_MS`（默认 6h），复用 engagement sync 模式；索引列失败仅 record 不中断
 - [x] **前端 Analytics 异常面板** — Scan 按钮（PageHeader + 面板内 Refresh）+ `Badge` 严重度（danger/warning）+ `ANOMALY_TYPE_LABELS` 中文类型；类型 `Anomaly`/`AnomalyType`/`AnomalySeverity` 纳入 `lib/types`；演示用 `notify: false` 预览
+
+### M23: V1.1 — 内容日历 (Content Calendar) (PRD §3.3 P1)
+**目标:** 月视图排期日历，聚合已排期内容与发布任务，补全 Content Studio 的"日历/列表视图排期"能力
+
+- [x] **Prisma 模型复用** — 直接利用现有 `Content.scheduledAt` + `PublishJob.scheduledAt`，无需迁移
+- [x] **ContentService.calendar 编排** — 聚合 `SCHEDULED/PUBLISHING` 内容 + `QUEUED/RETRYING` PublishJob，按 UTC 日历日分组为完整月份网格；PublishJob 仅存 `contentId`（无 Content 关系），故单独批量查 Content 解析标题
+- [x] **DTO 校验** — `CalendarQueryDto`（`@IsInt @Min(2000) @Max(2100)` year / `@IsInt @Min(1) @Max(12)` month）
+- [x] **API 端点** — `GET /contents/calendar?year=&month=`（置于 `:id` 路由之前，避免 "calendar" 被当 id 捕获）
+- [x] **单元测试** — 3 服务单测（网格分组 + 事件归日、月份窗口查询条件、闰年 2 月 29 天）+ 1 控制器单测（year/month 透传）
+- [x] **前端月视图** — `apps/web/src/app/(app)/content/calendar/page.tsx`：6×7 月网格（前后月淡显、今日圈选、选中 ring 高亮、事件 chip + 计数 badge）、月份前后翻瓣 + "Today" 按钮、选中日详情 Table（标题链接到内容详情/作业置为纯文本、类型/平台/状态/时间列）
+- [x] **导航接入** — Sidebar 新增 📅 Calendar 入口（位于 Content 与 Media 之间）
+- [x] **前端类型** — `CalendarEvent` / `CalendarDay` / `CalendarResponse` / `CALENDAR_EVENT_TONE` 纳入 `lib/types`
 
 ### M13: 测试 + 部署 + 文档
 **目标：** 生产就绪

@@ -16,6 +16,9 @@ describe('ContentController', () => {
     service = {
       create: jest.fn().mockResolvedValue({ id: 'c1', version: 1 }),
       findAll: jest.fn().mockResolvedValue({ items: [], total: 0 }),
+      calendar: jest
+        .fn()
+        .mockResolvedValue({ year: 2026, month: 7, days: [{ date: '2026-07-01', events: [] }] }),
       findOne: jest.fn().mockResolvedValue({ id: 'c1' }),
       update: jest.fn().mockResolvedValue({ id: 'c1' }),
       remove: jest.fn().mockResolvedValue({ success: true, id: 'c1' }),
@@ -80,6 +83,12 @@ describe('ContentController', () => {
     expect(service.findAll).toHaveBeenCalledWith(
       expect.objectContaining({ skip: 0, take: 10, teamId: 'team-1' }),
     );
+  });
+
+  it('calendar forwards year/month to the service', async () => {
+    const result = await controller.calendar({ year: 2026, month: 7 } as any);
+    expect(service.calendar).toHaveBeenCalledWith(2026, 7);
+    expect(result).toMatchObject({ year: 2026, month: 7 });
   });
 
   it('update passes user id from request', async () => {

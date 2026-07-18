@@ -179,6 +179,39 @@ export interface PublishJob {
   retryCount: number;
 }
 
+// ── Content Calendar (PRD §3.3) ────────────────────────────────────────
+
+/** A single scheduled item rendered on the content calendar. */
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  type: 'content' | 'job';
+  platform?: string;
+  status: string;
+  scheduledAt: string;
+}
+
+/** One calendar day in a month grid: its ISO date (YYYY-MM-DD) and events. */
+export interface CalendarDay {
+  date: string;
+  events: CalendarEvent[];
+}
+
+/** Response of GET /contents/calendar?year=&month=. */
+export interface CalendarResponse {
+  year: number;
+  month: number;
+  days: CalendarDay[];
+}
+
+/** Map a content/job status to the UI tone used by <StatusBadge />. */
+export const CALENDAR_EVENT_TONE: Record<string, 'neutral' | 'success' | 'warning' | 'danger'> = {
+  SCHEDULED: 'neutral',
+  PUBLISHING: 'warning',
+  QUEUED: 'neutral',
+  RETRYING: 'warning',
+};
+
 export interface AuditLogUser {
   id: string;
   name: string;

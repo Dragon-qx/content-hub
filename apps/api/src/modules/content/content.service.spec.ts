@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
-import { ContentStatus } from '@prisma/client';
+import { ContentStatus, JobStatus } from '@prisma/client';
 import { ContentService, CONTENT_TRANSITIONS } from './content.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { WorkflowService } from '../workflow/workflow.service';
@@ -129,6 +129,92 @@ describe('ContentService', () => {
       const result = await service.remove('1');
       expect(result).toHaveProperty('success', true);
       expect(result).toHaveProperty('id', '1');
+    });
+  });
+
+  describe('calendar', () => {
+    it('builds a full month grid with content + job events grouped by day', async () => {
+      const jul6 = new Date(Date.UTC(2026, 6, 6, 10, 0, 0));
+      const jul7 = new Date(Date.UTC(2026, 6, 7, 12, 0, 0));
+      // First content.findMany → scheduled content; second (job title lookup) → c2.
+      prisma.content.findMany
+        .mockResolvedValueOnce([
+          { id: 'c1', title: 'Scheduled post', status: ContentStatus.SCHEDULED, scheduledAt: jul6 },
+        ])
+        .mockResolvedValueOnce([{ id: 'c2', title: 'Queued job content' }]);
+      prisma.publishJob.findMany.mockResolvedValue([
+        {
+          id: 'j1',
+          contentId: 'c2',
+          platform: 'DOUYIN',
+          status: JobStatus.QUEUED,
+          scheduledAt: jul7,
+        },
+      ]);
+
+      const result = await service.calendar(2026, 7);
+
+      expect(result.year).toBe(2026);
+      expect(result.month).toBe(7);
+      expect(result.days).toHaveLength(31);
+      // Content lands on the 6th, job on the 7th (dates are UTC-grouped).
+      expect(result.days[5]).toHaveProperty('date', '2026-07-06');
+      expect(result.days[5].events).toHaveLength(1);
+      expect(result.days[5].events[0]).toMatchObject({
+        id: 'c1',
+        type: 'content',
+        status: ContentStatus.SCHEDULED,
+      });
+      expect(result.days[6]).toHaveProperty('date', '2026-07-07');
+      expect(result.days[6].events[0]).toMatchObject({
+        id: 'j1',
+        type: 'job',
+        platform: 'DOUYIN',
+        title: 'Queued job content',
+      });
+      // A quiet day has no events.
+      expect(result.days[0].events).toHaveLength(0);
+    });
+
+    it('queries only the target month window (SCHEDULED/PUBLISHING + QUEUED/RETRYING)', async () => {
+      prisma.content.findMany.mockResolvedValue([]);
+      prisma.publishJob.findMany.mockResolvedValue([]);
+
+      await service.calendar(2026, 7);
+
+      // First content.findMany is the scheduled-content query.
+      expect(prisma.content.findMany).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          where: {
+            status: { in: [ContentStatus.SCHEDULED, ContentStatus.PUBLISHING] },
+            scheduledAt: {
+              gte: new Date(Date.UTC(2026, 6, 1, 0, 0, 0)),
+              lt: new Date(Date.UTC(2026, 7, 1, 0, 0, 0)),
+            },
+          },
+        }),
+      );
+      expect(prisma.publishJob.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            status: { in: [JobStatus.QUEUED, JobStatus.RETRYING] },
+            scheduledAt: {
+              gte: new Date(Date.UTC(2026, 6, 1, 0, 0, 0)),
+              lt: new Date(Date.UTC(2026, 7, 1, 0, 0, 0)),
+            },
+          },
+        }),
+      );
+    });
+
+    it('February in a leap year has 29 days', async () => {
+      // content.findMany: scheduled-content query then the (empty) title lookup.
+      prisma.content.findMany.mockResolvedValue([]);
+      prisma.publishJob.findMany.mockResolvedValue([]);
+      const result = await service.calendar(2024, 2);
+      expect(result.days).toHaveLength(29);
+      expect(result.days[28]).toHaveProperty('date', '2024-02-29');
     });
   });
 

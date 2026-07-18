@@ -6,10 +6,34 @@ import {
 import {
   ContentStatus,
   ContentType,
+  JobStatus,
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { WorkflowService } from '../workflow/workflow.service';
+
+/** A single scheduled item on the content calendar for one day. */
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  type: 'content' | 'job';
+  platform?: string;
+  status: string;
+  scheduledAt: string;
+}
+
+/** One calendar day in a month: its ISO date (YYYY-MM-DD) and its events. */
+export interface CalendarDay {
+  date: string;
+  events: CalendarEvent[];
+}
+
+/** `calendar()` response: a full month grid of days with their events. */
+export interface CalendarResponse {
+  year: number;
+  month: number;
+  days: CalendarDay[];
+}
 
 /** Input shape for creating content — see CreateContentDto. */
 export interface CreateContentInput {
@@ -152,6 +176,105 @@ export class ContentService {
     ]);
 
     return { items, total, skip: params.skip ?? 0, take: params.take ?? 20 };
+  }
+
+  /**
+   * Build a month calendar of scheduled publishing activity.
+   *
+   * Aggregates (a) content whose status is SCHEDULED/PUBLISHING with a
+   * `scheduledAt` in the target month and (b) queued/retrying publish jobs in
+   * the same window, then groups them by calendar day. The UI renders this as a
+   * month grid with per-day event chips and a detail list for a selected day.
+   */
+  async calendar(year: number, month: number) {
+    // month is 1-based; compute [start, end) of the target month in UTC.
+    const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
+    const end = new Date(Date.UTC(year, month, 1, 0, 0, 0));
+
+    const [contentItems, jobs] = await Promise.all([
+      this.prisma.content.findMany({
+        where: {
+          status: { in: [ContentStatus.SCHEDULED, ContentStatus.PUBLISHING] },
+          scheduledAt: { gte: start, lt: end },
+        },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          scheduledAt: true,
+        },
+        orderBy: { scheduledAt: 'asc' },
+      }),
+      this.prisma.publishJob.findMany({
+        where: {
+          status: { in: [JobStatus.QUEUED, JobStatus.RETRYING] },
+          scheduledAt: { gte: start, lt: end },
+        },
+        select: {
+          id: true,
+          contentId: true,
+          platform: true,
+          status: true,
+          scheduledAt: true,
+        },
+        orderBy: { scheduledAt: 'asc' },
+      }),
+    ]);
+
+    // Resolve titles for job content (PublishJob only stores contentId, with no
+    // relation to Content). Dedup ids to avoid redundant lookups.
+    const jobContentIds = [...new Set(jobs.map((j) => j.contentId))];
+    const jobContentTitles =
+      jobContentIds.length > 0
+        ? await this.prisma.content.findMany({
+            where: { id: { in: jobContentIds } },
+            select: { id: true, title: true },
+          })
+        : [];
+    const titleById = new Map(jobContentTitles.map((c) => [c.id, c.title] as const));
+
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const days: CalendarDay[] = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      days.push({ date: `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`, events: [] });
+    }
+
+    const byDay = new Map<number, CalendarEvent[]>(
+      days.map((day, i) => [i + 1, day.events]),
+    );
+
+    // `scheduledAt` is nullable in the Prisma type, but our where clause filters
+    // to non-null values, so it is safe to treat it as a Date here.
+    const toDay = (d: Date | null | undefined): number => new Date(d as Date).getUTCDate();
+
+    for (const c of contentItems) {
+      const day = toDay(c.scheduledAt);
+      const slot = byDay.get(day);
+      if (!slot) continue;
+      slot.push({
+        id: c.id,
+        title: c.title,
+        type: 'content',
+        status: c.status,
+        scheduledAt: (c.scheduledAt as Date).toISOString(),
+      });
+    }
+
+    for (const j of jobs) {
+      const day = toDay(j.scheduledAt);
+      const slot = byDay.get(day);
+      if (!slot) continue;
+      slot.push({
+        id: j.id,
+        title: titleById.get(j.contentId) ?? `(job ${j.id})`,
+        type: 'job',
+        platform: j.platform,
+        status: j.status,
+        scheduledAt: (j.scheduledAt as Date).toISOString(),
+      });
+    }
+
+    return { year, month, days };
   }
 
   async findOne(id: string) {

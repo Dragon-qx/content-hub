@@ -5,6 +5,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -110,6 +111,25 @@ export class RejectContentDto {
   @IsString()
   @MaxLength(1000)
   reason?: string;
+}
+
+/**
+ * Query the content calendar for a given month. Returns every day in the
+ * month with its scheduled content + publish jobs, so the UI can render a
+ * month grid without a second round-trip.
+ */
+export class CalendarQueryDto {
+  @IsInt()
+  @Min(2000)
+  @Max(2100)
+  @Type(() => Number)
+  year: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  @Type(() => Number)
+  month: number;
 }
 
 export class ListContentQueryDto {

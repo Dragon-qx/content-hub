@@ -19,6 +19,7 @@ import {
   UpdateContentDto,
   CreateContentVersionDto,
   ListContentQueryDto,
+  CalendarQueryDto,
   SubmitContentDto,
   ApproveContentDto,
   RejectContentDto,
@@ -60,6 +61,12 @@ export class ContentController {
       teamId: query.teamId,
       search: query.search,
     });
+  }
+
+  /** Month calendar of scheduled content + publish jobs (grid-friendly). */
+  @Get('calendar')
+  calendar(@Query() query: CalendarQueryDto) {
+    return this.content.calendar(query.year, query.month);
   }
 
   @Get(':id')

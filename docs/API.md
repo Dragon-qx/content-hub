@@ -112,9 +112,34 @@ written; they are decrypted only when a real sync against the platform runs.
 | ------ | ------------------ | --------------------------------------- |
 | POST   | `/contents`        | Creates `DRAFT` with `version=1` + first `ContentVersion` |
 | GET    | `/contents`        | `?status&teamId&createdBy&search&skip&take` |
+| GET    | `/contents/calendar` | `?year&month` — month grid of scheduled content + jobs (see below) |
 | GET    | `/contents/:id`    | Includes tags, posts, workflow, versions |
 | PUT    | `/contents/:id`    | Partial update                          |
 | DELETE | `/contents/:id`    | Hard delete                             |
+
+### Content calendar
+`GET /contents/calendar?year=2026&month=7` returns every day in the month with
+the scheduled content (`SCHEDULED`/`PUBLISHING`) and queued/retrying publish jobs
+(`QUEUED`/`RETRYING`) whose `scheduledAt` falls that day, grouped by UTC date.
+Each event carries `id`, `title`, `type` (`content`|`job`), `platform` (jobs only),
+`status`, and `scheduledAt`. Rendered as the month grid on `/content/calendar`.
+
+```json
+{
+  "year": 2026, "month": 7,
+  "days": [
+    { "date": "2026-07-06", "events": [
+      { "id": "c1", "title": "Scheduled post", "type": "content",
+        "status": "SCHEDULED", "scheduledAt": "2026-07-06T10:00:00.000Z" }
+    ]},
+    { "date": "2026-07-07", "events": [
+      { "id": "j1", "title": "Queued job content", "type": "job",
+        "platform": "DOUYIN", "status": "QUEUED",
+        "scheduledAt": "2026-07-07T12:00:00.000Z" }
+    ]}
+  ]
+}
+```
 
 ---
 
