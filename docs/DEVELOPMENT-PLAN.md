@@ -2,7 +2,9 @@
 
 > 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18（第2次）
 
-> **当前进度（2026-07-18 第8次）**: M1–M26 全部完成 + **M27 内容排行榜 Top/Bottom 自动标记**（PRD §3.5 P1 排行 Top/Bottom 内容自动标记）：后端 `AnalyticsService.getTopContent` 扩展为 `getTopContent(sortBy, limit, view?)` — 按 cohort 均值自动投射 TOP（≥1.2×）/ MID / BOTTOM（<0.5×）三级标记（纯函数 `classifyTier(value, mean)`），新增 `ContentTier` / `TopContentView` / `RankedContentItem` / `ContentRanking` 类型；排序方向随 `view` 切换（`top` 最佳优先 / `bottom` 最差优先，让运营一眼定位表现不佳内容），最终项打 1-based `rank`，并返回 `summary{top,mid,bottom,total}` 分布；新增 `view` 查询参数（`@IsIn(['top','bottom'])`，默认 `top`），控制器透传并在无 DTO 时 coalesce 默认值；`TopContentQueryDto` 导入 `TopContentView`；单测 **+8**（服务 5：三级标记投射、summary 分布、bottom view 升序最差优先 + rank、无帖子、classifyTier 边界 / 控制器 3：透传 view + 默认 top）；前端 `lib/types.ts` 新增 `ContentTier/RankedContentItem/ContentRanking/CONTENT_TIER_LABELS/CONTENT_TIER_TONE`，分析页「Top content」升级为「Content ranking」卡片（Top/Bottom 切换按钮、`top/mid/low` 分布 Badge、每行 rank + Tier Badge）。测试 **334 通过 / 31 API 套件**（+6 净增），API + web typecheck 与 build 全绿。
+> **当前进度（2026-07-18 第9次）**: M1–M27 全部完成。剩余收尾：E2E 测试、CI/CD、生产部署配置、Swagger 文档、用户手册。
+> 
+> **测试**: 334 通过 / 31 API 套件。API + web typecheck 与 build 全绿。
 
 > **此前（第6次）**: M1–M24 全部完成 + **M25 内容模板库**（PRD §3.3 P1 内容模板 · 可复用模板库）：后端新增 `ContentTemplate` Prisma 模型（teamId / title / body / contentType / tags[] / createdBy，关联 `Team.templates`）+ 迁移 `20260718080000_content_templates`；`ContentTemplateModule`（`ContentTemplateService` + `ContentTemplateController`）提供 `POST/GET/PUT/DELETE /templates`（`JwtAuthGuard` + `AuditService` 全操作审计，team 级隔离，自由文本搜索，分页）及 `POST /templates/:id/apply`（返回 `TemplateDraftSeed` 供 `ContentService.create` 复用，跨 team 拒绝）；DTO 校验全覆盖（`class-validator`）；单元测试 **13**（创建/默认值/空 team 拒绝、team 分页列表、搜索 OR、findOne/NotFound、update 部分字段、delete + NotFound、apply 标题覆写与跨 team 拒绝）；`test/prisma.mock.ts` 新增 `contentTemplate` delegate；前端 `TemplatePicker` 组件（防抖搜索 + 加载 + 应用）、`/content` 页 Templates 管理面板（CRUD + "New from template" 种子创建表单）、`/contents/[id]` 编辑器内 "Load template" 种子；`lib/types.ts` 新增 `ContentTemplate / TemplateDraftSeed`。测试 **323 通过 / 31 API 套件**（+13），API + web typecheck 与 build 全绿。
 >
@@ -213,8 +215,8 @@
 ### 功能验收
 - [x] 用户注册登录完整流程 (M9)
 - [x] 团队创建和成员邀请 (M9)
-- [x] 多平台账号绑定（≥3 平台） (M9/M11)
-- [x] 内容创建编辑和版本管理 (M9) — M19 完善：Markdown 编辑器 + 工具栏 + 安全预览 + 图片拖拽上传 + 媒体库
+- [x] 多平台账号绑定（≥8 平台） (M9/M11/M21)
+- [x] 内容创建编辑和版本管理 (M9/M19/M26)
 - [x] 审批流程完整流转 (M8)
 - [x] 定时发布和批量发布 (M9)
 - [x] 数据看板展示核心指标 (M9)
@@ -223,6 +225,12 @@
 - [x] 站内通知 + 团队广播 (M12)
 - [x] 双因素认证 TOTP (M18)
 - [x] Engagement Hub — 互动管理：统一评论收件箱 + 情感分析 + 快捷回复 (M20)
+- [x] 内容排行榜 Top/Bottom 自动标记 (M27)
+- [x] 内容版本回滚 (M26)
+- [x] 内容模板库 (M25)
+- [x] 内容适配引擎 (M24)
+- [x] 内容日历 (M23)
+- [x] 异常检测引擎 (M22)
 
 ### 技术验收
 - [x] 所有测试通过 (213 API + 10 SDK)
