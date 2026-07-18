@@ -1,8 +1,25 @@
 # ContentHub — 完整开发计划
 
-> 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18（第4次）
+> 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18（第5次）
 
-> **当前进度（2026-07-18 第20次）**: M1–M38 全部完成 + **M38 发布回执截图留档**（PRD §3.4 P1）：Prisma schema 新增 `PublishReceipt {contentId/platformPostId/accountId/platform/externalId/externalUrl/assetId(`MediaAsset.` 1:1 unique)/receiptHash unique/metadata}` + receipts 关系挂 `Content`/`PlatformPost`/`SocialAccount`；迁移 `20260719110000_publish_receipts`（平台/资产/哈希三元 UNIQUE + contentId index + 外键级联/SetNull）；`ScreenshotProvider` seam（抽象类）+ `NoopScreenshotProvider` 默认（无头浏览器未就绪抛 fallback 位；未来可换 Playwright/Puppeteer 注入 `SCREENSHOT_PROVIDER`）；`MediaService.buildReceiptCard`（sharp SVG→PNG，渲染发布元数据卡：标题/平台/内容 ID/外部 ID+URL/时间 ISO）+ `attachReceiptCard` 写 `/uploads/receipts/{id}.png`（fs 失败降级 → metadata base64 回水，仍落 MediaAsset 行）；`PublishReceiptService.generate` 三阶段：① 字段校验 + 算 input 元组 SHA-256 幂等 hash（idempotent 默认命中返回 / `idempotent:false` 二次抛 Conflict）② `screenshot.capture` + 失败警告降级 ③ `buildReceiptCard`+`attachReceiptCard` 写 MediaAsset，落 PublishReceipt 行并标 `assetId`（优先 screenshot.assetId）；`listByContent`/`get(id)`/`verify(id)`（哈希重算验证 tamper-evident）；控制器 `POST /receipts?GenerateReceiptDto`（纯 `@IsEnum(Platform)`+`@IsString`）/`GET /receipts?contentId`+`GET /:id`+`GET /:id/verify`（全部 `JwtAuthGuard`+Swagger）；`ReceiptModule` 接入 `AppModule`；sharp 作为 api `dependency` 显式安装；`test/prisma.mock.ts` 增 `publishReceipt` delegate；单测 **15**（service 10 + controller 5），sharp 渲染在测试环境可执行，527 测试 / 48 全绿，typecheck 全绿。
+> **当前进度（2026-07-18 第21次）**: M1–M38 + M30b WYSIWYG 全部完成。剩余：自定义报表拖拽生成（🟢 低优先级）、账号健康度阈值告警（🟢）、真实 AI 接入（🔧）、平台 SDK mock→真实调用（🔧）、数据库 migration SQL 文件（🔧）
+
+---
+
+### M30b: V1.1 — WYSIWYG 编辑器集成 (WYSIWYG Editor Integration) (PRD §3.3)
+**目标:** 在内容编辑页面集成 TipTap 富文本编辑器，与已有 Markdown 编辑器实现双模式切换，补齐 PRD §3.3 缺失能力。
+
+- [x] **WYSIWYG 编辑器组件** — `apps/web/src/components/WysiwygEditor.tsx`：基于 TipTap (`@tiptap/react`)，包含 B/H1/H2/H3/bullet/ordered/quote/code/link 工具栏，HTML↔Markdown 双向转换（turndown），拖拽上传图片，媒体库插入；`value/onChange` 受控接口与 MarkdownEditor 完全对齐
+- [x] **`package.json` 依赖** — `@tiptap/react` / `@tiptap/starter-kit` / `@tiptap/extension-image` / `@tiptap/extension-link` / `turndown`（dependencies）+ `@types/turndown`（devDependencies）
+- [x] **编辑页集成** — `apps/web/src/app/(app)/contents/[id]/page.tsx`：编辑器工具栏新增「切换编辑器」按钮（Rich text ↔ Markdown），共享同一个 `body` 状态，表单操作（save/version/rollback）完全不受影响；默认 Markdown 模式保持向后兼容
+- [x] **新建内容集成** — `apps/web/src/app/(app)/content/page.tsx`：新建表单默认 WYSIWYG 编辑器，Template 表单同样支持模式切换
+- [x] **typecheck** — 修复 TipTap v3 `setContent` API 签名变更 + turndown 类型声明缺失，`pnpm typecheck` 全绿
+
+---
+
+> **此前（第20次）**: M1–M38 +
+
+> **此前较早**: （PRD §3.4 P1）：Prisma schema 新增 `PublishReceipt {contentId/platformPostId/accountId/platform/externalId/externalUrl/assetId(`MediaAsset.` 1:1 unique)/receiptHash unique/metadata}` + receipts 关系挂 `Content`/`PlatformPost`/`SocialAccount`；迁移 `20260719110000_publish_receipts`（平台/资产/哈希三元 UNIQUE + contentId index + 外键级联/SetNull）；`ScreenshotProvider` seam（抽象类）+ `NoopScreenshotProvider` 默认（无头浏览器未就绪抛 fallback 位；未来可换 Playwright/Puppeteer 注入 `SCREENSHOT_PROVIDER`）；`MediaService.buildReceiptCard`（sharp SVG→PNG，渲染发布元数据卡：标题/平台/内容 ID/外部 ID+URL/时间 ISO）+ `attachReceiptCard` 写 `/uploads/receipts/{id}.png`（fs 失败降级 → metadata base64 回水，仍落 MediaAsset 行）；`PublishReceiptService.generate` 三阶段：① 字段校验 + 算 input 元组 SHA-256 幂等 hash（idempotent 默认命中返回 / `idempotent:false` 二次抛 Conflict）② `screenshot.capture` + 失败警告降级 ③ `buildReceiptCard`+`attachReceiptCard` 写 MediaAsset，落 PublishReceipt 行并标 `assetId`（优先 screenshot.assetId）；`listByContent`/`get(id)`/`verify(id)`（哈希重算验证 tamper-evident）；控制器 `POST /receipts?GenerateReceiptDto`（纯 `@IsEnum(Platform)`+`@IsString`）/`GET /receipts?contentId`+`GET /:id`+`GET /:id/verify`（全部 `JwtAuthGuard`+Swagger）；`ReceiptModule` 接入 `AppModule`；sharp 作为 api `dependency` 显式安装；`test/prisma.mock.ts` 增 `publishReceipt` delegate；单测 **15**（service 10 + controller 5），sharp 渲染在测试环境可执行，527 测试 / 48 全绿，typecheck 全绿。
 
 > **此前（第19次）**: M1–M37 全部完成 + **M37 AI 回复建议**（PRD §3.6）：`AiReplySuggestionsService`（确定性启发式，无外部 LLM，与 ContentAssistant / scheduling-recommend 同风格）：`suggest(commentId, signal)` → `{signal:{intent,score,topics}, suggestions:[{variant,confidence,text}]×2}`；意图分类 `complaint|praise|question|neutral`（强负+score<-0.25 complaint / 疑问词短评 question / 正 / neutral）；主题抽取 中英关键词映射 quality/service/shipping/refund/delivery/bug/pricing/support 最多 3；主变体 `variantFor`（complaint → empathetic 或 purchaser/high-like professional / praise → grateful / question → helpful / verified → professional / 其他 enrolling）+ `fallbackFor`；`scoreVariant` 基础分 + 主变体提升 + 高互动 complaint 向 professional 倾斜，钳 0.2–0.99；5 类模板 variants empathetic/grateful/enrolling/helpful/professional 中英分支（isChinese 自动识别）；`EngagementService.aiSuggestReplies(commentId)` 查信号并委托；`EngagementModule` 注册 provider；控制器 `GET /engagement/comments/:id/reply-suggestions`（`JwtAuthGuard` + Swagger）；单测 **15**（engine 8 + engagement.service 2 + controller 1 proxy），511 测试 / 46 套件全绿，typecheck 全绿。
 
@@ -312,7 +329,7 @@
 
 ### 🔧 技术债务/质量改进
 - [ ] 真实 AI 接入 — ContentAssistant/适配器/异常检测当前全是确定性启发式
-- [ ] WYSIWYG 编辑器 — PRD §3.3 要求 Markdown + 所见即所得双模式
+- [x] WYSIWYG 编辑器（M30b ✅）— TipTap 富文本编辑器 + Markdown 双模式切换，集成到编辑页和新建内容页
 - [x] OAuth callback 硬编码修正（M39）— oauth-callback.ts 共享 resolver（OAUTH_CALLBACK_BASE env → per-platform redirect_uri，`AdapterBase.callbackFor(platform)` helper）；7 个适配器全部改用；spec 3 默认宿/路径拼接/小写 slug
 - [ ] 平台 SDK mock→真实调用 — 抖音/小红书/公众号/视频号/微博 publish() 占位 URL
 - [ ] 数据库 migration 文件 — 当前仅 Prisma schema

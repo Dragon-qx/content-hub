@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { Button, Card, Input, Select, Textarea, Badge, StatusBadge } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
 import MarkdownEditor, { renderMarkdown } from '@/components/MarkdownEditor';
+import WysiwygEditor from '@/components/WysiwygEditor';
 import MediaLibrary from '@/components/MediaLibrary';
 import AdaptationPreview from '@/components/AdaptationPreview';
 import TemplatePicker from '@/components/TemplatePicker';
@@ -69,6 +70,7 @@ function ContentDetail({ id }: { id: string }) {
   const [editing, setEditing] = useState(false);
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editorMode, setEditorMode] = useState<'wysiwyg' | 'markdown'>('markdown');
 
   // New version
   const [changeNote, setChangeNote] = useState('');
@@ -341,13 +343,33 @@ function ContentDetail({ id }: { id: string }) {
                 onCancel={() => setShowTemplates(false)}
               />
             )}
-            <MarkdownEditor
-              value={body}
-              onChange={setBody}
-              placeholder="Write content in Markdown…"
-              contentId={id}
-              onInsertMedia={() => setShowMedia(true)}
-            />
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-slate-500">Editor mode</span>
+              <button
+                type="button"
+                onClick={() => setEditorMode((m) => (m === 'markdown' ? 'wysiwyg' : 'markdown'))}
+                className="rounded border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Switch to {editorMode === 'markdown' ? 'Rich text' : 'Markdown'}
+              </button>
+            </div>
+            {editorMode === 'markdown' ? (
+              <MarkdownEditor
+                value={body}
+                onChange={setBody}
+                placeholder="Write content in Markdown…"
+                contentId={id}
+                onInsertMedia={() => setShowMedia(true)}
+              />
+            ) : (
+              <WysiwygEditor
+                value={body}
+                onChange={setBody}
+                placeholder="Write content…"
+                contentId={id}
+                onInsertMedia={() => setShowMedia(true)}
+              />
+            )}
           </div>
         ) : (
           <Preview body={content.body} />

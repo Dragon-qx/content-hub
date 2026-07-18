@@ -38,7 +38,7 @@
 - [x] CI/CD 配置（GitHub Actions `.github/workflows/ci.yml`：lint+typecheck→build→test→e2e→openapi→deploy ✅）
 - [x] 生产环境部署配置（`docker-compose.prod.yml` + `Dockerfile.api` + `Dockerfile.web` + `docker-entrypoint.sh` + `nginx.conf` ✅）
 - [x] API 文档（Swagger `deepScanRoutes` + `/api/docs-json` + `scripts/export-openapi.ts` + CI OpenAPI artifact ✅）
-- [ ] 用户手册（docs/USER-GUIDE.md）
+- [x] 用户手册（docs/USER-GUIDE.md 14 章 376 行）
 
 ## 🔥 铁律：每次完成必须记录
 
@@ -89,12 +89,19 @@
 #### 🟢 低优先级（锦上添花）
 
 - [ ] **自定义报表（拖拽生成）** — PRD §3.5 P2，用户拖拽字段生成自定义报表
-- [ ] **账号健康度指标阈值告警** — PRD §3.2，健康度低于阈值自动告警
+- [ ] **账号健康度指标阈值告警** — PRD §3.2：健康度低于阈值自动告警
+  - 待推进：`HealthMonitorService` 的阈值告警扩展（新增 `threshold_alert` 级别，自动发通知）
 
 #### 🔧 技术债务 & 质量改进
 
 - [ ] **真实 AI 接入** — ContentAssistant/适配器/异常检测当前全是确定性启发式，需接入真实 LLM（OpenAI/Claude API）
-- [ ] **WYSIWYG 编辑器** — PRD §3.3 要求 Markdown + 所见即所得双模式，当前仅 Markdown（可集成 TipTap/Slate）
+- [x] **WYSIWYG 编辑器**（M30b ✅）— PRD §3.3 要求 Markdown + 所见即所得双模式：
+  - 已创建 `apps/web/src/components/WysiwygEditor.tsx`：基于 TipTap 的富文本编辑器，包含 B/H1/H2/H3/bullet/ordered/quote/code/link 工具栏，HTML↔Markdown 双向转换（turndown），拖拽上传图片
+  - 已在 `apps/web/package.json` 添加 `@tiptap/react @tiptap/starter-kit @tiptap/extension-image @tiptap/extension-link turndown`（dependencies）+ `@types/turndown`（devDependencies）
+  - **集成到编辑页面**：
+    - `contents/[id]/page.tsx`：工具栏新增「切换编辑器」按钮，状态 Rich text ↔ Markdown，共享 `body` 状态，表单操作（save/version/rollback）不受影响
+    - `content/page.tsx`：新建内容默认 WYSIWYG，Template 表单亦支持切换
+  - typecheck 全绿（修复 TipTap v3 `setContent` API + turndown 类型声明）
 - [x] **OAuth callback 硬编码修正**（M39 ✅）：新增 `packages/platform-sdk/src/oauth-callback.ts`：`OAUTH_CALLBACK_BASE = process.env.OAUTH_CALLBACK_BASE?.replace(/\/+$/,{}) ?? 'https://your-domain.com'` + `callbackUrlFor(platform) = ${BASE}/callback/${platform.toLowerCase()}` + `encodedCallbackFor`；`AdapterBase.callbackFor(platform)` 受保 helper 复用；所有 8 个适配器（douyin/twitter/weibo/bilibili/wechat-official/wechat-video/youtube/xiaohongshu）均从内联 `https://your-domain.com/callback/{platform}` 改为 `this.callbackFor()`（Twitter/Weibo/YouTube 同时修 query+body 两处）；`.env.example` 增 `OAUTH_CALLBACK_BASE=` 注释；单测 `oauth-callback.spec.ts` 3（默认宿/路径拼接/小写 slug）；`platform-sdk` 包现有适配测试 43 + 新 3 = 46 全绿；API 527 不变
 - [ ] **平台 SDK mock→真实调用** — 抖音/小红书/公众号/视频号/微博 publish() 返回占位 URL，逐步接入真实平台 API
 - [ ] **数据库迁移 SQL 文件** — 当前仅 Prisma schema，缺少版本化 migration 文件

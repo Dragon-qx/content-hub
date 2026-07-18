@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { Button, Card, Input, Select, Badge } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
 import MarkdownEditor from '@/components/MarkdownEditor';
+import WysiwygEditor from '@/components/WysiwygEditor';
 import { Table } from '@/components/Table';
 import {
   Content,
@@ -35,6 +36,7 @@ export default function ContentPage() {
   const [teamId, setTeamId] = useState('default-team');
   const [tagsInput, setTagsInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [editorMode, setEditorMode] = useState<'wysiwyg' | 'markdown'>('wysiwyg');
 
   const load = async () => {
     setLoading(true);
@@ -87,6 +89,7 @@ export default function ContentPage() {
   const [tplTags, setTplTags] = useState('');
   const [tplSaving, setTplSaving] = useState(false);
   const [tplError, setTplError] = useState<string | null>(null);
+  const [tplEditorMode, setTplEditorMode] = useState<'wysiwyg' | 'markdown'>('markdown');
 
   const loadTemplates = async () => {
     try {
@@ -197,7 +200,21 @@ export default function ContentPage() {
         {showTemplateForm && (
           <form onSubmit={saveTemplate} className="mb-4 flex flex-col gap-3 rounded-lg border border-slate-200 p-4">
             <Input placeholder="Template title" value={tplTitle} onChange={(e) => setTplTitle(e.target.value)} required />
-            <MarkdownEditor value={tplBody} onChange={setTplBody} placeholder="Template body (Markdown)…" />
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-slate-500">Editor mode</span>
+              <button
+                type="button"
+                onClick={() => setTplEditorMode((m) => (m === 'markdown' ? 'wysiwyg' : 'markdown'))}
+                className="rounded border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Switch to {tplEditorMode === 'markdown' ? 'Rich text' : 'Markdown'}
+              </button>
+            </div>
+            {tplEditorMode === 'markdown' ? (
+              <MarkdownEditor value={tplBody} onChange={setTplBody} placeholder="Template body (Markdown)…" />
+            ) : (
+              <WysiwygEditor value={tplBody} onChange={setTplBody} placeholder="Template body…" />
+            )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <Select value={tplType} onChange={(e) => setTplType(e.target.value)}>
                 {CONTENT_TYPES.map((t) => (
@@ -251,11 +268,29 @@ export default function ContentPage() {
         <Card className="mb-6">
           <form onSubmit={submit} className="flex flex-col gap-3">
             <Input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
-            <MarkdownEditor
-              value={body}
-              onChange={setBody}
-              placeholder="Write your content (Markdown supported)…"
-            />
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-slate-500">Editor mode</span>
+              <button
+                type="button"
+                onClick={() => setEditorMode((m) => (m === 'markdown' ? 'wysiwyg' : 'markdown'))}
+                className="rounded border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Switch to {editorMode === 'markdown' ? 'Rich text' : 'Markdown'}
+              </button>
+            </div>
+            {editorMode === 'markdown' ? (
+              <MarkdownEditor
+                value={body}
+                onChange={setBody}
+                placeholder="Write your content (Markdown supported)…"
+              />
+            ) : (
+              <WysiwygEditor
+                value={body}
+                onChange={setBody}
+                placeholder="Write your content…"
+              />
+            )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <Select value={contentType} onChange={(e) => setContentType(e.target.value)}>
                 {CONTENT_TYPES.map((t) => (
