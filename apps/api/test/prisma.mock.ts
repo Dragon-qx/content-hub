@@ -45,6 +45,18 @@ export const mockPrisma = () => ({
     delete: jest.fn(),
     count: jest.fn(),
   },
+  wallet: {
+    create: jest.fn(),
+    findUnique: jest.fn(),
+    findFirst: jest.fn(),
+    update: jest.fn(),
+    count: jest.fn(),
+  },
+  walletTransaction: {
+    create: jest.fn(),
+    findMany: jest.fn().mockResolvedValue([]),
+    count: jest.fn().mockResolvedValue(0),
+  },
   content: {
     findUnique: jest.fn(),
     findMany: jest.fn(),

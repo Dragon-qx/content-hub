@@ -23,6 +23,7 @@ import { WorkflowModule } from './modules/workflow/workflow.module';
 import { UserModule } from './modules/user/user.module';
 import { EngagementModule } from './modules/engagement/engagement.module';
 import { HealthModule } from './modules/health/health.module';
+import { WalletModule } from './modules/wallet/wallet.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { HealthModule } from './modules/health/health.module';
     NotificationModule,
     HealthModule,
     EngagementModule,
+    WalletModule,
   ],
   controllers: [AppController],
   providers: [
