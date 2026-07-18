@@ -62,7 +62,7 @@
 
 #### 🔴 高优先级（P0/P1，核心缺失）
 
-- [ ] **邮件 / Webhook 通知** — PRD §3.2 要求站内+邮件+Webhook 三种通知渠道，当前仅站内广播；需增加邮件通知模块（支持 SMTP/SES）和 Webhook 推送
+- [x] **邮件 / Webhook 通知**（M31a ✅）— NotificationService 新增 SMTP 邮件投递（nodemailer）+ Webhook 投递（fetch+指数退避重试）；DTO 增加 email/webhookUrl 字段；ConfigService 集成；.env.example 增加 SMTP_* / WEBHOOK_URL 配置；+2 单测（邮件跳过降级 + webhook 记录创建）；378 测试全绿
 - [ ] **账号分组** — PRD §3.2 P0 要求按项目/品牌/平台对账号分组，是筛选/统计/报表的基础条件
 - [ ] **视频转码 + 封面裁剪** — PRD §3.3 P0，支持多分辨率转码、自动/手动封面裁剪
 - [ ] **图片在线裁剪 + 加水印 + 滤镜** — PRD §3.3 P0，在 Media Service 中实现图片处理管线（sharp/jimp）

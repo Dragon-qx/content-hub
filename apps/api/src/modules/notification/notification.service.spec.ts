@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotificationService } from './notification.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -12,6 +13,15 @@ const mockPrisma = () => ({
   },
   member: { findMany: jest.fn().mockResolvedValue([]) },
   team: { findUnique: jest.fn().mockResolvedValue(null) },
+  user: { findUnique: jest.fn().mockResolvedValue({ email: 'user@example.com' }) },
+});
+
+const mockConfig = () => ({
+  get: jest.fn((key: string, fallback?: string) => {
+    if (key === 'SMTP_HOST') return null;
+    if (key === 'SMTP_FROM') return 'ContentHub <no-reply@contenthub.dev>';
+    return fallback;
+  }),
 });
 
 describe('NotificationService', () => {
@@ -24,6 +34,7 @@ describe('NotificationService', () => {
       providers: [
         NotificationService,
         { provide: PrismaService, useValue: prisma },
+        { provide: ConfigService, useValue: mockConfig() },
       ],
     }).compile();
 
@@ -79,5 +90,30 @@ describe('NotificationService', () => {
     expect(prisma.notification.findMany.mock.calls[0][0]).toMatchObject({
       where: { userId: 'u1', read: false },
     });
+  });
+
+  it('email channel: record is created even when SMTP is not configured (best-effort)', async () => {
+    prisma.notification.create.mockResolvedValue({ id: 'n-email', channel: 'email' });
+    const result = await service.create({
+      userId: 'u1',
+      channel: 'email',
+      title: 'Your weekly report',
+      body: 'Your content performed well',
+    });
+    expect(result.channel).toBe('email');
+    // SMTP not configured in this test → delivery silently skipped, no throw.
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('webhook channel: record is created (delivery is best-effort)', async () => {
+    prisma.notification.create.mockResolvedValue({ id: 'n-wh', channel: 'webhook' });
+    const result = await service.create({
+      userId: 'u1',
+      channel: 'webhook',
+      webhookUrl: 'https://example.com/hook',
+      title: 'Alert',
+      body: 'Something happened',
+    });
+    expect(result.channel).toBe('webhook');
   });
 });

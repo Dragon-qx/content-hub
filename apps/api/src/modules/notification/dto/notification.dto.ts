@@ -28,21 +28,31 @@ export class CreateNotificationDto {
   @IsEnum(['in_app', 'email', 'webhook'])
   channel?: 'in_app' | 'email' | 'webhook' = 'in_app';
 
-  @ApiProperty({ description: 'Notification title', maxLength: 200 })
+  @ApiProperty({ description: 'Notification title', maxLength: 256 })
   @IsString()
   @MinLength(1)
-  @MaxLength(200)
+  @MaxLength(256)
   title: string;
 
-  @ApiProperty({ description: 'Notification body', maxLength: 2000 })
+  @ApiProperty({ description: 'Notification body', maxLength: 4096 })
   @IsString()
-  @MaxLength(2000)
+  @MaxLength(4096)
   body: string;
 
   @ApiPropertyOptional({ description: 'Deep-link URL' })
   @IsOptional()
   @IsString()
   link?: string;
+
+  @ApiPropertyOptional({ description: 'Email recipient override (defaults to user.email)' })
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @ApiPropertyOptional({ description: 'Webhook URL override (defaults to WEBHOOK_URL env)' })
+  @IsOptional()
+  @IsString()
+  webhookUrl?: string;
 
   @ApiPropertyOptional({ description: 'Arbitrary JSON metadata' })
   @IsOptional()
