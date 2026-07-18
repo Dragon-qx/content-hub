@@ -4,6 +4,7 @@ import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AnalyticsQueryDto, HistoryQueryDto, TopContentQueryDto } from './dto/analytics-query.dto';
 import { SnapshotCreateDto } from './dto/snapshot-create.dto';
+import { AnomalyAlertsQueryDto, ScanAnomalyDto } from './dto/anomaly.dto';
 
 @Controller('analytics')
 @UseGuards(JwtAuthGuard)
@@ -58,5 +59,47 @@ export class AnalyticsController {
     @Body() dto: SnapshotCreateDto,
   ) {
     return this.analytics.recordSnapshot(accountId, dto);
+  }
+
+  // ── Anomaly detection (PRD §3.5) ───────────────────────────────────────
+
+  /** Detect anomalies for one account across all monitored metrics. */
+  @Get('anomalies/:accountId')
+  async getAnomalies(@Param('accountId') accountId: string) {
+    const anomalies = await this.analytics.detectAccountAnomalies(accountId);
+    return { accountId, anomalies, generatedAt: new Date().toISOString() };
+  }
+
+  /**
+   * Trigger an on-demand scan. With no body or no accountId, scans every
+   * active account; otherwise scans the one named account. Set notify:false to
+   * suppress the team broadcast (useful for a dry preview).
+   */
+  @Post('anomalies/scan')
+  async scanAnomalies(@Body() dto: ScanAnomalyDto) {
+    if (dto.accountId) {
+      const anomalies = await this.analytics.detectAccountAnomalies(
+        dto.accountId,
+      );
+      let notified = false;
+      if (dto.notify !== false && anomalies.length > 0) {
+        const r = await this.analytics.scanAccountAndAlert(dto.accountId);
+        notified = r.notified;
+      }
+      return {
+        accountId: dto.accountId,
+        anomalies,
+        notified,
+      };
+    }
+
+    const results = await this.analytics.scanAllAndAlert();
+    return { scanned: results.length, results };
+  }
+
+  /** Recent anomaly alert broadcast records (for the audit surface). */
+  @Get('anomaly-alerts')
+  listAlerts(@Query() query: AnomalyAlertsQueryDto) {
+    return this.analytics.listAlerts(query);
   }
 }

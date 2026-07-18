@@ -300,6 +300,42 @@ export const METRIC_LABELS: Record<AnalyticsMetric, string> = {
 export const TREND_PERIODS = ['7d', '30d', '90d'] as const;
 export type TrendPeriod = (typeof TREND_PERIODS)[number];
 
+// ── Anomaly detection (PRD §3.5) ───────────────────────────────────────
+
+/** An anomaly type mirrors the backend Anomaly.type for the dashboard badge. */
+export type AnomalyType =
+  | 'DROP_SPIKE'
+  | 'SURGE'
+  | 'SUSTAINED_DECLINE'
+  | 'CLIFF_DROP'
+  | 'FOLLOWER_LOSS';
+
+export type AnomalySeverity = 'critical' | 'warning';
+
+export interface Anomaly {
+  type: AnomalyType;
+  metric: string;
+  severity: AnomalySeverity;
+  message: string;
+  currentValue: number;
+  baselineValue: number;
+  changePercent: number;
+  date: string;
+}
+
+export const ANOMALY_TYPE_LABELS: Record<AnomalyType, string> = {
+  DROP_SPIKE: 'Drop spike',
+  SURGE: 'Surge',
+  SUSTAINED_DECLINE: 'Sustained decline',
+  CLIFF_DROP: 'Cliff drop',
+  FOLLOWER_LOSS: 'Follower loss',
+};
+
+export const ANOMALY_SEVERITY_TONE: Record<AnomalySeverity, 'danger' | 'warning'> = {
+  critical: 'danger',
+  warning: 'warning',
+};
+
 export const NOTIFICATION_TONE: Record<NotificationType, 'neutral' | 'success' | 'warning' | 'danger'> = {
   info: 'neutral',
   success: 'success',

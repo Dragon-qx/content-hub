@@ -2,10 +2,12 @@ import { Test } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { NotificationService } from '../notification/notification.service';
 
 describe('AnalyticsService', () => {
   let service: AnalyticsService;
   let prisma: any;
+  let notifications: any;
 
   beforeEach(async () => {
     prisma = {
@@ -25,12 +27,21 @@ describe('AnalyticsService', () => {
       auditLog: {
         findMany: jest.fn(),
       },
+      anomalyAlert: {
+        findFirst: jest.fn(),
+        create: jest.fn(),
+        findMany: jest.fn(),
+      },
+    };
+    notifications = {
+      broadcastToTeam: jest.fn().mockResolvedValue({ count: 0 }),
     };
 
     const module = await Test.createTestingModule({
       providers: [
         AnalyticsService,
         { provide: PrismaService, useValue: prisma },
+        { provide: NotificationService, useValue: notifications },
       ],
     }).compile();
 
@@ -345,6 +356,145 @@ describe('AnalyticsService', () => {
 
       const result = await service.recordSnapshot('a1', {});
       expect(result).toHaveProperty('accountId', 'a1');
+    });
+  });
+
+  // ── Anomaly detection engine (PRD §3.5) ────────────────────────────────
+
+  describe('detectAccountAnomalies', () => {
+    it('builds a daily series per metric and surfaces anomalies', async () => {
+      prisma.socialAccount.findUnique.mockResolvedValue({
+        id: 'a1',
+        accountName: 'Test',
+        teamId: 't1',
+      });
+      // 8 days at impressions=100, then a cliff to 10 on the latest day.
+      const rows = [];
+      const base = new Date();
+      for (let i = 7; i >= 1; i--) {
+        const d = new Date(base);
+        d.setDate(d.getDate() - i);
+        rows.push({ accountId: 'a1', snapshotDate: d, impressions: 100 });
+      }
+      const last = new Date(base);
+      rows.push({ accountId: 'a1', snapshotDate: last, impressions: 10 });
+      prisma.analyticsSnapshot.findMany.mockResolvedValue(rows);
+
+      const result = await service.detectAccountAnomalies('a1');
+
+      expect(result.length).toBeGreaterThan(0);
+      // The 10 vs 1000-ish cliff should yield a CLIFF_DROP and/or DROP_SPIKE.
+      expect(result.some((a) => a.type === 'CLIFF_DROP' || a.type === 'DROP_SPIKE')).toBe(true);
+    });
+
+    it('returns an empty array when there is no history', async () => {
+      prisma.socialAccount.findUnique.mockResolvedValue({
+        id: 'a1',
+        accountName: 'Test',
+        teamId: 't1',
+      });
+      prisma.analyticsSnapshot.findMany.mockResolvedValue([]);
+
+      const result = await service.detectAccountAnomalies('a1');
+      expect(result).toEqual([]);
+    });
+
+    it('throws NotFoundException for a missing account', async () => {
+      prisma.socialAccount.findUnique.mockResolvedValue(null);
+      await expect(service.detectAccountAnomalies('nope')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('scanAccountAndAlert', () => {
+    it('broadcasts to the team when anomalies are new', async () => {
+      // Detector: a cliff on impressions.
+      prisma.socialAccount.findUnique
+        .mockResolvedValueOnce({ id: 'a1', accountName: 'Test', teamId: 't1' }) // detect
+        .mockResolvedValueOnce({
+          id: 'a1',
+          accountName: 'Test',
+          teamId: 't1',
+          platform: 'DOUYIN',
+        }); // alert
+      const rows = [
+        { accountId: 'a1', snapshotDate: new Date(Date.now() - 86400000), impressions: 100 },
+        { accountId: 'a1', snapshotDate: new Date(), impressions: 10 },
+      ];
+      prisma.analyticsSnapshot.findMany.mockResolvedValue(rows);
+      prisma.anomalyAlert.findFirst.mockResolvedValue(null); // no prior alert
+
+      const result = await service.scanAccountAndAlert('a1');
+
+      expect(result.notified).toBe(true);
+      expect(result.anomalies).toBeGreaterThan(0);
+      expect(notifications.broadcastToTeam).toHaveBeenCalledTimes(1);
+      expect(prisma.anomalyAlert.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not re-alert when the signature is unchanged', async () => {
+      prisma.socialAccount.findUnique
+        .mockResolvedValueOnce({ id: 'a1', accountName: 'Test', teamId: 't1' })
+        .mockResolvedValueOnce({
+          id: 'a1',
+          accountName: 'Test',
+          teamId: 't1',
+          platform: 'DOUYIN',
+        });
+      const rows = [
+        { accountId: 'a1', snapshotDate: new Date(Date.now() - 86400000), impressions: 100 },
+        { accountId: 'a1', snapshotDate: new Date(), impressions: 10 },
+      ];
+      prisma.analyticsSnapshot.findMany.mockResolvedValue(rows);
+      // Prior alert with the same computed signature → stay quiet.
+      prisma.anomalyAlert.findFirst.mockResolvedValue({
+        id: 'p1',
+        signature: 'CLIFF_DROP:impressions',
+      });
+
+      const result = await service.scanAccountAndAlert('a1');
+
+      expect(result.notified).toBe(false);
+      expect(notifications.broadcastToTeam).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('scanAllAndAlert', () => {
+    it('scans every active account and returns a summary', async () => {
+      prisma.socialAccount.findMany.mockResolvedValue([
+        { id: 'a1' },
+        { id: 'a2' },
+      ]);
+      prisma.socialAccount.findUnique
+        .mockResolvedValueOnce({ id: 'a1', accountName: 'A', teamId: 't1' })
+        .mockResolvedValueOnce({ id: 'a1', accountName: 'A', teamId: 't1', platform: 'DOUYIN' })
+        .mockResolvedValueOnce({ id: 'a2', accountName: 'B', teamId: 't1' })
+        .mockResolvedValueOnce({ id: 'a2', accountName: 'B', teamId: 't1', platform: 'DOUYIN' });
+      prisma.analyticsSnapshot.findMany.mockResolvedValue([]);
+      prisma.anomalyAlert.findFirst.mockResolvedValue(null);
+
+      const results = await service.scanAllAndAlert();
+
+      expect(results.length).toBe(2);
+      // No history means no anomalies → count 0 for both.
+      expect(results[0].anomalies).toBe(0);
+      expect(results[1].anomalies).toBe(0);
+      expect(notifications.broadcastToTeam).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listAlerts', () => {
+    it('delegates to prisma with the supplied filters', async () => {
+      prisma.anomalyAlert.findMany.mockResolvedValue([{ id: 'x1' }]);
+      const result = await service.listAlerts({ teamId: 't1', take: 10 });
+      expect(prisma.anomalyAlert.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { teamId: 't1' },
+          take: 10,
+        }),
+      );
+      expect(result).toEqual([{ id: 'x1' }]);
     });
   });
 });

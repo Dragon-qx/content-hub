@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { api, downloadFile } from '@/lib/api';
-import { Button, Card, Select } from '@/lib/ui';
+import { Badge, Button, Card, Select } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
 import TrendChart from '@/components/TrendChart';
 import {
   AnalyticsMetric,
   ANALYTICS_METRICS,
+  Anomaly,
+  ANOMALY_SEVERITY_TONE,
+  ANOMALY_TYPE_LABELS,
   METRIC_LABELS,
   TrendPeriod,
   TREND_PERIODS,
@@ -55,6 +58,38 @@ export default function AnalyticsPage() {
   const [metric, setMetric] = useState<AnalyticsMetric>('impressions');
   const [period, setPeriod] = useState<TrendPeriod>('30d');
   const [trendLoading, setTrendLoading] = useState(false);
+
+  // Anomaly detection results (PRD §3.5) — scanned on demand / on load.
+  const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
+  const [anomalyLoading, setAnomalyLoading] = useState(false);
+  const [anomalyError, setAnomalyError] = useState<string | null>(null);
+
+  const scanAnomalies = async () => {
+    setAnomalyLoading(true);
+    setAnomalyError(null);
+    try {
+      const res = await api.post<{
+        scanned?: number;
+        results?: { accountId: string; anomalies: number }[];
+        anomalies?: Anomaly[];
+      }>('/analytics/anomalies/scan', { notify: false });
+      // A single-account scan returns anomalies inline; a full scan returns a
+      // summary. There is no single combined list for "all accounts", so we
+      // surface the count and keep any inline anomalies.
+      const inline = res.anomalies ?? [];
+      setAnomalies(inline);
+      if (!res.anomalies && res.results) {
+        setAnomalyError(
+          `Scanned ${res.scanned ?? 0} account(s). Run per-account to view details.`,
+        );
+      }
+    } catch {
+      setAnomalyError('Anomaly scan failed');
+      setAnomalies([]);
+    } finally {
+      setAnomalyLoading(false);
+    }
+  };
 
   // Overview + top content + platform breakdown.
   useEffect(() => {
@@ -111,7 +146,14 @@ export default function AnalyticsPage() {
       <PageHeader
         title="Analytics"
         subtitle="Performance across your platforms"
-        actions={<Button variant="secondary" onClick={exportCsv}>Export CSV</Button>}
+        actions={
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={scanAnomalies} disabled={anomalyLoading}>
+              {anomalyLoading ? 'Scanning…' : 'Scan anomalies'}
+            </Button>
+            <Button variant="secondary" onClick={exportCsv}>Export CSV</Button>
+          </div>
+        }
       />
 
       {loading ? (
@@ -137,6 +179,52 @@ export default function AnalyticsPage() {
               </Card>
             ))}
           </div>
+
+          {/* Anomaly detection panel (PRD §3.5) */}
+          <Card>
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-semibold">Anomaly detection</h2>
+                {anomalies.length > 0 && (
+                  <Badge tone="danger">{anomalies.length} firing</Badge>
+                )}
+              </div>
+              <Button variant="ghost" onClick={scanAnomalies} disabled={anomalyLoading}>
+                {anomalyLoading ? 'Scanning…' : 'Refresh'}
+              </Button>
+            </div>
+            {anomalyError && !anomalies.length ? (
+              <p className="text-sm text-slate-400">{anomalyError}</p>
+            ) : anomalies.length > 0 ? (
+              <ul className="flex flex-col gap-2">
+                {anomalies.map((a, i) => (
+                  <li
+                    key={`${a.type}-${a.metric}-${i}`}
+                    className="flex items-start justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2 text-sm"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Badge tone={ANOMALY_SEVERITY_TONE[a.severity]}>
+                        {ANOMALY_TYPE_LABELS[a.type]}
+                      </Badge>
+                      <span className="text-slate-700">{a.message}</span>
+                    </div>
+                    <span
+                      className={`shrink-0 text-xs ${
+                        a.changePercent < 0 ? 'text-red-500' : 'text-emerald-600'
+                      }`}
+                    >
+                      {a.changePercent > 0 ? '+' : ''}
+                      {a.changePercent}%
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-slate-400">
+                No anomalies detected. Run a scan to analyse recent metric history.
+              </p>
+            )}
+          </Card>
 
           {/* Trend chart with selectors */}
           <Card>

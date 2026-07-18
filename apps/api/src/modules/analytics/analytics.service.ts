@@ -1,6 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { NotificationService } from '../notification/notification.service';
+import {
+  Anomaly,
+  SeriesPoint,
+  detectAnomaliesForMetric,
+} from './anomaly.detector';
 
 /** A numeric metric tracked per account (the columns summed in analytics). */
 export type AnalyticsMetric =
@@ -47,7 +53,12 @@ export interface SnapshotInput {
  */
 @Injectable()
 export class AnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(AnalyticsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationService,
+  ) {}
 
   // ===== 1. 团队数据总览 =====
 
@@ -315,7 +326,154 @@ export class AnalyticsService {
     };
   }
 
-  // ===== 6. 手动快照 =====
+  // ===== 6. 异常检测引擎 (PRD §3.5) =====
+
+  /**
+   * Convert raw AnalyticsSnapshot rows into a daily series for one metric,
+   * taking the latest snapshot per calendar day per account. `null` values are
+   * treated as missing (skipped) so they don't poison the average.
+   */
+  private buildSeries(
+    rows: Prisma.AnalyticsSnapshotGetPayload<{}>[],
+    metric: AnalyticsMetric,
+  ): SeriesPoint[] {
+    const byDay = new Map<string, Prisma.AnalyticsSnapshotGetPayload<{}>>();
+    for (const r of rows) {
+      const day = new Date(r.snapshotDate).toISOString().split('T')[0];
+      const existing = byDay.get(day);
+      if (!existing || new Date(r.snapshotDate) > new Date(existing.snapshotDate)) {
+        byDay.set(day, r);
+      }
+    }
+    return [...byDay.entries()]
+      .map(([date, snap]) => ({ date, value: snap[metric] ?? 0 }))
+      .filter((p) => p.value !== null && p.value !== undefined) as SeriesPoint[];
+  }
+
+  /** Detect anomalies across all monitored metrics for one account. */
+  async detectAccountAnomalies(accountId: string): Promise<Anomaly[]> {
+    const account = await this.prisma.socialAccount.findUnique({
+      where: { id: accountId },
+      select: { id: true, accountName: true, teamId: true },
+    });
+    if (!account) throw new NotFoundException(`Account ${accountId} not found`);
+
+    // Pull the recent history (last ~30 days) once, then slice per metric.
+    const since = new Date();
+    since.setDate(since.getDate() - 30);
+    const rows = await this.prisma.analyticsSnapshot.findMany({
+      where: { accountId, snapshotDate: { gte: since } },
+      orderBy: { snapshotDate: 'asc' },
+    });
+
+    const anomalies: Anomaly[] = [];
+    for (const metric of METRIC_KEYS) {
+      const series = this.buildSeries(rows, metric);
+      anomalies.push(...detectAnomaliesForMetric(series, metric));
+    }
+    return anomalies;
+  }
+
+  /**
+   * Scan every monitored metric for one account and broadcast anomalies to the
+   * account's team. Uses a turnstile (one alert per signature) so a persistent
+   * anomaly does not spam the team on every tick.
+   */
+  async scanAccountAndAlert(accountId: string): Promise<{
+    accountId: string;
+    anomalies: number;
+    notified: boolean;
+  }> {
+    const anomalies = await this.detectAccountAnomalies(accountId);
+    if (anomalies.length === 0) return { accountId, anomalies: 0, notified: false };
+
+    const account = await this.prisma.socialAccount.findUnique({
+      where: { id: accountId },
+      select: { accountName: true, teamId: true, platform: true },
+    });
+    if (!account) {
+      return { accountId, anomalies: anomalies.length, notified: false };
+    }
+
+    // A signature summarises *what* is firing; if it is unchanged since the
+    // last alert we stay quiet (the team already knows about it).
+    const signature = anomalies
+      .map((a) => `${a.type}:${a.metric}`)
+      .sort()
+      .join('|');
+    const existing = await this.prisma.anomalyAlert.findFirst({
+      where: { accountId },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existing && existing.signature === signature) {
+      return { accountId, anomalies: anomalies.length, notified: false };
+    }
+
+    try {
+      await this.notifications.broadcastToTeam(account.teamId, {
+        type: 'warning',
+        title: `Analytics anomaly on ${account.platform}`,
+        body: `${account.accountName}: ${anomalies.length} anomaly(s) detected — ${anomalies
+          .map((a) => a.message)
+          .slice(0, 3)
+          .join('; ')}`,
+        link: '/analytics',
+        metadata: { account: accountId, count: anomalies.length, signature },
+      });
+    } catch (err) {
+      // Alerting must never break the scan pipeline.
+      this.logger.warn(
+        `Anomaly alert broadcast failed for ${accountId}: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    }
+
+    // Record the alert signature so the next tick is deduped.
+    await this.prisma.anomalyAlert.create({
+      data: { accountId, teamId: account.teamId, signature, count: anomalies.length },
+    });
+
+    return { accountId, anomalies: anomalies.length, notified: true };
+  }
+
+  /** Scan all accounts and alert each team. Returns a per-account summary. */
+  async scanAllAndAlert(): Promise<
+    { accountId: string; anomalies: number; notified: boolean }[]
+  > {
+    const accounts = await this.prisma.socialAccount.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true },
+      distinct: ['id'],
+    });
+    const results = [];
+    for (const acc of accounts) {
+      try {
+        results.push(await this.scanAccountAndAlert(acc.id));
+      } catch (err) {
+        this.logger.warn(
+          `Anomaly scan skipped account ${acc.id}: ${
+            err instanceof Error ? err.message : err
+          }`,
+        );
+      }
+    }
+    return results;
+  }
+
+  /** Fetch the most recent alert records (for an admin/audit surface). */
+  listAlerts(params: { teamId?: string; accountId?: string; take?: number }) {
+    const where: Prisma.AnomalyAlertWhereInput = {};
+    if (params.accountId) where.accountId = params.accountId;
+    if (params.teamId) where.teamId = params.teamId;
+    return this.prisma.anomalyAlert.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: params.take ?? 50,
+    });
+  }
+
+  // ===== 7. 手动快照 =====
 
   async recordSnapshot(accountId: string, data?: SnapshotInput) {
     const snapshotDate = data?.snapshotDate ? new Date(data.snapshotDate) : new Date();

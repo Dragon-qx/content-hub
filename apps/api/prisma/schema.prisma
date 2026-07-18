@@ -71,6 +71,7 @@ model SocialAccount {
   publishJobs     PublishJob[]
   comments        EngagementComment[]
   messages        EngagementMessage[]
+  anomalyAlerts   AnomalyAlert[]
 
   @@unique([platform, accountId])
 }
@@ -185,6 +186,24 @@ model AnalyticsSnapshot {
   createdAt       DateTime        @default(now())
 
   @@unique([accountId, snapshotDate])
+}
+
+/// Record of an anomaly-detection alert broadcast to a team. The `signature`
+/// field summarises which (type, metric) tuples fired, so consecutive polling
+/// ticks only re-alert when the set of active anomalies *changes* — preventing
+/// a persistent outage from spamming the team.
+model AnomalyAlert {
+  id         String        @id @default(cuid())
+  accountId  String
+  account    SocialAccount @relation(fields: [accountId], references: [id])
+  teamId     String
+  /// Pipe-joined list of `type:metric` that fired (sorted alphabetically).
+  signature  String
+  count      Int           @default(0)
+  createdAt  DateTime      @default(now())
+
+  @@index([accountId, createdAt])
+  @@index([teamId, createdAt])
 }
 
 // Enums

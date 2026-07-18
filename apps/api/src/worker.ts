@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { SchedulerService } from './modules/scheduler/scheduler.service';
 import { EngagementService } from './modules/engagement/engagement.service';
+import { AnalyticsService } from './modules/analytics/analytics.service';
 
 const POLL_INTERVAL_MS = Number(process.env.WORKER_POLL_INTERVAL_MS ?? 10_000);
 const BATCH_SIZE = Number(process.env.WORKER_BATCH_SIZE ?? 5);
@@ -14,6 +15,15 @@ const BATCH_SIZE = Number(process.env.WORKER_BATCH_SIZE ?? 5);
  */
 const ENGAGEMENT_SYNC_INTERVAL_MS = Number(
   process.env.WORKER_ENGAGEMENT_SYNC_INTERVAL_MS ?? 600_000,
+);
+
+/**
+ * How often to run the analytics anomaly scan over every active account.
+ * Detection needs a meaningful time series, so this is intentionally slow —
+ * a few times a day is plenty. Defaults to 6 hours.
+ */
+const ANOMALY_SCAN_INTERVAL_MS = Number(
+  process.env.WORKER_ANOMALY_SCAN_INTERVAL_MS ?? 6 * 3_600_000,
 );
 
 /**
@@ -40,9 +50,11 @@ async function bootstrap() {
 
   const scheduler = app.get(SchedulerService);
   const engagement = app.get(EngagementService);
+  const analytics = app.get(AnalyticsService);
 
   let running = true;
   let lastEngagementSync = 0;
+  let lastAnomalyScan = 0;
 
   const shutdown = () => {
     logger.log('Received shutdown signal, finishing current tick...');
@@ -53,7 +65,8 @@ async function bootstrap() {
 
   logger.log(
     `Publish worker started (poll ${POLL_INTERVAL_MS}ms, batch ${BATCH_SIZE}, ` +
-      `engagement sync every ${ENGAGEMENT_SYNC_INTERVAL_MS}ms)`,
+      `engagement sync every ${ENGAGEMENT_SYNC_INTERVAL_MS}ms, ` +
+      `anomaly scan every ${ANOMALY_SCAN_INTERVAL_MS}ms)`,
   );
 
   while (running) {
@@ -92,6 +105,28 @@ async function bootstrap() {
         } catch (err) {
           logger.warn(
             `Engagement sync failed: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+      }
+
+      // Analytics anomaly detection: scan every active account and alert teams
+      // when the set of active anomalies changes. Slow cadence — the series
+      // only moves with daily snapshots.
+      if (now - lastAnomalyScan >= ANOMALY_SCAN_INTERVAL_MS) {
+        lastAnomalyScan = now;
+        try {
+          const results = await analytics.scanAllAndAlert();
+          const alerted = results.filter((r) => r.notified).length;
+          const totalAnomalies = results.reduce((acc, r) => acc + r.anomalies, 0);
+          if (alerted > 0 || totalAnomalies > 0) {
+            logger.log(
+              `Anomaly scan: ${results.length} account(s), ` +
+                `${totalAnomalies} anomaly(s), ${alerted} team(s) alerted`,
+            );
+          }
+        } catch (err) {
+          logger.warn(
+            `Anomaly scan failed: ${err instanceof Error ? err.message : err}`,
           );
         }
       }

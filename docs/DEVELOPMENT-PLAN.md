@@ -2,7 +2,7 @@
 
 > 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18（第2次）
 
-> **当前进度（2026-07-18 第2次）**: M1–M20 全部完成 + **V1.1 平台扩展完成**（TWITTER + YOUTUBE）+ **代码审查修复**（调度重试退避、OAuth POST 参数绑定、前端 token 刷新、SDK 凭据解密告警）。8 个平台适配器全部实现（WECHAT_OFFICIAL / WECHAT_VIDEO / DOUYIN / XIAOHONGSHU / BILIBILI / WEIBO / TWITTER / YOUTUBE）。测试 **257 通过 / 28 API 套件** + **SDK 28 通过**，e2e **21 通过**，API + 前端 + SDK 构建全部通过。
+> **当前进度（2026-07-18 第3次）**: M1–M21 全部完成 + **M22 异常检测引擎**（PRD §3.5 P1 5 规则：突降/突增/持续下滑/断崖/粉丝异常；纯函数检测器 + AnalyticsService 编排 + 团队通知广播 + 签名去重 + Prisma AnomalyAlert 模型 + 迁移 + worker 慢周期轮询；`GET /analytics/anomalies/:accountId` + `POST /analytics/anomalies/scan` + `GET /analytics/anomaly-alerts`；前端 Analytics 页异常面板含 Scan 按钮 + 严重度 Badge）。测试 **280 通过 / 29 API 套件**（+23）+ **SDK 28 通过**，typecheck 全绿。
 >
 > **本轮新增（审查修复 + 平台扩展）**: (1) **审查发现修复** — 调度 `handleFailure` 增加指数退避（`RETRY_BACKOFF_BASE_MS * 2^attempt`，上限 60s），避免轮询器对故障平台紧循环重试；`worker.ts` 移除过时的 `GRACE_MS` 注释；OAuth `@Post(':platform/authorize')` 从 `@Query()` 改为 `@Body()`（前端发送 JSON body，原绑定导致 @MinLength 校验必然 400）；`Media` 上传页改为走共享 api client（统一 401 处理 + 刷新重试）；前端 `api.ts` 新增 refresh token 持久化 + 401 自动刷新一次重试链路（登录/注册/mfaLogin 均持久化 refreshToken，logout 清除）；`decryptCredentials` 解密失败回退时补 debug 日志；治理 `/engagement` 页面无操作的 setter 死代码。(2) **Twitter 适配器** — `TwitterAdapter`（OAuth2 PKCE 授权 / X API v2 发布 / 粉丝指标，评论/私信回退 BaseAdapter 默认抛错）+ 工厂注册 + 5 单元测试。(3) **YouTube 适配器** — `YouTubeAdapter`（OAuth2 授权 / 视频元数据创建 / 频道指标 subs+views / 评论 fetch+reply，私信回退默认抛错）+ 工厂注册 + 7 单元测试。
 
@@ -118,6 +118,16 @@
 - [x] **SDK 凭据解密告警** — `decryptCredentials` 解密失败回退时补 debug 日志
 - [x] **worker.ts 过时注释** — 移除不存在的 `GRACE_MS` 引用，改为准确描述条件 markRunning 防双发
 - [x] **治理** — 清理 `/engagement` 页面无操作 setter 死代码
+
+### M22: V1.1 — 异常检测引擎 (Analytics Anomaly Detection) (PRD §3.5 P1)
+**目标：** 5 类指标异常自动检测 + 团队通知广播，复用现有 AnalyticsSnapshot 时序、NotificationService.broadcastToTeam 与 worker 轮询骨架
+
+- [x] **纯函数检测器** — `anomaly.detector.ts`：5 规则（突降 >50% vs 7 日均值、突增 >200%、连续 3 周期下滑、单周期断崖 >80%、粉丝单日掉粉 >5%），依赖无关、独立单元测试 16 个
+- [x] **AnalyticsService 编排** — `detectAccountAnomalies`（快照→日度时序→检测器）、`scanAccountAndAlert`（签名去重 + broadcastToTeam）、`scanAllAndAlert`（遍历活跃账号）、`listAlerts`
+- [x] **AnomalyAlert Prisma 模型 + 迁移** — 记录 `(accountId, teamId, signature, count)`，`@@index` 于 `[accountId,createdAt]`/`[teamId,createdAt]`；签名去重避免持续异常刷屏
+- [x] **API 端点** — `GET /analytics/anomalies/:accountId`、`POST /analytics/anomalies/scan`（单账号/全量 + notify 开关）、`GET /analytics/anomaly-alerts`（审计/列表）；DTO 校验（`class-validator`）+ `JwtAuthGuard`
+- [x] **worker 慢周期轮询** — `ANOMALY_SCAN_INTERVAL_MS`（默认 6h），复用 engagement sync 模式；索引列失败仅 record 不中断
+- [x] **前端 Analytics 异常面板** — Scan 按钮（PageHeader + 面板内 Refresh）+ `Badge` 严重度（danger/warning）+ `ANOMALY_TYPE_LABELS` 中文类型；类型 `Anomaly`/`AnomalyType`/`AnomalySeverity` 纳入 `lib/types`；演示用 `notify: false` 预览
 
 ### M13: 测试 + 部署 + 文档
 **目标：** 生产就绪
