@@ -29,7 +29,7 @@ export class DouyinAdapter extends BaseAdapter {
   }
 
   getAuthUrl(state: string): string {
-    const redirect = encodeURIComponent('https://your-domain.com/callback/douyin');
+    const redirect = encodeURIComponent(this.callbackFor());
     return `https://open.douyin.com/platform/oauth/connect?client_key=${encodeURIComponent(this.config.clientKey)}&response_type=code&scope=user_info,video.list,video.create&redirect_uri=${redirect}&state=${encodeURIComponent(state)}`;
   }
 

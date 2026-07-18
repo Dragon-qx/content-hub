@@ -38,7 +38,7 @@ export class TwitterAdapter extends BaseAdapter {
   }
 
   getAuthUrl(state: string): string {
-    const redirect = encodeURIComponent('https://your-domain.com/callback/twitter');
+    const redirect = encodeURIComponent(this.callbackFor());
     // PKCE code_challenge is generated in a real client; `challenge` here is a
     // placeholder standing in for S256(code_verifier). The redirect flow mints
     // the challenge/verifier pair and swaps the code for a token server-side.
@@ -62,7 +62,7 @@ export class TwitterAdapter extends BaseAdapter {
         body: new URLSearchParams({
           code,
           grant_type: 'authorization_code',
-          redirect_uri: 'https://your-domain.com/callback/twitter',
+          redirect_uri: this.callbackFor(),
           code_verifier: 'verifier',
         }).toString(),
       },

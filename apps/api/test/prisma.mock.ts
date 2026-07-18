@@ -85,6 +85,14 @@ export const mockPrisma = () => ({
     delete: jest.fn(),
     count: jest.fn(),
   },
+  publishReceipt: {
+    findUnique: jest.fn(),
+    findMany: jest.fn().mockResolvedValue([]),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    count: jest.fn(),
+  },
   platformPost: {
     findUnique: jest.fn(),
     findMany: jest.fn(),

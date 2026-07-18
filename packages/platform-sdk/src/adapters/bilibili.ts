@@ -31,7 +31,7 @@ export class BilibiliAdapter extends BaseAdapter {
   }
 
   getAuthUrl(state: string): string {
-    const redirect = encodeURIComponent('https://your-domain.com/callback/bilibili');
+    const redirect = encodeURIComponent(this.callbackFor());
     return `https://passport.bilibili.com/register/pc_oauth2.html#/?client_id=${encodeURIComponent(this.config.accessKey)}&return_url=${redirect}&state=${encodeURIComponent(state)}`;
   }
 

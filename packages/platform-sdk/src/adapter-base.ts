@@ -9,6 +9,7 @@ import {
   PublishRequest,
   PublishResult,
 } from './types';
+import { callbackUrlFor } from './oauth-callback';
 
 /**
  * Shared helpers and sensible defaults for every ConcreteAdapter.
@@ -46,6 +47,16 @@ export abstract class BaseAdapter implements PlatformAdapter {
     } else {
       this.injectedTokenExpire = Date.now() + 3600_000;
     }
+  }
+
+  /**
+   * OAuth2 callback URL for this platform, derived from the shared
+   * OAUTH_CALLBACK_BASE (so new deployments stop hard-coding
+   * `https://your-domain.com`). Subclasses call this from getAuthUrl /
+   * handleCallback instead of inlining the host.
+   */
+  protected callbackFor(platform: Platform = this.platform): string {
+    return callbackUrlFor(platform);
   }
 
   /** True when the adapter can publish without a fresh OAuth handshake. */

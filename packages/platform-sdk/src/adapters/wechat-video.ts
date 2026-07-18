@@ -31,7 +31,7 @@ export class WechatVideoAdapter extends BaseAdapter {
   }
 
   getAuthUrl(state: string): string {
-    const redirect = encodeURIComponent('https://your-domain.com/callback/wechat-video');
+    const redirect = encodeURIComponent(this.callbackFor());
     return `https://open.weixin.qq.com/connect/qrconnect?appid=${encodeURIComponent(this.config.clientKey)}&redirect_uri=${redirect}&response_type=code&scope=snsapi_login&state=${encodeURIComponent(state)}#wechat_redirect`;
   }
 

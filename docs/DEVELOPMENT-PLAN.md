@@ -1,8 +1,22 @@
 # ContentHub — 完整开发计划
 
-> 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18（第3次）
+> 创建: 2026-07-17 | 基于: PRD v2.0 | 状态: 执行中 | 更新: 2026-07-18（第4次）
 
-> **当前进度（2026-07-18 第13次）**: M1–M31e 全部完成 + **M31e 视频转码 + 封面裁剪**（PRD §3.3 P0）：`VideoProcessingService`（fluent-ffmpeg）多分辨率转码（720p/1080p，mp4/webm，H.264+AAC / libvpx+libvorbis）+ `extractCover()` 时间戳提取单帧 + `getMetadata()` ffprobe 探测；API 端点 `POST /media/video/transcode`、`POST /media/video/cover`、`GET /media/video/:id/metadata`（DTO 校验，`JwtAuthGuard` 保护）；`MediaModule` providers 接入；单元测试 **11 个**；412 测试 / 38 套族全绿，新增 `fluent-ffmpeg` + `@types/fluent-ffmpeg` 依赖。
+> **当前进度（2026-07-18 第20次）**: M1–M38 全部完成 + **M38 发布回执截图留档**（PRD §3.4 P1）：Prisma schema 新增 `PublishReceipt {contentId/platformPostId/accountId/platform/externalId/externalUrl/assetId(`MediaAsset.` 1:1 unique)/receiptHash unique/metadata}` + receipts 关系挂 `Content`/`PlatformPost`/`SocialAccount`；迁移 `20260719110000_publish_receipts`（平台/资产/哈希三元 UNIQUE + contentId index + 外键级联/SetNull）；`ScreenshotProvider` seam（抽象类）+ `NoopScreenshotProvider` 默认（无头浏览器未就绪抛 fallback 位；未来可换 Playwright/Puppeteer 注入 `SCREENSHOT_PROVIDER`）；`MediaService.buildReceiptCard`（sharp SVG→PNG，渲染发布元数据卡：标题/平台/内容 ID/外部 ID+URL/时间 ISO）+ `attachReceiptCard` 写 `/uploads/receipts/{id}.png`（fs 失败降级 → metadata base64 回水，仍落 MediaAsset 行）；`PublishReceiptService.generate` 三阶段：① 字段校验 + 算 input 元组 SHA-256 幂等 hash（idempotent 默认命中返回 / `idempotent:false` 二次抛 Conflict）② `screenshot.capture` + 失败警告降级 ③ `buildReceiptCard`+`attachReceiptCard` 写 MediaAsset，落 PublishReceipt 行并标 `assetId`（优先 screenshot.assetId）；`listByContent`/`get(id)`/`verify(id)`（哈希重算验证 tamper-evident）；控制器 `POST /receipts?GenerateReceiptDto`（纯 `@IsEnum(Platform)`+`@IsString`）/`GET /receipts?contentId`+`GET /:id`+`GET /:id/verify`（全部 `JwtAuthGuard`+Swagger）；`ReceiptModule` 接入 `AppModule`；sharp 作为 api `dependency` 显式安装；`test/prisma.mock.ts` 增 `publishReceipt` delegate；单测 **15**（service 10 + controller 5），sharp 渲染在测试环境可执行，527 测试 / 48 全绿，typecheck 全绿。
+
+> **此前（第19次）**: M1–M37 全部完成 + **M37 AI 回复建议**（PRD §3.6）：`AiReplySuggestionsService`（确定性启发式，无外部 LLM，与 ContentAssistant / scheduling-recommend 同风格）：`suggest(commentId, signal)` → `{signal:{intent,score,topics}, suggestions:[{variant,confidence,text}]×2}`；意图分类 `complaint|praise|question|neutral`（强负+score<-0.25 complaint / 疑问词短评 question / 正 / neutral）；主题抽取 中英关键词映射 quality/service/shipping/refund/delivery/bug/pricing/support 最多 3；主变体 `variantFor`（complaint → empathetic 或 purchaser/high-like professional / praise → grateful / question → helpful / verified → professional / 其他 enrolling）+ `fallbackFor`；`scoreVariant` 基础分 + 主变体提升 + 高互动 complaint 向 professional 倾斜，钳 0.2–0.99；5 类模板 variants empathetic/grateful/enrolling/helpful/professional 中英分支（isChinese 自动识别）；`EngagementService.aiSuggestReplies(commentId)` 查信号并委托；`EngagementModule` 注册 provider；控制器 `GET /engagement/comments/:id/reply-suggestions`（`JwtAuthGuard` + Swagger）；单测 **15**（engine 8 + engagement.service 2 + controller 1 proxy），511 测试 / 46 套件全绿，typecheck 全绿。
+
+> **此前（第18次）**: M1–M36 全部完成 + **M36 BullMQ 适配层**（PRD §3.4）：新增 `QueueService`（`QueueKind='prisma'|'bullmq'` 可拔插 seam，`prisma` 为默认不引 Redis）：`publish/schedulePublish()`（委托 SchedulerService.schedule 立落 PublishJob 行）/ `runPublishTick(now, limit)`（自 `getDueJobs` + 逐 job 原子 `executeJob`，单 job 失败计入 failed 不中断 tick，返回 `{processed, succeeded, failed}`）/ `runEngagementSyncTick()`（调 engagement.syncAllTeams 聚合 teams/comments/messages）/ `runAnomalyScanTick()`（调 analytics.scanAllAndAlert 统计 accounts/anomalies/teamsAlerted）；kind=bullmq 显式 throw 预留位；`QueueModule` 聚合 imports（SchedulerModule + EngagementModule + AnalyticsModule）+ 注册 `QUEUE_KIND` provider；`EngagementModule` 新增 export `EngagementService`（修复 worker/Queue 跨模块 DI）；重写 `src/worker.ts`：全部由 `app.get(QueueService)` 经 seam 委托 tick，poll/SIGINT/SIGTERM/batch/interval 语义完全不变（仅把直调 service 改成 queue.*Tick）；单测 `queue.service.spec.ts` **11**（kind 报告/publish alias/tick 空/成功全跑/容错部分失败/limit/不支持 kind 抛 /engagement 聚合与 0 /anomaly 计数），501 测试 / 45 套件全绿，typecheck 全绿。
+
+> **此前（第17次）**: M1–M35 全部完成 + **M35 余额钱包 / 用量计费**（PRD §4.4）：Prisma schema 新增 `Wallet {teamId(unique), balance, holdBalance, currency}` + `WalletTransaction {walletId, type TransactionType, amount(signed), balanceAfter, refId, note}` + enum `TransactionType { TOPUP, REFUND, PUBLISH, SCHEDULE, SYNC, MEDIA_PROCESS, AI_ASSIST }` + `WalletTransaction.[walletId,createdAt]` 索引 + `Team.wallet` 1:1；迁移 `20260719100000_wallet_billing`（含 CREATE TYPE + 两表 + 外键级联）；`WalletService`：`getOrCreateWallet`（findUnique + 懒创建）/ `balance`（balance - holdBalance = available）/ `topUp(teamId,{amount,note})`（@IsPositive 校验 + `$transaction` upsert increment+写 TOPUP 账行）/ `debit(teamId,type,{refId,note,minBalance})`（price=0 返回 null · `prisma.wallet.findUnique` 缺则 NotFound · 余额-价格<minFloor 则 Conflict · `$transaction` decrement balance+写账行）/ `tryDebit(...,lenient)` · `listTransactions(teamId,{skip,take})` 降序分页 · `setPrices/getPrices` 可变 rate card（PUBLISH=10 SCHEDULE=5 SYNC=2 MEDIA_PROCESS=8 AI_ASSIST=3 TOPUP·REFUND=0）；控制器 `GET /wallet/:teamId/balance` + `POST /wallet/:teamId/top-up` + `POST /wallet/:teamId/debit` + `GET /wallet/:teamId/transactions` + `GET/PATCH /wallet/prices`（`JwtAuthGuard` + DTO 校验 + Swagger）；DTO `@IsInt @IsPositive @IsString @MaxLength`；`WalletModule` 接入 `AppModule`；mock 增 `wallet`/`walletTransaction`；单测 **24**（service 17：getOrCreate 命中/创建/balance 缺失/含 hold · topUp 非法金额/upsert ledger · debit free/缺钱包/余额不足/原子扣 · tryDebit 宽容/严格 · listTransactions 缺钱包/分页 · price table 读写 — controller 7 · 均为 mock+stub），490 测试 / 44 套件全绿。
+
+> **此前（第16次）**: M1–M34 全部完成 + **M34 账号转移/交接**（PRD §3.2 P1）：Prisma schema 新增 `AccountTransfer` 表（id/accountId/fromTeamId/toTeamId/initiatorId/note/status `TransferStatus` PENDING|ACCEPTED|REJECTED|CANCELLED/decidedById/decidedAt + `[accountId,status]` & `[toTeamId,status]` 索引、级联删除）+ 迁移 `20260719090000_account_transfer_handover`（含 `CREATE TYPE TransferStatus`）；`AccountTransferService` 二阶段交接：`initiate(sourceTeamId, {accountId,toTeamId,initiatorUserId,note})` 校验同-team 拒绝 / 账号归属 / `assertAdmin`（owner 等同 admin 权限）/ 同 account 活跃 PENDING 冲突 → 创建 PENDING；`decide({transferId,actingUserId,decision})` 校验终态（NotFound/Conflict）/ 目标 team `assertAdmin` → accept 在 `prisma.$transaction` 内原子 写 transfer ACCEPTED + 改 `account.teamId` + `groupId=null`（组是 team 域的），reject 仅标记 REJECTED；`cancel`/`get`/`listForTeam(teamId,{direction:'incoming'|'outgoing'|'all',status})`；控制器 `POST /accounts/:id/transfer`（`InitiateTransferDto` toTeamId + note）+ `PATCH /accounts/:id/transfer`（`DecideTransferDto` accept|reject）+ `DELETE /accounts/:id/transfer` + `GET /accounts/transfers?teamId&direction&status`（`ListTransfersQueryDto`）；全部 `JwtAuthGuard` + `AuditService` `@ApiParam/@ApiBody/@Swagger`；DTO `@IsString @MinLength(1) @IsIn @MaxLength(500)`；`AccountModule` 注册 provider+export；`test/prisma.mock.ts` 增 `accountTransfer` + `$transaction`；单测 **16**（initiate 同 team/缺/非源 team/非 admin/owner 平权/PENDING 冲突/成功｜ decide NotFound/终态冲突/非 admin/accept 事务移动+清 groupId/reject 不动｜ cancel 撤回/终态｜ list 过滤），typecheck 全绿，466 测试 / 42 套件全绿。
+
+> **此前（第15次）**: M1–M33 全部完成 + **M33 智能排期推荐**（PRD §3.4 P2）：`SchedulingRecommendationService`（纯确定性启发式，按 team±accountId 取 90 天 `AnalyticsSnapshot` → 按 day-of-week 分桶计算平均 engagement 率 → `projectSlots` 投影到 `horizonDays` 内严格晚于 `now` 的最近时刻，score 归一化 + confidence=1-e^{-n/12}，按 score 降序返回 top N）；snapshot=0 时回落 `HEURISTIC_WINDOWS` 行业基准并标 `basis:'heuristic'`；单 account 路径校验 `NotFound` / `Forbidden` 团队归属；`GET /scheduler/recommendations`（`RecommendQueryDto` 校验 teamId/slots 1-10/horizonDays 1-30/accountId）；`SchedulerModule` 注入 + export 双服务；控制器 Swagger 注解；单测 **19**（service 13：heuristic 兜底/上下限/归属校验/历史路径 rate clamp/置信度/去重/projection + controller 6），450 测试 / 41 套件全绿，typecheck 全绿。
+
+> **此前（第14次）**: M1–M32 全部完成 + **M32 CSV 批量导入账号**（PRD §3.2 P2）：`csv-parser.ts` 纯函数 RFC 4180 解析器（引用字段/转义双引号/CRLF/LF/ragged 行错误收集）+ `credentialsFromRecord()` 按平台抽取凭证列并覆写 JSON `credentials` 列；`AccountService.batchImport()`（每行独立校验绑定，部分成功不抛错，返回 `BatchImportSummary {total,succeeded,failed,results[]}`）+ `importOne()`（必填/合法平台/already-bound/persist 失败分级）+ `parseImportCsv()`；控制器新增 `POST /accounts/import`（`FileInterceptor('file')` CSV 上传 + 5 MB 上限 + `teamId` + `AuditService` 审计）和 `POST /accounts/import/json`（`ImportAccountsDto` class-validator，`@ArrayMaxSize(200)` 批上限）；DTO `ImportAccountsDto` / `AccountImportRecord` / `ImportAccountsQueryDto`（`@IsEnum(Platform)` + `@MinLength` + `@ArrayNotEmpty/@ArrayMaxSize`）；单元测试 **26 个**（csv-parser 12 + batchImport 8 + controller 6），438 测试 / 40 套件全绿，typecheck 全绿。
+
+> **此前（第13次）**: M1–M31e 全部完成 + **M31e 视频转码 + 封面裁剪**（PRD §3.3 P0）：`VideoProcessingService`（fluent-ffmpeg）多分辨率转码（720p/1080p，mp4/webm，H.264+AAC / libvpx+libvorbis）+ `extractCover()` 时间戳提取单帧 + `getMetadata()` ffprobe 探测；API 端点 `POST /media/video/transcode`、`POST /media/video/cover`、`GET /media/video/:id/metadata`（DTO 校验，`JwtAuthGuard` 保护）；`MediaModule` providers 接入；单元测试 **11 个**；412 测试 / 38 套族全绿，新增 `fluent-ffmpeg` + `@types/fluent-ffmpeg` 依赖。
 
 > **此前（第12次）**: M1–M31d 全部完成 + **M31d 审批超时处理**（PRD §3.7 P0）：Prisma schema 新增 `timeoutHours Int? @default(48)` / `timeoutAction String?`（APPROVE|REJECT|ESCALATE）/ `escalateTo String?` / `firstReminderAt DateTime?` + `@@index([status,createdAt])`；迁移 `20260718150000_workflow_timeout`；`WorkflowTimeoutService`（`processTimeouts()` 扫描到期 PENDING 工作流执行自动动作 + `sendReminders()` 临期 24h 提醒 + `getTimeoutSummary()` 分组汇总）；`WorkflowController` 新增 `PATCH /workflow/:id/timeout-config`（`WorkflowTimeoutConfigDto` + DTO 验证，ESCALATE 必须带 escalateTo）+ `GET /workflow/timeout-summary`（`TimeoutSummaryQueryDto`）；`WorkflowModule` 接入 `NotificationModule` + `AuditModule`；单元测试 **10**（setConfig 成功/NotFound/BadRequest + processTimeouts 三动作/跳过/错误 + sendReminders 发送/跳过 + getTimeoutSummary 分组）；31 tests / 3 suites 全绿，typecheck 全绿。
 
@@ -55,6 +69,104 @@
 - [x] **依赖** — 安装 `fluent-ffmpeg` `@types/fluent-ffmpeg`
 - [x] **测试** — 412 通过 / 38 套件 ✅（+11 视频单测，+1 控制器）
 - [x] **typecheck** — 仅 `workflow-timeout.service.ts` 预存错（disjoint，已记入 BLOCKERS）
+
+### M32: V1.1 — CSV 批量导入账号 (Batch Account Import) (PRD §3.2 P2)
+**目标:** 以 CSV 或 JSON 批量导入第三方平台账号，补齐 PRD §3.2 P2 缺失能力。
+
+- [x] **CSV 解析器** — `csv-parser.ts` 纯函数（无外部依赖）RFC 4180：支持引用字段、转义双引号、CRLF/LF、ragged 行列数不一致收集为错误记录而不中断；`headers` → `rows: Record<string,string>[]` → `errors: CsvRowError[]`
+- [x] **凭证复合** — `credentialsFromRecord(platform, rec)`：从 `appid/secret, clientKey/clientSecret, appKey/appSecret, accessKey, bearerToken, apiKey, clientId, callbackUrl` 等通用凭证列中抽取非空值，再合并一个可选 JSON `credentials` 列（解析失败静默忽略）
+- [x] **服务层** — `AccountService`：
+  - `importOne(teamId, row)`: 必填字段检查 / `Platform` 枚举校验 / already-bound 去重 / `composeCredentials` + `crypto.encrypt` 持久化；失败返回 `{error}` 而不抛错
+  - `batchImport(teamId, rows)`: 逐行调用 `importOne`，聚合成 `BatchImportSummary { total, succeeded, failed, results: ImportRowResult[] }`，允许部分成功
+  - `parseImportCsv(csv)`: 包一层 `parseCsv` + `credentialsFromRecord`，输出 `{rows, parseErrors}`
+- [x] **API 端点** — `AccountController` 新增双入口：
+  - `POST /accounts/import`（`FileInterceptor('file')` CSV 上传 + 5 MB 上限 + `teamId` + `AuditService` 审计）
+  - `POST /accounts/import/json`（`ImportAccountsDto` 校验 body + `@ArrayMaxSize(200)` 批上限 + 审计）
+- [x] **DTO** — `ImportAccountsDto` / `AccountImportRecord` / `ImportAccountsQueryDto`（`@IsString @MinLength(1) @IsEnum(Platform) @IsArray @ArrayNotEmpty @ArrayMaxSize(200) @IsObject` 全覆盖，Swapper 注解）
+- [x] **单元测试** — `csv-parser.spec.ts` **12**（引用/转义/CRLF/ragged/空行/空输入/凭证列+JSON 列/malformed 静默）+ `account.service.spec.ts` **8** 增量（parseImportCsv / batchImport 全路径/无效平台/空值/already-bound/persist 失败/空输入）+ `account-import.controller.spec.ts` **6**（无文件无 teamId/超 5MB/解析+审计/错误前置/JSON 透传）= **26**
+- [x] **测试** — 438 通过 / 40 套件 ✅（+26），typecheck 全绿
+
+### M38: V1.1 — 发布回执截图留档 (Publish Receipt + Screenshot Archiving) (PRD §3.4 P1)
+**目标:** 发布成功后可生成服务器端防篡改回执 + 留档素材（截图 seam + 卡图 fallback），补齐 PRD §3.4 P1 缺失能力。
+
+- [x] **Prisma schema** — `PublishReceipt { contentId, platformPostId (unique), accountId, platform, externalId, externalUrl, assetId (MediaAsset 1:1 @unique), receiptHash (@unique), metadata }`；`Content.receipts` / `PlatformPost.receipt` / `SocialAccount.receipts` / `MediaAsset.receipt` 关系；迁移 `20260719110000_publish_receipts`(三元 UNIQUE + index + 外键 SetNull/Cascade)
+- [x] **`MediaService.buildReceiptCard`** — sharp SVG→PNG 标题卡（蓝底 + 平台 / 内容 ID / 外部 ID+URL / ISO 时间）+ `attachReceiptCard`: 写 `/uploads/receipts/{id}.png` (fs 失败降级 metadata base64 回水)，落 MediaAsset (type=IMAGE)
+- [x] **Screenshot seam** — `ScreenshotProvider` 抽象类 + `NoopScreenshotProvider` 默认；future 接入 Playwright/Puppeteer
+- [x] **`PublishReceiptService`** — `{generate, listByContent, get, verify}`；generate 三阶段：① 字段校验 + input 元组 SHA-256 哈希 → 幂等命中返回 / `idempotent:false` 二次 throw Conflict ② `screenshot.capture(externalUrl,...)`(+ 失败降级日志) ③ `buildReceiptCard` + `attachReceiptCard` 落 MediaAsset + store PublishReceipt（assetId 优先 screenshot.assetId）；`verify(id)` 重算哈希判 tamper-evident
+- [x] **API** — `JwtAuthGuard`：`POST /receipts`(`GenerateReceiptDto`) + `GET /receipts?contentId` + `GET /:id` + `GET /:id/verify`；class-validator enum+string + Swagger
+- [x] **模块 + dep** — `ReceiptModule` 接入 `AppModule`；sharp 显式 api dependency；mock 增 `publishReceipt` delegate
+- [x] **测试** — `receipt.service.spec.ts` **10**（哈希确定性/illegal 字段/idempotent/二次/截图失败降级/capture 抛错降级/list/get/verify tamper）+ `receipt.controller.spec.ts` **5**（generate/list/get/verify 透传）= **15**
+- [x] **测试** — 527 通过 / 48 套 ✅（+15），typecheck 全绿
+
+### M37: V1.1 — AI 回复建议 (AI Reply Suggestions) (PRD §3.6)
+**目标:** 为评论收件箱生成草稿回复，补齐 PRD §3.6 缺失能力。无外部 LLM，确定性启发式。
+
+- [x] **`AiReplySuggestionsService`（`apps/api/src/modules/engagement/ai-reply-suggestions.service.ts`）** —纯函数引擎：
+  - `suggest(commentId, {sentiment, score, content, likeCount, replied, isVerified?, isPurchaser?})` → `{signal:{intent, score, topics}, suggestions:[{variant,confidence,text}]×2}`
+  - `classifyIntent`：`complaint`（NEGATIVE && score < -0.25）· `question`（短评语含 吗?呢 等疑问词）· `praise`（POSITIVE）· `neutral`
+  - `extractTopics`：中英 keyword→topic map，最多 3（quality/service/shipping/refund/delivery/bug/pricing/support）
+  - `variantFor`·`fallbackFor`：5 类 tone（empathetic / grateful / enrolling / helpful / professional），complaint→empathetic 或 purchaser+/high-like→professional；praise→grateful；question→helpful；verified→professional；否则 enrolling
+  - `scoreVariant`：基础分 + 主变体 +0.3 + 高互动 complaint 倾向 professional；钳 0.2–0.99
+  - `render`×5 中英文分支，按 isChinese 自动选模板，并引用评论 firstSentence
+- [x] **`EngagementService.aiSuggestReplies`** —新增编排方法：查 comment 行、组装 signal、委托 service
+- [x] **`EngagementModule` + `EngagementController` — GET /engagement/comments/:id/reply-suggestions**（`JwtAuthGuard` + Swagger）
+- [x] **单元测试** — `ai-reply-suggestions.service.spec.ts` **8**（数量/complaint 变体/verified-professional/grateful/question-helpful/topics/中文 empathetic/confidence 窗口）+ `engagement.service.spec.ts` **2**（未找到/信号代写）+ `engagement.controller.spec.ts` **1 proxy**（含 controller 新端点）= **11**；总 engagement 43 含其它
+- [x] **测试** — 511 通过 / 46 套件 ✅（+10），typecheck 全绿
+
+### M36: V1.1 — BullMQ 适配层 (Queue Seam) (PRD §3.4)
+**目标:** 把 worker 的 poll 调度抽成可拔插的 Queue seam，为真实 BullMQ/Redis 接入预留位，同时让 dispatch 逻辑可单元测试。
+
+- [x] **`QueueService`（`apps/api/src/modules/queue/queue.service.ts`）** — `QueueKind='prisma'|'bullmq'` seam：
+  - `publish(contentId, platform, scheduledAt)` / `schedulePublish(payload)` → 委托 SchedulerService.schedule 立落 PublishJob 行
+  - `runPublishTick(now, limit)`：自 `scheduler.getDueJobs` 取 due jobs + 逐 job 原子 `scheduler.executeJob`（单 job 失败计入 failed 不中断 tick），返回 `{processed, succeeded, failed}`；kind=bullmq 显式 throw 预留位
+  - `runEngagementSyncTick()`：调 `engagement.syncAllTeams` 聚合 `{teams, comments, messages}`
+  - `runAnomalyScanTick()`：调 `analytics.scanAllAndAlert` 统计 `{accounts, anomalies, teamsAlerted}`
+- [x] **`QueueModule`** — imports SchedulerModule + EngagementModule + AnalyticsModule；providers QueueService + `QUEUE_KIND` provider（默认 `process.env.QUEUE_KIND ?? 'prisma'`）；exports QueueService
+- [x] **`EngagementModule`** — 新增 `exports: [EngagementService]`（修复 worker/Queue 跨模块 DI）
+- [x] **`src/worker.ts`** — 重写：全部由 `app.get(QueueService)` 经 seam 委托 tick；保留 POLL_INTERVAL_MS / BATCH_SIZE / ENGAGEMENT_SYNC_INTERVAL_MS / ANOMALY_SCAN_INTERVAL_MS 与 SIGINT/SIGTERM 优雅停机；新增 `toMs` 防负 setTimeout clamp
+- [x] **单元测试** — `queue.service.spec.ts` **11**（kind 报告/publish alias/tick 空/成功全跑/容错部分失败/limit/不支持 kind 抛 /engagement 聚合与 0 /anomaly 计数）
+- [x] **测试** — 501 通过 / 45 套件 ✅（+11），typecheck 全绿
+
+### M35: V1.1 — 余额钱包 / 用量计费 (Credit Wallet / Usage Billing) (PRD §4.4)
+**目标:** 团队级信用钱包 + 操作级用量计费，补齐 PRD §4.4 缺失能力。
+
+- [x] **Prisma schema** — `Wallet { teamId(unique), balance, holdBalance, currency CREDIT }` + `WalletTransaction { walletId, type TransactionType, amount(signed 正=充值/负=消费), balanceAfter, refId, note }` + enum `TransactionType { TOPUP, REFUND, PUBLISH, SCHEDULE, SYNC, MEDIA_PROCESS, AI_ASSIST }`；`WalletTransaction.[walletId, createdAt]` 索引；`Team.wallet` 1:1；迁移 `20260719100000_wallet_billing`
+- [x] **`WalletService`（`apps/api/src/modules/wallet/wallet.service.ts`）** — 全 `prisma.$transaction` 原子化：
+  - `getOrCreateWallet(teamId)`：findUnique，缺失则 create(balance=0) 幂等
+  - `balance(teamId)`：返 {balance, holdBalance, available=balance-hold, currency}；缺钱包返 0
+  - `topUp(teamId,{amount,note})`：校验整数正数；`$transaction`内 `wallet.upsert(increment amount)` + 写 TOPUP 账行(balanceAfter=新余额)；审计一致
+  - `debit(teamId,type,{refId,note,minBalance=0})`：查 price 表（PUBLISH=10/SCHEDULE=5/SYNC=2/MEDIA_PROCESS=8/AI_ASSIST=3/TOPUP·REFUND=0）；price=0 返回 null；缺钱包 → NotFound；`balance-price<minFloor` → Conflict（余额不足，拦截操作扣费）；否则 `$transaction` decrement balance + 写账行 amount=-price
+  - `tryDebit(...,lenient?)`：宽容模式余额不足返回 false，粗暴错误透传
+  - `listTransactions(teamId,{skip,take})`；`setPrices/getPrices` 可变 rate card
+- [x] **API 端点** — `WalletController`：`GET /wallet/:teamId/balance` + `POST /wallet/:teamId/top-up`（`TopUpWalletDto`）+ `POST /wallet/:teamId/debit`（`DebitWalletDto` 枚举字符串）+ `GET /wallet/:teamId/transactions` + `GET/PATCH /wallet/prices`（`JwtAuthGuard` + class-validator + Swagger）
+- [x] **模块** — `WalletModule` (controller + provider + export) 接入 `AppModule`；`test/prisma.mock.ts` 增 `wallet`/`walletTransaction` delegates
+- [x] **单元测试** — `wallet.service.spec.ts` **17**（getOrCreate 命中/创建 · balance 缺钱包/含hold · topUp 非法金额/upsert-ledger · debit free/缺钱包/不足/原子扣 · tryDebit 宽容/严格 · listTransactions 缺钱包/分页 · price table 读写）+ `wallet.controller.spec.ts` **7**（balance/top-up/debit 解析类型/零扣费/未知类型 NotFound/分页/setPrices）= **24**
+- [x] **测试** — 490 通过 / 44 套件 ✅（+24），typecheck 全绿
+
+### M34: V1.1 — 账号转移/交接 (Account Transfer / Handover) (PRD §3.2 P1)
+**目标:** 两阶段团队间账号所有权转让，补齐 PRD §3.2 P1 缺失能力。
+
+- [x] **Prisma schema** — `AccountTransfer { accountId, fromTeamId, toTeamId, initiatorId, note, status TransferStatus, decidedById?, decidedAt? }` + enum `TransferStatus { PENDING, ACCEPTED, REJECTED, CANCELLED }` + `@@index([accountId, status])` / `@@index([toTeamId, status])`；`SocialAccount.transfers` 关系；迁移 `20260719090000_account_transfer_handover`（含 CREATE TYPE + 两个索引 + 外键级联删除）
+- [x] **`AccountTransferService`** — `initiate(sourceTeamId,{accountId,toTeamId,initiatorUserId,note})` 校验同 team/源 team/admin/活跃 PENDING 冲突 → 创建 PENDING；`decide({transferId,actingUserId,decision})` NotFound/终态/目标 team `assertAdmin`，accept 在 `$transaction` 内原子写 ACCEPTED + `account.teamId`/`groupId=null`；`cancel`（发起人或源 admin）/ `get` / `listForTeam(teamId,{direction:'incoming'|'outgoing'|'all',status})` / `activeTransferFor`；私有 `assertAdmin`（member ADMIN 或 team owner）
+- [x] **API 端点** — `POST /accounts/:id/transfer`（`InitiateTransferDto {toTeamId,note?}`）+ `PATCH /accounts/:id/transfer`（`DecideTransferDto {decision:'accept'|'reject'}`）+ `DELETE /accounts/:id/transfer` + `GET /accounts/transfers?teamId&direction&status`（`ListTransfersQueryDto`），全部 `JwtAuthGuard` + `AuditService` 审计 + Swagger
+- [x] **DTO** — `@IsString @MinLength(1) toTeamId` / `@IsIn accept|reject` / `@IsIn incoming|outgoing|all` / `@MaxLength(500) note`
+- [x] **模块** — `AccountModule` providers+exports 增 `AccountTransferService`；`test/prisma.mock.ts` 增 `accountTransfer` + `$transaction`
+- [x] **单元测试** — `account-transfer.service.spec.ts` **16** + `account-import.controller.spec.ts` provider 更新
+- [x] **测试** — 466 通过 / 42 套件 ✅（+54），typecheck 全绿
+
+### M33: V1.1 — 智能排期推荐 (Smart Scheduling Recommendation) (PRD §3.4 P2)
+**目标:** 根据历史参与率数据为团队推荐最佳发布时间档，补齐 PRD §3.4 P2 缺失能力。
+
+- [x] **`SchedulingRecommendationService`（`apps/api/src/modules/scheduler/scheduling-recommendation.service.ts`）** ——纯确定性启发式：
+  - `recommend(teamId, {accountId, slots, horizonDays, now})`：按 team（或可选 account）拉最近 90 天 `AnalyticsSnapshot` → 按 `snapshotDate.getDay()` 分桶 → 计算 per-bucket 平均 engagement 率（`engagements/impressions`，钳 0-1）→ 排名天档 → `projectSlots` 投影到 `horizonDays` 内严格晚于 `now` 的最近 `dayOfWeek+hour` 出现时刻（ISO key 去重）；score 归一化 0-1，`confidence = 1 − e^{-n/12}`；snapshot=0 时回落 `HEURISTIC_WINDOWS` 行业基准 `(Sat 10, Fri 19, Sun 20, …)` 并标 `basis:'heuristic'`
+  - `projectSlots(ranked, horizonDays, now)`：纯 helper，对 `nextOccurrence` 投影 + score 排序 + 去重
+  - 单 account 路径先查 `socialAccount.findUnique`：不存在 → `NotFoundException`，跨 team → `ForbiddenException`
+  - `nextOccurrence(dayOfWeek, hour, now, horizonDays)` 纯函数：从 now 下一分钟起逐日找下一个匹配窗口，超出 horizon 返回 null
+- [x] **API 端点** — `SchedulerController.getRecommendations`（`GET /scheduler/recommendations`，`JwtAuthGuard` + `Swagger`，委托给 service 透传 slots/horizonDays/accountId）
+- [x] **DTO 校验** — `RecommendQueryDto`（`@IsOptional @IsString @MinLength(1)` teamId/accountId、`@IsInt @Min(1) @Max(10)` slots、`@IsInt @Min(1) @Max(30)` horizonDays，Swagger）
+- [x] **`SchedulerModule`** — providers 增 `SchedulingRecommendationService` 并 export 双服务
+- [x] **单元测试** — `scheduling-recommendation.service.spec.ts` **13**（heuristic 兜底/上下限/归属 NotFound/Forbidden/成功 scope/历史路径 rate >1 clamp/置信度 >0/空 impressions 回落/projection 严格晚于 now 在 horizon 内/去重/projection helper）+ `scheduler.controller.spec.ts` **6** 增量（含推荐透传）= **19**
+- [x] **测试** — 450 通过 / 41 套件 ✅（+19），typecheck 全绿
 
 ### M30: V1.1 — 审批超时处理 (Approval Timeout Handling) (PRD §3.7 P0)
 **目标:** 审批超时自动通过/驳回/升级，补齐 PRD §3.7 要求的核心缺失功能。

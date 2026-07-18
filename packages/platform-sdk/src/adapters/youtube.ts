@@ -40,7 +40,7 @@ export class YouTubeAdapter extends BaseAdapter {
   }
 
   getAuthUrl(state: string): string {
-    const redirect = encodeURIComponent('https://your-domain.com/callback/youtube');
+    const redirect = encodeURIComponent(this.callbackFor());
     return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(
       this.config.clientId,
     )}&redirect_uri=${redirect}&response_type=code&scope=${encodeURIComponent(
@@ -59,7 +59,7 @@ export class YouTubeAdapter extends BaseAdapter {
           client_id: this.config.clientId,
           client_secret: this.config.clientSecret,
           grant_type: 'authorization_code',
-          redirect_uri: 'https://your-domain.com/callback/youtube',
+          redirect_uri: this.callbackFor(),
         }).toString(),
       },
     );

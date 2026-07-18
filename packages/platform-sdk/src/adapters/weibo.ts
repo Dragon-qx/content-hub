@@ -31,7 +31,7 @@ export class WeiboAdapter extends BaseAdapter {
   }
 
   getAuthUrl(state: string): string {
-    const redirect = encodeURIComponent('https://your-domain.com/callback/weibo');
+    const redirect = encodeURIComponent(this.callbackFor());
     return `https://api.weibo.com/oauth2/authorize?client_id=${encodeURIComponent(this.config.appKey)}&response_type=code&redirect_uri=${redirect}&state=${encodeURIComponent(state)}`;
   }
 
@@ -45,7 +45,7 @@ export class WeiboAdapter extends BaseAdapter {
           client_secret: this.config.appSecret,
           code,
           grant_type: 'authorization_code',
-          redirect_uri: 'https://your-domain.com/callback/weibo',
+          redirect_uri: this.callbackFor(),
         }),
       },
     );

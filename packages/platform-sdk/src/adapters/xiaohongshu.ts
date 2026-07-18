@@ -38,7 +38,7 @@ export class XiaoHongShuAdapter extends BaseAdapter {
   }
 
   getAuthUrl(state: string): string {
-    const redirect = encodeURIComponent('https://your-domain.com/callback/xhs');
+    const redirect = encodeURIComponent(this.callbackFor());
     return `https://customer.xiaohongshu.com/api/oauth/v1/authorize?app_key=${encodeURIComponent(this.config.appKey)}&redirect_uri=${redirect}&response_type=code&state=${encodeURIComponent(state)}`;
   }
 
