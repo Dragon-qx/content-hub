@@ -558,4 +558,13 @@
 
 ---
 
+## M44: 收尾 — Dockerfile PATH 修复 (2026-07-18)
+
+- **问题**: GitHub Actions Deploy job 失败 `nest: not found`
+- **根因**: `Dockerfile.api` builder stage 复制了 `node_modules` 但未把 `node_modules/.bin` 加入 PATH
+- **修复**: `ENV PATH="/app/node_modules/.bin:${PATH}"` 加入 builder stage
+- **验证**: 此前被 BLOCKERS.md 记录的 3 个预存在失败套件经验证全部通过（analytics.controller / engagement.controller / app.e2e 共 36 tests），552 tests / 48 suites 全绿
+
+---
+
 _文档结束_
