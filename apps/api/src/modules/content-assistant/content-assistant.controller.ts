@@ -19,9 +19,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
  * deterministic helper over the current draft: optimize titles, extract tags,
  * audit against platform rules + quality heuristics, and produce copy variants.
  *
- * All operations are synchronous projections over the supplied draft — they do
- * not persist anything and do not call external services, so they are safe to
- * invoke from the editor on every keystroke (debounced by the client).
+ * All operations are deterministic projections over the supplied draft — they do
+ * not persist anything. By default they use locale-aware heuristic engines.
+ * Set `LLM_PROVIDER=openai|anthropic` to enable real-model calls via the pluggable
+ * LlmProvider seam (falls back to heuristic output if the model call fails).
  */
 @ApiTags('AI Content Assistant')
 @ApiBearerAuth()

@@ -1,16 +1,30 @@
 import { ContentAssistantService } from './content-assistant.service';
 import {
+  LlmProviderFactory,
+  LlmProvider,
+} from './llm.service';
+import {
   auditContent,
   extractTagsFromBody,
   generateVariants,
   optimizeTitles,
 } from './content-assistant.service';
 
+const heuristicProvider: LlmProvider = {
+  name: 'heuristic',
+  isAvailable: true,
+  generate: async () => ({ text: '', provider: 'heuristic' }),
+};
+
+const mockFactory: LlmProviderFactory = {
+  getProvider: () => heuristicProvider,
+} as unknown as LlmProviderFactory;
+
 describe('ContentAssistantService', () => {
   let service: ContentAssistantService;
 
   beforeEach(() => {
-    service = new ContentAssistantService();
+    service = new ContentAssistantService(mockFactory);
   });
 
   // The service is a thin deterministic wrapper over pure functions, so we
@@ -184,23 +198,23 @@ describe('ContentAssistantService', () => {
   });
 
   describe('service wrapper delegation', () => {
-    it('optimizeTitles delegates to the pure engine', () => {
-      const result = service.optimizeTitles({ body: 'wrapper delegation test', count: 3 });
+    it('optimizeTitles delegates to the pure engine', async () => {
+      const result = await service.optimizeTitles({ body: 'wrapper delegation test', count: 3 });
       expect(result.variants).toHaveLength(3);
     });
 
-    it('extractTags delegates to the pure engine', () => {
-      const result = service.extractTags({ body: 'one one one two two three', count: 5 });
+    it('extractTags delegates to the pure engine', async () => {
+      const result = await service.extractTags({ body: 'one one one two two three', count: 5 });
       expect(result.tags.length).toBeGreaterThan(0);
     });
 
-    it('audit delegates to the pure engine', () => {
-      const result = service.audit({ body: 'a'.repeat(300) });
+    it('audit delegates to the pure engine', async () => {
+      const result = await service.audit({ body: 'a'.repeat(300) });
       expect(result.platforms.length).toBeGreaterThan(0);
     });
 
-    it('generateVariants delegates to the pure engine', () => {
-      const result = service.generateVariants({ body: 'body', style: 'all' });
+    it('generateVariants delegates to the pure engine', async () => {
+      const result = await service.generateVariants({ body: 'body', style: 'all' });
       expect(result.variants).toHaveLength(4);
     });
   });

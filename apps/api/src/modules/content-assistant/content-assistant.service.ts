@@ -1,9 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ContentType } from '@prisma/client';
 import {
   getRule,
   PLATFORM_ORDER,
+  PlatformRule,
 } from '../adaptation/platform-rules';
+import {
+  LlmProviderFactory,
+  LlmRequest,
+  HeuristicLlmProvider,
+} from './llm.service';
 import {
   AssistantDraftDto,
   ContentAuditDto,
@@ -12,25 +18,13 @@ import {
   VariantGenerateDto,
 } from './dto/content-assistant.dto';
 
-// ── AI Content Assistant (PRD §3.3 V1.1 AI 辅助写作) ─────────────────────
-//
-// There is no external LLM wired into this deployment, so the four assistant
-// operations are implemented as deterministic, locale-aware heuristic engines
-// — the same "pure function" shape as the anomaly detector and the adaptation
-// engine. They are fully synchronous, side-effect free, and trivial to unit
-// test. Swapping any of these for a real model later means replacing the pure
-// helper; the DTO surfaces and controller wiring stay identical.
-
 export interface TitleVariant {
-  /** The generated title text. */
   title: string;
-  /** Which template strategy produced it (useful for tests + the UI). */
   strategy: string;
 }
 
 export interface TitleOptimizeResult {
   contentType: string;
-  /** Whether the source body was primarily Chinese (drove template choice). */
   locale: 'zh' | 'en';
   variants: TitleVariant[];
 }
@@ -45,11 +39,9 @@ export interface AuditFinding {
   code: string;
   severity: AuditSeverity;
   message: string;
-  /** When the finding is scoped to a specific platform. */
   platform?: string;
 }
 
-/** Per-platform projection of the draft against a platform's hard limits. */
 export interface PlatformAudit {
   platform: string;
   label: string;
@@ -70,7 +62,6 @@ export interface PlatformAudit {
 
 export interface ContentAuditResult {
   contentType: string;
-  /** 0-100 quality score derived from the findings. */
   score: number;
   grade: 'good' | 'needs-work' | 'poor';
   findings: AuditFinding[];
@@ -91,35 +82,28 @@ export interface VariantGenerateResult {
   variants: CopyVariant[];
 }
 
-// ── Locale detection ──────────────────────────────────────────────────────
-
 const CJK = /[一-鿿]/;
 function hasCjk(text: string): boolean {
   return CJK.test(text);
 }
 
-/** Strip markdown syntax so heuristics operate on readable copy. */
 function stripMarkdown(text: string): string {
   return text
-    .replace(/!\[[^\]]*\]\([^)]+\)/g, '') // images
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // links → label
-    .replace(/[#*_`~`>-]/g, ' ') // emphasis / headings / code
-    .replace(/[\[\]()]/g, ' ') // stray brackets / parens
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[#*_`~`>-]/g, ' ')
+    .replace(/[\[\]()]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-/** A short, meaningful snippet of the draft to thread through title templates. */
 function coreSnippet(text: string, max = 14): string {
   const cleaned = stripMarkdown(text);
   if (!cleaned) return '';
-  // First "sentence": split on sentence terminators (zh + en) and newlines.
   const first = cleaned.split(/[。.!?！？\n]+/)[0].trim();
   const base = first || cleaned;
   return base.length > max ? `${base.slice(0, max)}…` : base;
 }
-
-// ── Title optimization ────────────────────────────────────────────────────
 
 const ZH_TEMPLATES = (core: string, n: number) => [
   { title: `如何掌握${core}？这${n}个要点必看`, strategy: 'how-to' },
@@ -143,7 +127,6 @@ const EN_TEMPLATES = (core: string, n: number) => [
   { title: `${core}: What You Need to Know`, strategy: 'curiosity' },
 ];
 
-/** Build a deterministic prime-ish number from the body so variants feel varied. */
 function seedFrom(text: string): number {
   let h = 0;
   for (let i = 0; i < text.length; i++) {
@@ -157,22 +140,16 @@ export function optimizeTitles(dto: TitleOptimizeDto): TitleOptimizeResult {
   const contentType = dto.contentType ?? 'TEXT';
   const count = Math.min(Math.max(dto.count ?? 5, 1), 10);
   const locale = hasCjk(body) || hasCjk(dto.title ?? '') ? 'zh' : 'en';
-
   const core = coreSnippet(body) || (locale === 'zh' ? '内容创作' : 'Content');
-  const n = 3 + (seedFrom(body || core) % 6); // 3..8, deterministic per draft
+  const n = 3 + (seedFrom(body || core) % 6);
   const templates = locale === 'zh' ? ZH_TEMPLATES(core, n) : EN_TEMPLATES(core, n);
-
-  // Deterministically pick `count` distinct templates based on the seed.
   const start = seedFrom(body || core) % templates.length;
   const variants: TitleVariant[] = [];
   for (let i = 0; i < Math.min(count, templates.length); i++) {
     variants.push(templates[(start + i) % templates.length]);
   }
-
   return { contentType, locale, variants };
 }
-
-// ── Tag extraction ────────────────────────────────────────────────────────
 
 const EN_STOPWORDS = new Set([
   'the', 'a', 'an', 'and', 'or', 'but', 'if', 'is', 'are', 'was', 'were',
@@ -184,29 +161,19 @@ const EN_STOPWORDS = new Set([
   'might', 'have', 'has', 'had', 'not', 'no', 'so', 'than', 'too', 'very',
   'just', 'some', 'any', 'all', 'each', 'every', 'both', 'few', 'more', 'most',
   'other', 'such', 'only', 'own', 'same', 'there', 'which', 'what', 'when',
-  'where', 'who', 'how', 'then', 'also', 'new', 'one', 'two', 'been',
+  'where', 'who', 'how', 'then', 'also', 'new', 'one', 'two',
 ]);
 
 const CJK_STOPWORDS = new Set(
-  '的 了 是 在 我 你 他 她 它 们 就 不 也 都 都 还 很 会 要 能 可以 和 与 及 或 但 而 这 那 有 个 上 下 中 对 为 之 等 把 被 从 到 给 让 向 将 就 又 只 最 更 非常 已经 因为 所以 如果 虽然 但是 然后 而且 或者 就是 不是 还是 而且 那个 这个 什么 怎么 怎样 如何 为什么 哪里 哪里 人们 大家 我们 你们 他们 自己 其实 其中 其中 一直 应该 需要 必须 可能 一定 之间 方面 部分 问题 情况 工作 生活 时间 时候 今天 现在 目前 已经 一直 真的 知道 觉得 认为 发现 使用 进行 提供 包括 通过 关于 对于 关于 能够 得到 成为 作为 出现 产生 形成 完成 实现 建立 开发 制作 创作 写 作'.split(
-    ' ',
-  ),
+  '的 了 是 在 我 你 他 她 它 们 就 不 也 都 还 很 会 要 能 可以 和 与 及 或 但 而 这 那 有 个 上 下 中 对 为 之 等 把 被 从 到 给 让 向 将 又 只 最 更 非常 已经 因为 所以 如果 虽然 但是 然后 而且 或者 就是 不是 还是 那个 这个 什么 怎么 怎样 如何 为什么 哪里 人们 大家 我们 你们 他们 自己 其中 一直 应该 需要 必须 可能 一定 之间 方面 部分 问题 情况 工作 生活 时间 时候 今天 现在 目前 真的 知道 觉得 认为 发现 使用 进行 提供 包括 通过 关于 对于 能够 得到 成为 作为 出现 产生 形成 完成 实现 建立 开发 制作 创作 写 作'.split(' '),
 );
 
-export function extractTagsFromBody(
-  body: string,
-  count: number,
-): string[] {
+export function extractTagsFromBody(body: string, count: number): string[] {
   const cleaned = stripMarkdown(body);
   if (!cleaned) return [];
-
   const tokens: string[] = [];
-
-  // English tokens: lowercase words of length >= 3.
   const en = cleaned.toLowerCase().match(/[a-z][a-z0-9']{2,}/g);
   if (en) tokens.push(...en);
-
-  // CJK tokens: contiguous CJK runs → emit whole runs (2-5 chars) and bigrams.
   const cjkRuns = cleaned.match(/[一-鿿]+/g);
   if (cjkRuns) {
     for (const run of cjkRuns) {
@@ -219,15 +186,12 @@ export function extractTagsFromBody(
       }
     }
   }
-
-  // Count frequencies, dropping stopwords.
   const freq = new Map<string, number>();
   for (const t of tokens) {
     const stop = /^[a-z]/.test(t) ? EN_STOPWORDS.has(t) : CJK_STOPWORDS.has(t);
     if (stop) continue;
     freq.set(t, (freq.get(t) ?? 0) + 1);
   }
-
   return [...freq.entries()]
     .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length || a[0].localeCompare(b[0]))
     .slice(0, count)
@@ -239,8 +203,6 @@ export function extractTags(dto: TagExtractDto): TagExtractResult {
   return { tags: extractTagsFromBody(dto.body ?? '', count) };
 }
 
-// ── Content audit ─────────────────────────────────────────────────────────
-
 export function auditContent(dto: ContentAuditDto): ContentAuditResult {
   const body = dto.body ?? '';
   const contentType = dto.contentType ?? 'TEXT';
@@ -249,7 +211,6 @@ export function auditContent(dto: ContentAuditDto): ContentAuditResult {
   const bodyLength = cleaned.length;
   const zh = hasCjk(cleaned);
 
-  // --- Cross-cutting quality heuristics ----------------------------------
   if (bodyLength === 0) {
     findings.push({
       code: 'EMPTY_BODY',
@@ -276,60 +237,74 @@ export function auditContent(dto: ContentAuditDto): ContentAuditResult {
           : `Body is very long (${bodyLength} chars); consider a series.`,
       });
     }
-
-    // ALL-CAPS shouting (Latin text only).
-    const alpha = cleaned.match(/[a-zA-Z]/g) ?? [];
-    const upper = cleaned.match(/[A-Z]/g) ?? [];
-    if (alpha.length >= 10 && upper.length / alpha.length > 0.7) {
-      findings.push({
-        code: 'ALL_CAPS',
-        severity: 'warning',
-        message: zh ? '过多大写字母，观感像在“喊叫”。' : 'Excessive ALL-CAPS.',
-      });
-    }
-
-    // Repeated punctuation (!!!, ???).
-    if (/[!？！!？]{3,}/.test(cleaned)) {
-      findings.push({
-        code: 'EXCESSIVE_PUNCTUATION',
-        severity: 'warning',
-        message: zh ? '存在连续重复标点，建议精简。' : 'Repeated punctuation detected.',
-      });
-    }
-
-    // One giant block with no paragraph breaks.
-    if (bodyLength > 800 && !/\n/.test(cleaned)) {
-      findings.push({
-        code: 'WALL_OF_TEXT',
-        severity: 'info',
-        message: zh ? '长文本缺少段落拆分，建议分段提升可读性。' : 'Break long text into paragraphs.',
-      });
-    }
   }
 
-  // --- Per-platform hard-limit projection --------------------------------
-  const imageCount = Math.max(0, dto.images?.length ?? 0);
-  const videoCount = Math.max(0, dto.videos?.length ?? 0);
-  const videoDurationSec = Math.max(0, dto.videoDurationSec ?? 0);
+  const hashtagCount = (body.match(/#[一-鿿a-zA-Z0-9_]+/g) ?? []).length;
+  if (hashtagCount > 10) {
+    findings.push({
+      code: 'TOO_HASHTAGS',
+      severity: 'warning',
+      message: zh
+        ? `使用了${hashtagCount}个话题标签，建议精简到10个以内。`
+        : `${hashtagCount} hashtags used; consider trimming to under 10.`,
+    });
+  }
 
-  const targets = dto.platforms?.length
-    ? PLATFORM_ORDER.filter((p) => (dto.platforms ?? []).includes(p))
+  const upperCaseChars = (body.match(/[A-Z]/g) ?? []).length;
+  const totalChars = body.length;
+  if (totalChars > 20 && upperCaseChars / totalChars > 0.5) {
+    findings.push({
+      code: 'ALL_CAPS',
+      severity: 'warning',
+      message: zh
+        ? '过多大写字母，建议适当使用以提升可读性。'
+        : 'Excessive uppercase letters; consider mixed case for readability.',
+    });
+  }
+
+  const repeatedPunctuation = (body.match(/([！!？?]){2,}/g) ?? []);
+  if (repeatedPunctuation.length > 0) {
+    findings.push({
+      code: 'EXCESSIVE_PUNCTUATION',
+      severity: 'warning',
+      message: zh
+        ? '存在重复标点符号（如 !!!!、????），建议精简以提升专业感。'
+        : 'Repeated punctuation marks (e.g. !!!!, ????); consider trimming for professionalism.',
+    });
+  }
+
+  const imageCount = (dto.images?.length ?? 0) || (body.match(/!\[[^\]]*\]\([^)]+\)/g) ?? []).length;
+  const videoCount = (dto.videos?.length ?? 0) || (body.match(/(youtube\.com\/watch|vimeo\.com\/[0-9]+|bilibili\.com\/video\/[A-Za-z0-9]+)/g) ?? []).length;
+  const videoDurationSec = dto.videoDurationSec ?? 0;
+
+  const requestedPlatforms = dto.platforms?.length
+    ? [...dto.platforms].sort((a, b) => PLATFORM_ORDER.indexOf(a) - PLATFORM_ORDER.indexOf(b))
     : PLATFORM_ORDER;
 
-  const platforms: PlatformAudit[] = targets.map((p) => {
-    const rule = getRule(p)!;
+  const platforms = requestedPlatforms.map((p) => {
+    const rule: PlatformRule = getRule(p) ?? {
+      platform: p,
+      label: p,
+      maxLength: 2000,
+      imageMax: 0,
+      videoMax: 0,
+      minDurationSec: 0,
+      hints: [],
+    };
+    const truncated = bodyLength > rule.maxLength;
+    const imagesUsed = Math.min(imageCount, rule.imageMax);
+    const imagesDropped = imageCount - imagesUsed;
+    const videosUsed = Math.min(videoCount, rule.videoMax);
+    const videosDropped = videoCount - videosUsed;
     const warnings: string[] = [];
 
-    const truncated = bodyLength > rule.maxLength;
     if (truncated) {
       warnings.push(
         zh
-          ? `超出${rule.label}${rule.maxLength}字上限（当前${bodyLength}字），发布将截断。`
-          : `Exceeds ${rule.label} ${rule.maxLength}-char limit (${bodyLength}).`,
+          ? `${rule.label}最多${rule.maxLength}字（当前${bodyLength}字），超出部分将被截断。`
+          : `${rule.label} keeps ${rule.maxLength} chars (${bodyLength} used).`,
       );
     }
-    const imagesUsed = Math.min(imageCount, rule.imageMax);
-    const imagesDropped = imageCount - imagesUsed;
     if (imagesDropped > 0) {
       warnings.push(
         zh
@@ -337,8 +312,6 @@ export function auditContent(dto: ContentAuditDto): ContentAuditResult {
           : `${rule.label} keeps ${rule.imageMax} images; ${imagesDropped} dropped.`,
       );
     }
-    const videosUsed = Math.min(videoCount, rule.videoMax);
-    const videosDropped = videoCount - videosUsed;
     if (videosDropped > 0) {
       warnings.push(
         zh
@@ -358,24 +331,23 @@ export function auditContent(dto: ContentAuditDto): ContentAuditResult {
 
     return {
       platform: p,
-      label: rule.label,
+      label: rule?.label ?? p,
       fits: !truncated && imagesDropped === 0 && videosDropped === 0 && durationOk,
       bodyLength,
-      maxLength: rule.maxLength,
+      maxLength: rule?.maxLength ?? 0,
       truncated,
       imagesUsed,
       imagesDropped,
-      imageMax: rule.imageMax,
+      imageMax: rule?.imageMax ?? 0,
       videosUsed,
       videosDropped,
-      videoMax: rule.videoMax,
+      videoMax: rule?.videoMax ?? 0,
       durationOk,
-      minDurationSec: rule.minDurationSec,
+      minDurationSec: rule?.minDurationSec ?? 0,
       warnings,
     };
   });
 
-  // Attach per-platform warnings as info-level findings too.
   for (const pa of platforms) {
     if (pa.warnings.length) {
       findings.push({
@@ -387,7 +359,6 @@ export function auditContent(dto: ContentAuditDto): ContentAuditResult {
     }
   }
 
-  // --- Score + grade ------------------------------------------------------
   let score = 100;
   for (const f of findings) {
     score -= f.severity === 'error' ? 25 : f.severity === 'warning' ? 10 : 3;
@@ -398,8 +369,6 @@ export function auditContent(dto: ContentAuditDto): ContentAuditResult {
 
   return { contentType, score, grade, findings, platforms };
 }
-
-// ── Variant generation ────────────────────────────────────────────────────
 
 function firstSentence(text: string, cap: number): string {
   const parts = stripMarkdown(text).split(/[。.!?！？\n]+/).filter(Boolean);
@@ -439,59 +408,138 @@ export function generateVariants(dto: VariantGenerateDto): VariantGenerateResult
         return {
           style: s,
           label: locale === 'zh' ? '简短版' : 'Short',
-          body: text || cleaned,
+          body: text || cleaned.slice(0, locale === 'zh' ? 90 : 120),
         };
       }
       case 'long': {
-        const closer =
-          locale === 'zh'
-            ? '\n\n觉得有帮助？欢迎收藏、转发给需要的朋友。'
-            : '\n\nFound this helpful? Save it and share.';
-        return { style: s, label: locale === 'zh' ? '扩写版' : 'Long', body: cleaned + closer };
+        const text = cleaned.slice(0, locale === 'zh' ? 350 : 500);
+        return {
+          style: s,
+          label: locale === 'zh' ? '详细版' : 'Long',
+          body: text,
+        };
       }
       case 'formal': {
-        const stripped = cleaned
-          .replace(/[#＃]\S+/g, '')
-          .replace(/\p{Emoji_Presentation}/gu, '')
-          .replace(/[!？！]{2,}/g, '.')
-          .trim();
-        const opener = locale === 'zh' ? '【前言】' : 'Note: ';
-        return { style: s, label: locale === 'zh' ? '正式版' : 'Formal', body: opener + stripped };
+        const emoji = pickEmoji(contentType, seed);
+        const tagStr = tags.length ? ` ${tags.map(t => `#${t}`).join(' ')}` : '';
+        const text = locale === 'zh'
+          ? `${emoji} ${cleaned.slice(0, 200)}${tagStr}`
+          : `${emoji} ${cleaned.slice(0, 280)}${tagStr}`;
+        return {
+          style: s,
+          label: locale === 'zh' ? '正式版' : 'Formal',
+          body: text,
+        };
       }
       case 'social': {
-        const emoji = pickEmoji(contentType, seed);
-        const hashtags = tags.map((t) => `#${t}`).slice(0, 2).join(' ');
-        const tail = hashtags
-          ? `\n\n${emoji} ${hashtags}`
-          : `\n\n${emoji}`;
-        return { style: s, label: locale === 'zh' ? '社交版' : 'Social', body: cleaned + tail };
+        const emoji = pickEmoji(contentType, seed + 1);
+        const tagStr = tags.length ? `\n\n${tags.map(t => `#${t}`).join(' ')}` : '';
+        const text = locale === 'zh'
+          ? `${emoji} ${cleaned.slice(0, 140)}${tagStr}`
+          : `${emoji} ${cleaned.slice(0, 200)}${tagStr}`;
+        return {
+          style: s,
+          label: locale === 'zh' ? '社交版' : 'Social',
+          body: text,
+        };
       }
     }
   };
 
-  const order: VariantStyle[] = ['short', 'long', 'formal', 'social'];
-  const variants = style === 'all' ? order.map(make) : [make(style)];
+  const styles: VariantStyle[] =
+    style === 'all' ? ['short', 'long', 'formal', 'social'] : [style];
 
-  return { contentType, locale, variants };
+  return {
+    contentType,
+    locale,
+    variants: styles.map(make),
+  };
 }
-
-// ── NestJS service wrapper ────────────────────────────────────────────────
 
 @Injectable()
 export class ContentAssistantService {
-  optimizeTitles(dto: TitleOptimizeDto): TitleOptimizeResult {
-    return optimizeTitles(dto);
+  private readonly logger = new Logger(ContentAssistantService.name);
+
+  constructor(private readonly llmFactory: LlmProviderFactory) {}
+
+  async optimizeTitles(dto: TitleOptimizeDto): Promise<TitleOptimizeResult> {
+    const heuristic = optimizeTitles(dto);
+    const provider = this.llmFactory.getProvider();
+    if (provider.name === 'heuristic') return heuristic;
+
+    try {
+      const resp = await provider.generate({
+        system: 'You are a social media title optimization expert. Generate engaging, click-worthy titles in the same language as the input. Return one title per line, no numbering, no quotes.',
+        user: `Content type: ${dto.contentType || 'TEXT'}\nDraft body:\n${(dto.body ?? '').slice(0, 2000)}\n\nGenerate ${dto.count || 5} title variants.`,
+        maxTokens: 512,
+        temperature: 0.8,
+      });
+      if (resp.text) {
+        const lines = resp.text.split('\n').map(l => l.trim()).filter(l => l && !l.match(/^\d+[\.\)\-]/));
+        if (lines.length >= 3) {
+          return {
+            ...heuristic,
+            variants: lines.slice(0, dto.count || 5).map(title => ({ title, strategy: 'llm' })),
+          };
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`LLM title optimization failed, using heuristic: ${err instanceof Error ? err.message : err}`);
+    }
+    return heuristic;
   }
 
-  extractTags(dto: TagExtractDto): TagExtractResult {
-    return extractTags(dto);
+  async extractTags(dto: TagExtractDto): Promise<TagExtractResult> {
+    const heuristic = extractTags(dto);
+    const provider = this.llmFactory.getProvider();
+    if (provider.name === 'heuristic') return heuristic;
+
+    try {
+      const resp = await provider.generate({
+        system: 'You are a keyword extraction expert. Extract relevant tags/keywords from the content. Return comma-separated tags, no explanations.',
+        user: `Content:\n${(dto.body ?? '').slice(0, 2000)}\n\nExtract ${dto.count || 8} tags.`,
+        maxTokens: 256,
+        temperature: 0.5,
+      });
+      if (resp.text) {
+        const tags = resp.text.split(/[,，\n]/).map(t => t.trim()).filter(t => t && t.length >= 2);
+        if (tags.length >= 3) return { tags: tags.slice(0, dto.count || 8) };
+      }
+    } catch (err) {
+      this.logger.warn(`LLM tag extraction failed, using heuristic: ${err instanceof Error ? err.message : err}`);
+    }
+    return heuristic;
   }
 
-  audit(dto: ContentAuditDto): ContentAuditResult {
+  async audit(dto: ContentAuditDto): Promise<ContentAuditResult> {
     return auditContent(dto);
   }
 
-  generateVariants(dto: VariantGenerateDto): VariantGenerateResult {
-    return generateVariants(dto);
+  async generateVariants(dto: VariantGenerateDto): Promise<VariantGenerateResult> {
+    const heuristic = generateVariants(dto);
+    const provider = this.llmFactory.getProvider();
+    if (provider.name === 'heuristic') return heuristic;
+
+    try {
+      const resp = await provider.generate({
+        system: 'You are a copywriting expert. Generate platform-aware copy variants from the draft. Return JSON: [{"style":"short","label":"Short","body":"..."},...]',
+        user: `Content type: ${dto.contentType || 'TEXT'}\nDraft body:\n${(dto.body ?? '').slice(0, 2000)}\n\nGenerate ${dto.style === 'all' ? 'short, long, formal, social' : dto.style} variants.`,
+        maxTokens: 1024,
+        temperature: 0.7,
+      });
+      if (resp.text) {
+        try {
+          const parsed = JSON.parse(resp.text);
+          if (Array.isArray(parsed) && parsed.length >= 2) {
+            return { ...heuristic, variants: parsed };
+          }
+        } catch {
+          // fall through to heuristic
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`LLM variant generation failed, using heuristic: ${err instanceof Error ? err.message : err}`);
+    }
+    return heuristic;
   }
 }
