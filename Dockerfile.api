@@ -13,8 +13,10 @@ RUN pnpm install --frozen-lockfile
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-ENV PATH="/app/node_modules/.bin:${PATH}"
-RUN pnpm build --filter=@content-hub/api
+# Build workspace deps first, then build api directly (avoids pnpm exec binary resolution issues)
+RUN pnpm --filter=@content-hub/shared-types build
+RUN pnpm --filter=@content-hub/platform-sdk build
+RUN cd /app/apps/api && pnpm run build
 RUN pnpm --filter=@content-hub/api prisma generate
 
 FROM base AS runner
