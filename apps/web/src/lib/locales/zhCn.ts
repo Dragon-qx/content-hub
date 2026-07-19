@@ -127,6 +127,7 @@ export const zhCn = {
   'accounts.teamId': '团队 ID',
   'accounts.binding': '绑定中…',
   'accounts.bind': '绑定账号',
+  'accounts.bindSuccess': '账号绑定成功！',
   'accounts.redirecting': '跳转中…',
   'accounts.column.account': '账号',
   'accounts.column.platform': '平台',

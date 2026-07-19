@@ -129,6 +129,7 @@ export const en: Record<ZhCnKey, string> = {
   'accounts.teamId': 'Team ID',
   'accounts.binding': 'Binding…',
   'accounts.bind': 'Bind account',
+  'accounts.bindSuccess': 'Account bound successfully!',
   'accounts.redirecting': 'Redirecting…',
   'accounts.column.account': 'Account',
   'accounts.column.platform': 'Platform',

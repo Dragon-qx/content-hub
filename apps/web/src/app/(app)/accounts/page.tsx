@@ -144,6 +144,10 @@ export default function AccountsPage() {
       setSecret('');
       await load();
       await loadHealth();
+      alert(t('accounts.bindSuccess'));
+    } catch (err: any) {
+      const msg = err?.message ?? t('common.error');
+      window.alert(msg);
     } finally {
       setSubmitting(false);
     }
