@@ -35,7 +35,7 @@ export default function Topbar({ user, onMenuClick }: { user: AuthUser | null; o
         <button
           type="button"
           onClick={() => setLocale(locale === 'zhCn' ? 'en' : 'zhCn')}
-          className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs md:px-3 md:text-sm text-slate-600 hover:bg-slate-50"
+          className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs md:px-3 md:text-sm font-medium text-slate-700 hover:bg-slate-50"
           aria-label={t('topbar.language')}
         >
           {locale === 'zhCn' ? 'EN' : '中'}
@@ -43,7 +43,7 @@ export default function Topbar({ user, onMenuClick }: { user: AuthUser | null; o
         {user && (
           <button
             onClick={logout}
-            className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs md:px-3 md:text-sm text-slate-600 hover:bg-slate-50"
+            className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs md:px-3 md:text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             {t('topbar.logout')}
           </button>
