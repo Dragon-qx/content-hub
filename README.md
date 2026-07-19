@@ -55,19 +55,63 @@ pnpm --filter @content-hub/platform-sdk test
 pnpm --filter @content-hub/web build
 ```
 
-## Production deployment
+## One-command production startup
+
+### Option A — one-click scripts (recommended)
+
+Three scripts are committed at the project root; pick whichever matches your
+shell. They build the images if needed and start the stack detached behind an
+Nginx reverse proxy on <http://localhost>.
 
 ```bash
-# build and run the full stack behind Nginx
-docker compose -f docker-compose.prod.yml up -d --build
+# macOS / Linux / Git Bash / WSL
+./start.sh            # start
+./start.sh --down     # stop
+./start.sh --clean    # stop + wipe DB/Redis volumes
+
+# Windows CMD
+start.bat             # start
+start.bat --down      # stop
+start.bat --clean     # wipe data
+
+# Windows PowerShell
+.\start.ps1           # start
+.\start.ps1 -Down     # stop
+.\start.ps1 -Clean    # wipe data
 ```
 
-The compose file starts PostgreSQL, Redis, the API (`:3000`), the Next.js web
-frontend, and an Nginx reverse proxy exposed on `:80`. The API is reached at
-`https://<host>/api/v1` and the Swagger UI at `https://<host>/api/docs`.
+Then open **http://localhost**. The frontend is served at `/`, the REST API at
+`/api/v1`, and the Swagger UI at `/api/docs`.
 
-Required env vars (via a `.env` file next to the compose file):
-`DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `CREDENTIAL_ENCRYPTION_KEY`.
+### Option B — npm scripts
+
+```bash
+pnpm docker:up        # build & start detached
+pnpm docker:down      # stop
+pnpm docker:clean     # stop + wipe DB/Redis volumes
+pnpm docker:logs      # tail container logs
+```
+
+### Option C — raw docker compose
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml down -v   # stop + wipe data
+```
+
+### What's in the stack
+
+- `db` — PostgreSQL 16
+- `redis` — Redis 7
+- `api` — NestJS backend. Its entrypoint waits for the database, runs pending
+  Prisma migrations (idempotent), then starts the server on port `3000`.
+- `web` — Next.js frontend in standalone mode (port `3001`)
+- `nginx` — reverse-proxies `/api/` → API and `/` → Web, exposed on `:80`
+
+A `.env.prod` file with `JWT_SECRET`, `JWT_REFRESH_SECRET`, and
+`CREDENTIAL_ENCRYPTION_KEY` is auto-generated the first time so the stack boots
+with no manual setup. **For real deployments, replace these values with your
+own `.env` or Docker secrets before launching.**
 
 ## API overview
 

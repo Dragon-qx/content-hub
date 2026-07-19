@@ -1,11 +1,12 @@
 # Production deployment: DB + Redis + API + Web (Next.js) + Nginx.
-# Usage:  docker compose -f docker-compose.prod.yml up -d --build
 #
-# Required environment is read from a .env file containing at least:
-#   DATABASE_URL=postgresql://user:pass@db:5432/contenthub
-#   JWT_SECRET=...
-#   JWT_REFRESH_SECRET=...
-#   CREDENTIAL_ENCRYPTION_KEY=...
+# One-command startup:
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   open http://localhost
+#
+# Environment is read from the auto-generated `.env.prod`. Replace with your
+# own values (via `.env` or Docker secrets) before deploying for real.
+# Never commit real secrets.
 
 services:
   db:
@@ -28,6 +29,10 @@ services:
       - redisdata:/data
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
 
   api:
     build:
@@ -35,13 +40,31 @@ services:
       dockerfile: Dockerfile.api
     environment:
       NODE_ENV: production
+      PORT: 3000
       DATABASE_URL: postgresql://user:pass@db:5432/contenthub
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY}
+      REDIS_URL: redis://redis:6379
+      # Secrets: for local one-click runs these may be empty — the entrypoint
+      # (docker-entrypoint.sh) auto-generates throwaway values. For real
+      # deployments, set them via `.env` or Docker secrets.
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-}
+      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:-}
+      # Used by the entrypoint's DB liveness probe (defaults below match db:)
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: user
+      DB_NAME: contenthub
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/health']
+      interval: 15s
+      timeout: 5s
+      start_period: 45s
+      retries: 5
     restart: unless-stopped
 
   web:
@@ -50,6 +73,9 @@ services:
       dockerfile: Dockerfile.web
     environment:
       NODE_ENV: production
+      # Next.js standalone server.js defaults to port 3000; the nginx upstream
+      # expects 3001, so we pin it here.
+      PORT: "3001"
     depends_on:
       - api
     restart: unless-stopped
