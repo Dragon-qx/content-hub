@@ -14,6 +14,12 @@ out/
 .env
 .env.local
 .env.*.local
+# Auto-generated one-click docker secrets (never commit real secrets)
+.env.prod
+
+# Per-package symlinks from local installs — Docker rebuilds these from the
+# .pnpm store inside deps stage and must not be overwritten by `COPY . .`
+packages/*/node_modules
 
 # Logs
 *.log

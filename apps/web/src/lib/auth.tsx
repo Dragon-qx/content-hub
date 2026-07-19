@@ -15,7 +15,7 @@ import {
   setRefreshToken,
   setUnauthorizedHandler,
 } from './api';
-import { AuthUser } from './types';
+import { AuthTeam, AuthUser } from './types';
 
 export interface LoginResult {
   /** When true, the password was accepted but a TOTP code is now required. */
@@ -27,6 +27,10 @@ export interface LoginResult {
 interface AuthState {
   user: AuthUser | null;
   loading: boolean;
+  teams: AuthTeam[];
+  activeTeamId: string;
+  setActiveTeamId: (id: string) => void;
+  refreshTeams: () => Promise<void>;
   login: (email: string, password: string) => Promise<LoginResult>;
   /**
    * Complete an MFA-protected login with the token issued by `login` plus a
@@ -39,9 +43,37 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+const ACTIVE_TEAM_KEY = 'content-hub.activeTeamId';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [teams, setTeams] = useState<AuthTeam[]>([]);
+  const [activeTeamId, _setActiveTeamId] = useState('');
   const [loading, setLoading] = useState(true);
+
+  const setActiveTeamId = useCallback((id: string) => {
+    _setActiveTeamId(id);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(ACTIVE_TEAM_KEY, id);
+    }
+  }, []);
+
+  // Fetch the teams the current user belongs to (from the Member join table).
+  // We always derive the active team from this live list rather than trusting
+  // a single teamId column, because users may belong to multiple teams.
+  const refreshTeams = useCallback(async () => {
+    try {
+      const list = await api.get<AuthTeam[]>('/teams');
+      setTeams(list);
+      const stored =
+        typeof window !== 'undefined' ? localStorage.getItem(ACTIVE_TEAM_KEY) : null;
+      const stillMember = stored && list.some((t) => t.id === stored);
+      _setActiveTeamId(stillMember ? stored! : list[0]?.id ?? '');
+    } catch {
+      setTeams([]);
+      _setActiveTeamId('');
+    }
+  }, []);
 
   const hydrate = useCallback(async () => {
     if (!getAuthToken()) {
@@ -53,10 +85,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(me);
     } catch {
       setAuthToken(null);
-    } finally {
       setLoading(false);
+      return;
     }
-  }, []);
+    // After the user is known, resolve their teams so team-scoped pages have
+    // a valid activeTeamId for their API calls.
+    await refreshTeams();
+    setLoading(false);
+  }, [refreshTeams]);
 
   useEffect(() => {
     hydrate();
@@ -115,10 +151,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthToken(null);
     setRefreshToken(null);
     setUser(null);
+    setTeams([]);
+    _setActiveTeamId('');
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, mfaLogin, register, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        teams,
+        activeTeamId,
+        setActiveTeamId,
+        refreshTeams,
+        login,
+        mfaLogin,
+        register,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -19,6 +19,7 @@ import {
   TrendPeriod,
   TREND_PERIODS,
 } from '@/lib/types';
+import { useT } from '@/lib/i18n';
 
 interface Overview {
   followers: { value: number; change: string };
@@ -45,6 +46,7 @@ interface HistoryPoint {
 }
 
 export default function AnalyticsPage() {
+  const { t } = useT();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [ranking, setRanking] = useState<ContentRanking | null>(null);
   const [rankView, setRankView] = useState<TopContentView>('top');
@@ -156,36 +158,36 @@ export default function AnalyticsPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Analytics"
-        subtitle="Performance across your platforms"
+        title={t('analytics.title')}
+        subtitle={t('analytics.subtitle')}
         actions={
           <div className="flex gap-2">
             <Button variant="secondary" onClick={scanAnomalies} disabled={anomalyLoading}>
-              {anomalyLoading ? 'Scanning…' : 'Scan anomalies'}
+              {anomalyLoading ? t('analytics.scanning') : t('analytics.scanAnomalies')}
             </Button>
-            <Button variant="secondary" onClick={exportCsv}>Export CSV</Button>
+            <Button variant="secondary" onClick={exportCsv}>{t('analytics.exportCsv')}</Button>
           </div>
         }
       />
 
       {loading ? (
-        <div className="text-slate-400">Loading…</div>
+        <div className="text-slate-400">{t('common.loading')}</div>
       ) : overview ? (
         <>
           {/* KPI cards */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {[
-              { label: 'Followers', value: overview.followers.value, change: overview.followers.change },
-              { label: 'Impressions', value: overview.impressions.value, change: overview.impressions.change },
-              { label: 'Engagements', value: overview.engagements.value, change: overview.engagements.change },
-              { label: 'Eng. rate', value: overview.engagementRate, change: '' },
+              { label: t('dashboard.followers'), value: overview.followers.value, change: overview.followers.change },
+              { label: t('dashboard.impressions'), value: overview.impressions.value, change: overview.impressions.change },
+              { label: t('dashboard.engagements'), value: overview.engagements.value, change: overview.engagements.change },
+              { label: t('dashboard.engRate'), value: overview.engagementRate, change: '' },
             ].map((m) => (
               <Card key={m.label}>
                 <div className="text-sm text-slate-500">{m.label}</div>
                 <div className="mt-2 text-2xl font-semibold">{m.value.toLocaleString()}</div>
                 {m.change && (
                   <div className={`mt-1 text-xs ${m.change.startsWith('-') ? 'text-red-500' : 'text-emerald-600'}`}>
-                    {m.change} vs prev.
+                    {m.change} {t('analytics.vsPrev')}
                   </div>
                 )}
               </Card>
@@ -196,13 +198,13 @@ export default function AnalyticsPage() {
           <Card>
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-semibold">Anomaly detection</h2>
+                <h2 className="text-base font-semibold">{t('analytics.anomalyDetection')}</h2>
                 {anomalies.length > 0 && (
-                  <Badge tone="danger">{anomalies.length} firing</Badge>
+                  <Badge tone="danger">{anomalies.length} {t('analytics.firing')}</Badge>
                 )}
               </div>
               <Button variant="ghost" onClick={scanAnomalies} disabled={anomalyLoading}>
-                {anomalyLoading ? 'Scanning…' : 'Refresh'}
+                {anomalyLoading ? t('analytics.scanning') : t('analytics.refresh')}
               </Button>
             </div>
             {anomalyError && !anomalies.length ? (
@@ -216,7 +218,7 @@ export default function AnalyticsPage() {
                   >
                     <div className="flex items-center gap-2">
                       <Badge tone={ANOMALY_SEVERITY_TONE[a.severity]}>
-                        {ANOMALY_TYPE_LABELS[a.type]}
+                        {t(ANOMALY_TYPE_LABELS[a.type])}
                       </Badge>
                       <span className="text-slate-700">{a.message}</span>
                     </div>
@@ -233,7 +235,7 @@ export default function AnalyticsPage() {
               </ul>
             ) : (
               <p className="text-sm text-slate-400">
-                No anomalies detected. Run a scan to analyse recent metric history.
+                {t('analytics.empty')}
               </p>
             )}
           </Card>
@@ -241,11 +243,11 @@ export default function AnalyticsPage() {
           {/* Trend chart with selectors */}
           <Card>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-base font-semibold">Trend</h2>
+              <h2 className="text-base font-semibold">{t('analytics.trend')}</h2>
               <div className="flex gap-2">
                 <Select value={metric} onChange={(e) => setMetric(e.target.value as AnalyticsMetric)} className="w-full sm:max-w-[180px]">
                   {ANALYTICS_METRICS.map((m) => (
-                    <option key={m} value={m}>{METRIC_LABELS[m]}</option>
+                    <option key={m} value={m}>{t(METRIC_LABELS[m])}</option>
                   ))}
                 </Select>
                 <div className="flex overflow-hidden rounded-lg border border-slate-200">
@@ -262,7 +264,7 @@ export default function AnalyticsPage() {
               </div>
             </div>
             {trendLoading ? (
-              <div className="text-sm text-slate-400">Loading trend…</div>
+              <div className="text-sm text-slate-400">{t('common.loading')}</div>
             ) : (
               <TrendChart data={history} height={240} />
             )}
@@ -271,7 +273,7 @@ export default function AnalyticsPage() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Platform breakdown */}
             <Card>
-              <h2 className="mb-3 text-base font-semibold">Platform breakdown</h2>
+              <h2 className="mb-3 text-base font-semibold">{t('analytics.platformBreakdown')}</h2>
               {dashboard?.platformBreakdown?.length ? (
                 <div className="flex flex-col gap-3">
                   {dashboard.platformBreakdown.map((p) => (
@@ -292,7 +294,7 @@ export default function AnalyticsPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-slate-400">No platform data yet.</p>
+                <p className="text-sm text-slate-400">{t('analytics.empty')}</p>
               )}
             </Card>
 
@@ -300,7 +302,7 @@ export default function AnalyticsPage() {
             <Card>
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-base font-semibold">Content ranking</h2>
+                  <h2 className="text-base font-semibold">{t('analytics.contentRank')}</h2>
                   {ranking && (
                     <Badge tone="neutral">
                       {ranking.summary.top}/{ranking.summary.mid}/{ranking.summary.bottom} top/mid/low
@@ -318,7 +320,7 @@ export default function AnalyticsPage() {
                           : 'bg-white text-slate-600 hover:bg-slate-50'
                       }`}
                     >
-                      {v === 'top' ? 'Top' : 'Bottom'}
+                      {v === 'top' ? t('analytics.top') : t('analytics.bottom')}
                     </button>
                   ))}
                 </div>
@@ -333,7 +335,7 @@ export default function AnalyticsPage() {
                       <div className="flex items-center gap-2">
                         <span className="w-5 text-right text-xs text-slate-400">#{p.rank}</span>
                         <Badge tone={CONTENT_TIER_TONE[p.tier]}>
-                          {CONTENT_TIER_LABELS[p.tier]}
+                          {t(CONTENT_TIER_LABELS[p.tier])}
                         </Badge>
                         <div>
                           <div className="font-medium text-slate-700">{p.title}</div>
@@ -348,14 +350,14 @@ export default function AnalyticsPage() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-slate-400">No published content yet.</p>
+                <p className="text-sm text-slate-400">{t('analytics.empty')}</p>
               )}
             </Card>
           </div>
         </>
       ) : (
         <Card>
-          <p className="text-sm text-slate-400">Connect an account to see analytics.</p>
+          <p className="text-sm text-slate-400">{t('analytics.empty')}</p>
         </Card>
       )}
     </div>

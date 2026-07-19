@@ -8,11 +8,13 @@ import { JwtStrategy } from './jwt.strategy';
 import { MfaService } from './mfa.service';
 import { AuditModule } from '../audit/audit.module';
 import { CryptoModule } from '../../common/crypto/crypto.module';
+import { TeamModule } from '../team/team.module';
 
 @Module({
   imports: [
     AuditModule,
     CryptoModule,
+    TeamModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

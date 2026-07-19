@@ -1,12 +1,4 @@
 "use strict";
-/**
- * 微信公众号平台适配器
- * 提供 access_token 获取、素材管理、草稿管理、发布等功能。
- *
- * Extends BaseAdapter so it honours the PlatformAdapter contract (publish /
- * fetchMetrics) and can also be seeded with a pre-existing token via
- * setCredentials().
- */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WechatOfficialAdapter = void 0;
 const adapter_base_1 = require("../adapter-base");
@@ -23,15 +15,10 @@ class WechatOfficialAdapter extends adapter_base_1.BaseAdapter {
         const redirect = encodeURIComponent(this.callbackFor());
         return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${encodeURIComponent(this.config.appid)}&redirect_uri=${redirect}&response_type=code&scope=snsapi_base&state=${encodeURIComponent(state)}#wechat_redirect`;
     }
-    /** WeChat Official uses the client_credential grant; this derives the token. */
     async handleCallback() {
         const token = await this.getAccessToken();
         return { accessToken: token, expiresAt: new Date(this.tokenExpireTime) };
     }
-    /**
-     * 获取微信公众号 access_token
-     * 会缓存 token，过期前自动刷新。优先使用注入的已存 token。
-     */
     async getAccessToken() {
         const injected = this.getInjectedAccessToken();
         if (injected) {
@@ -51,23 +38,12 @@ class WechatOfficialAdapter extends adapter_base_1.BaseAdapter {
             throw new Error(`WeChat API error: ${data.errcode} - ${data.errmsg}`);
         }
         this.accessToken = data.access_token;
-        // 提前 60 秒过期，避免边界问题
         this.tokenExpireTime = Date.now() + (data.expires_in ?? 7200) * 1000;
         return this.accessToken;
     }
-    /** 兼容 BaseAdapter 的 getToken 管道：delegate 到 client-credential 流程。 */
     async getToken() {
         return this.getAccessToken();
     }
-    /**
-     * Publish a post: create a multimedia draft then submit it.
-     *
-     * WeChat requires a thumb_media_id (permanent image material) for every
-     * article draft. If `post.mediaUrls` is supplied the first URL is uploaded
-     * via the real `/cgi-bin/material/add_material` multipart endpoint and its
-     * returned media_id is used. Without a cover image the call throws because
-     * WeChat will reject a draft with a placeholder thumb.
-     */
     async publish(post) {
         const title = post.extra?.title ?? 'Untitled';
         const thumbUrl = post.mediaUrls?.[0];
@@ -90,7 +66,6 @@ class WechatOfficialAdapter extends adapter_base_1.BaseAdapter {
         };
     }
     async fetchMetrics() {
-        // 公众号没有直接返回“曝光/互动”的公开接口；这里返回粉丝数作为主指标。
         const followerCount = await this.getFollowerCount();
         return {
             impressions: 0,
@@ -102,10 +77,6 @@ class WechatOfficialAdapter extends adapter_base_1.BaseAdapter {
             followerCount,
         };
     }
-    /**
-     * 获取粉丝总数
-     * 注意：需要已认证的服务号
-     */
     async getFollowerCount() {
         const token = await this.getToken();
         const url = `https://api.weixin.qq.com/cgi-bin/user/get?access_token=${encodeURIComponent(token)}`;
@@ -119,12 +90,6 @@ class WechatOfficialAdapter extends adapter_base_1.BaseAdapter {
         }
         return data.total ?? 0;
     }
-    /**
-     * 获取素材列表
-     * @param type 素材类型：image/video/voice/news
-     * @param offset 偏移量
-     * @param count 数量
-     */
     async getMaterials(type = 'news', offset = 0, count = 20) {
         const token = await this.getToken();
         const url = `https://api.weixin.qq.com/cgi-bin/material/batchget_material?access_token=${encodeURIComponent(token)}`;
@@ -142,13 +107,6 @@ class WechatOfficialAdapter extends adapter_base_1.BaseAdapter {
         }
         return data;
     }
-    /**
-     * Upload a permanent image material via the real WeChat multipart endpoint.
-     *
-     * The WeChat API requires multipart/form-data with the raw image bytes (not
-     * a JSON body). This method fetches the image from `imageUrl` and POSTs it
-     * to `/cgi-bin/material/add_material?type=image`.
-     */
     async uploadImageMaterial(imageUrl) {
         const token = await this.getToken();
         const bytes = await this.fetchMediaBytes(imageUrl);
@@ -160,16 +118,9 @@ class WechatOfficialAdapter extends adapter_base_1.BaseAdapter {
         }
         return { media_id: data.media_id, url: data.url };
     }
-    /**
-     * @deprecated Use {@link uploadImageMaterial} which uses the real multipart endpoint.
-     */
     async addImageMaterial(imageUrl) {
         return this.uploadImageMaterial(imageUrl);
     }
-    /**
-     * 新建草稿
-     * @param articles 图文消息数组
-     */
     async createDraft(articles) {
         const token = await this.getToken();
         const url = `https://api.weixin.qq.com/cgi-bin/draft/add?access_token=${encodeURIComponent(token)}`;
@@ -187,10 +138,6 @@ class WechatOfficialAdapter extends adapter_base_1.BaseAdapter {
         }
         return { media_id: data.media_id };
     }
-    /**
-     * 发布草稿
-     * @param mediaId 草稿 media_id
-     */
     async publishDraft(mediaId) {
         const token = await this.getToken();
         const url = `https://api.weixin.qq.com/cgi-bin/freepublish/submit?access_token=${encodeURIComponent(token)}`;
@@ -208,10 +155,6 @@ class WechatOfficialAdapter extends adapter_base_1.BaseAdapter {
         }
         return { publish_id: data.publish_id };
     }
-    /**
-     * 删除草稿
-     * @param mediaId 草稿 media_id
-     */
     async deleteDraft(mediaId) {
         const token = await this.getToken();
         const url = `https://api.weixin.qq.com/cgi-bin/draft/delete?access_token=${encodeURIComponent(token)}`;

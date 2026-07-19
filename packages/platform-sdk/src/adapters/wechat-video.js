@@ -3,11 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.WechatVideoAdapter = void 0;
 const adapter_base_1 = require("../adapter-base");
 const types_1 = require("../types");
-/**
- * 微信视频号 (WeChat Channels) adapter.
- * Uses the official 视频号开放平台 OAuth2 + content APIs.
- * See: https://developers.weixin.qq.com/doc/channels/API/basics/getaccesstoken.html
- */
 class WechatVideoAdapter extends adapter_base_1.BaseAdapter {
     constructor(config) {
         super();
@@ -47,10 +42,6 @@ class WechatVideoAdapter extends adapter_base_1.BaseAdapter {
             return (await this.refreshToken()).accessToken;
         throw new Error('WeChat Video adapter is not authenticated');
     }
-    /**
-     * Upload a video to WeChat Channels and return the media_id.
-     * Real API: POST /channels/ec/basics/video/upload with multipart form.
-     */
     async uploadVideo(mediaUrl) {
         const token = await this.getToken();
         const bytes = await this.fetchMediaBytes(mediaUrl);
@@ -61,7 +52,6 @@ class WechatVideoAdapter extends adapter_base_1.BaseAdapter {
     }
     async publish(post) {
         const token = await this.getToken();
-        // Upload video first if mediaUrls provided
         let mediaId = '';
         if (post.mediaUrls?.length) {
             mediaId = await this.uploadVideo(post.mediaUrls[0]);

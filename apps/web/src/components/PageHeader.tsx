@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { useT } from '@/lib/i18n';
 
 export default function PageHeader({
   title,
@@ -9,6 +10,7 @@ export default function PageHeader({
   subtitle?: ReactNode;
   actions?: ReactNode;
 }) {
+  const { t } = useT();
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
       <div>

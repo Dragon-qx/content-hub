@@ -8,6 +8,7 @@ import { useEffect, useCallback, useState, useRef } from 'react';
 import { api } from '@/lib/api';
 import { MediaAsset } from '@/lib/types';
 import TurndownService from 'turndown';
+import { useT } from '@/lib/i18n';
 
 interface WysiwygEditorProps {
   value: string;
@@ -55,6 +56,7 @@ export default function WysiwygEditor({
   contentId,
   onInsertMedia,
 }: WysiwygEditorProps) {
+  const { t } = useT();
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -72,7 +74,7 @@ export default function WysiwygEditor({
     editorProps: {
       attributes: {
         class: 'prose max-w-none px-3 py-2 min-h-[300px] outline-none text-sm text-slate-700',
-        placeholder: placeholder || 'Write content...',
+        placeholder: placeholder || t('assistant.writeDraft'),
       },
     },
     onUpdate: ({ editor: ed }) => {
@@ -171,7 +173,7 @@ export default function WysiwygEditor({
           {onInsertMedia && (
             <button type="button" onClick={onInsertMedia}
               className="rounded px-2 text-xs font-medium text-slate-600 hover:bg-slate-200 min-h-[44px]">
-              Media
+              {t('media.title')}
             </button>
           )}
         </div>
@@ -193,13 +195,13 @@ export default function WysiwygEditor({
         {dragging && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-b-lg bg-indigo-50/80">
             <span className="rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-primary shadow-sm">
-              Drop image to upload
+              {t('media.upload')}
             </span>
           </div>
         )}
         {uploading && (
           <div className="pointer-events-none absolute bottom-2 right-2 rounded bg-slate-700 px-2 py-1 text-xs text-white">
-            Uploading…
+            {t('common.uploading')}
           </div>
         )}
       </div>

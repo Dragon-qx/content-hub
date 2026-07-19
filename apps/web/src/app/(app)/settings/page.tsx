@@ -5,6 +5,7 @@ import { api, qrCodeUrl } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { Badge, Button, Card, Field, Input } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
+import { useT } from '@/lib/i18n';
 
 interface MfaSetup {
   secret: string;
@@ -13,6 +14,7 @@ interface MfaSetup {
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const { t } = useT();
   const [name, setName] = useState(user?.name ?? '');
   const [password, setPassword] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
@@ -37,7 +39,7 @@ export default function SettingsPage() {
     setMsg(null);
     try {
       await api.put('/users/me', { name, ...(password ? { password } : {}) });
-      setMsg('Profile updated.');
+      setMsg(t('settings.profileUpdated'));
       setPassword('');
       // Reflect any change by re-hydrating the user (name change shows on next load).
       window.location.reload();
@@ -98,21 +100,21 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-6 pb-20 md:pb-8">
-      <PageHeader title="Settings" subtitle="Profile and security" />
+      <PageHeader title={t('settings.title')} subtitle={t('settings.subtitle')} />
 
       <Card className="max-w-xl">
-        <h2 className="mb-4 text-base font-semibold">Profile</h2>
+        <h2 className="mb-4 text-base font-semibold">{t('settings.profile')}</h2>
         <form onSubmit={save} className="flex flex-col gap-4">
-          <Field label="Email">
+          <Field label={t('settings.email')}>
             <Input value={user?.email ?? ''} disabled />
           </Field>
-          <Field label="Name">
+          <Field label={t('settings.name')}>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
-          <Field label="New password (optional)">
+          <Field label={t('settings.newPassword')}>
             <Input
               type="password"
-              placeholder="Leave blank to keep current"
+              placeholder={t('settings.newPasswordHint')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               minLength={8}
@@ -121,7 +123,7 @@ export default function SettingsPage() {
           {msg && <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{msg}</div>}
           <div className="flex justify-end">
             <Button type="submit" disabled={busy}>
-              {busy ? 'Saving…' : 'Save'}
+              {busy ? t('settings.saving') : t('settings.save')}
             </Button>
           </div>
         </form>
@@ -129,14 +131,13 @@ export default function SettingsPage() {
 
       <Card className="max-w-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold">Two-factor authentication</h2>
+          <h2 className="text-base font-semibold">{t('settings.mfa')}</h2>
           <Badge tone={mfaEnabled ? 'success' : 'warning'}>
-            {mfaEnabled ? 'Enabled' : 'Disabled'}
+            {mfaEnabled ? t('settings.mfa.enabled') : t('settings.mfa.disabled')}
           </Badge>
         </div>
         <p className="mb-4 text-sm text-slate-500">
-          Protect your account with a time-based one-time password from an
-          authenticator app.
+          {t('settings.mfa.protect')}
         </p>
 
         {mfaError && (
@@ -167,7 +168,7 @@ export default function SettingsPage() {
               </div>
             </div>
             <form onSubmit={confirmSetup} className="flex flex-col gap-3">
-              <Field label="Enter the 6-digit code to confirm">
+              <Field label={t('settings.mfa.enterCode')}>
                 <input
                   inputMode="numeric"
                   autoComplete="one-time-code"
@@ -182,10 +183,10 @@ export default function SettingsPage() {
               </Field>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="secondary" onClick={() => setSetup(null)} disabled={mfaBusy}>
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button type="submit" disabled={mfaBusy || verifyCode.length !== 6}>
-                  {mfaBusy ? 'Confirming…' : 'Confirm & enable'}
+                  {mfaBusy ? t('settings.mfa.confirming') : t('settings.mfa.confirmEnable')}
                 </Button>
               </div>
             </form>
@@ -195,12 +196,12 @@ export default function SettingsPage() {
         <div className="flex gap-2">
           {!mfaEnabled && !setup && (
             <Button onClick={startSetup} disabled={mfaBusy}>
-              {mfaBusy ? 'Starting…' : 'Enable two-factor authentication'}
+              {mfaBusy ? t('settings.mfa.enableAction') : t('settings.mfa')}
             </Button>
           )}
           {mfaEnabled && (
             <Button variant="danger" onClick={disableMfa} disabled={mfaBusy}>
-              {mfaBusy ? 'Disabling…' : 'Disable two-factor authentication'}
+              {mfaBusy ? t('common.loading') : t('settings.mfa.disableAction')}
             </Button>
           )}
         </div>

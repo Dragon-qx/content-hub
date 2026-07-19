@@ -1,5 +1,13 @@
 // Frontend data shapes that mirror the API resources.
 
+/** A team the authenticated user belongs to. */
+export interface AuthTeam {
+  id: string;
+  name: string;
+  description?: string | null;
+  ownerId?: string;
+}
+
 /** The authenticated user object returned by /users/me and /auth/me. */
 export interface AuthUser {
   id: string;
@@ -7,6 +15,7 @@ export interface AuthUser {
   name: string;
   role: string;
   mfaEnabled: boolean;
+  teamId?: string | null;
 }
 
 export interface Paginated<T> {
@@ -99,16 +108,17 @@ export const CONTENT_STATUSES: ContentStatus[] = [
   'ARCHIVED',
 ];
 
-/** Human-friendly status labels for badges and filters. */
+/** Human-friendly status labels for badges and filters.
+ *  Localised at the source so both zhCn and en share the same key space. */
 export const STATUS_LABELS: Record<ContentStatus, string> = {
-  DRAFT: 'Draft',
-  IN_REVIEW: 'In review',
-  APPROVED: 'Approved',
-  SCHEDULED: 'Scheduled',
-  PUBLISHING: 'Publishing',
-  PUBLISHED: 'Published',
-  FAILED: 'Failed',
-  ARCHIVED: 'Archived',
+  DRAFT: 'status.DRAFT',
+  IN_REVIEW: 'status.IN_REVIEW',
+  APPROVED: 'status.APPROVED',
+  SCHEDULED: 'status.SCHEDULED',
+  PUBLISHING: 'status.PUBLISHING',
+  PUBLISHED: 'status.PUBLISHED',
+  FAILED: 'status.FAILED',
+  ARCHIVED: 'status.ARCHIVED',
 };
 
 /**
@@ -297,14 +307,14 @@ export interface PlatformOption {
 }
 
 export const PLATFORMS: PlatformOption[] = [
-  { value: 'WECHAT_OFFICIAL', label: 'WeChat Official' },
-  { value: 'WECHAT_VIDEO', label: 'WeChat Video' },
-  { value: 'DOUYIN', label: 'Douyin' },
-  { value: 'XIAOHONGSHU', label: 'XiaoHongShu' },
-  { value: 'BILIBILI', label: 'Bilibili' },
-  { value: 'WEIBO', label: 'Weibo' },
-  { value: 'TWITTER', label: 'Twitter / X' },
-  { value: 'YOUTUBE', label: 'YouTube' },
+  { value: 'WECHAT_OFFICIAL', label: 'accounts.platform.WECHAT_OFFICIAL' },
+  { value: 'WECHAT_VIDEO', label: 'accounts.platform.WECHAT_VIDEO' },
+  { value: 'DOUYIN', label: 'accounts.platform.DOUYIN' },
+  { value: 'XIAOHONGSHU', label: 'accounts.platform.XIAOHONGSHU' },
+  { value: 'BILIBILI', label: 'accounts.platform.BILIBILI' },
+  { value: 'WEIBO', label: 'accounts.platform.WEIBO' },
+  { value: 'TWITTER', label: 'accounts.platform.TWITTER' },
+  { value: 'YOUTUBE', label: 'accounts.platform.YOUTUBE' },
 ];
 
 export const CONTENT_TYPES = ['TEXT', 'IMAGE', 'VIDEO', 'CAROUSEL', 'THREAD', 'ARTICLE'] as const;
@@ -351,15 +361,15 @@ export const ANALYTICS_METRICS: AnalyticsMetric[] = [
 ];
 
 export const METRIC_LABELS: Record<AnalyticsMetric, string> = {
-  followerCount: 'Followers',
-  followingCount: 'Following',
-  postCount: 'Posts',
-  impressions: 'Impressions',
-  engagements: 'Engagements',
-  likes: 'Likes',
-  comments: 'Comments',
-  shares: 'Shares',
-  views: 'Views',
+  followerCount: 'dashboard.followers',
+  followingCount: 'dashboard.following',
+  postCount: 'dashboard.posts',
+  impressions: 'dashboard.impressions',
+  engagements: 'dashboard.engagements',
+  likes: 'dashboard.likes',
+  comments: 'dashboard.comments',
+  shares: 'dashboard.shares',
+  views: 'dashboard.views',
 };
 
 export const TREND_PERIODS = ['7d', '30d', '90d'] as const;
@@ -403,9 +413,9 @@ export interface ContentRanking {
 }
 
 export const CONTENT_TIER_LABELS: Record<ContentTier, string> = {
-  TOP: 'Top',
-  MID: 'Mid',
-  BOTTOM: 'Bottom',
+  TOP: 'analytics.top',
+  MID: 'common.all',
+  BOTTOM: 'analytics.bottom',
 };
 
 export const CONTENT_TIER_TONE: Record<ContentTier, 'success' | 'neutral' | 'danger'> = {
@@ -438,11 +448,11 @@ export interface Anomaly {
 }
 
 export const ANOMALY_TYPE_LABELS: Record<AnomalyType, string> = {
-  DROP_SPIKE: 'Drop spike',
-  SURGE: 'Surge',
-  SUSTAINED_DECLINE: 'Sustained decline',
-  CLIFF_DROP: 'Cliff drop',
-  FOLLOWER_LOSS: 'Follower loss',
+  DROP_SPIKE: 'anomaly.DROP_SPIKE',
+  SURGE: 'anomaly.SURGE',
+  SUSTAINED_DECLINE: 'anomaly.SUSTAINED_DECLINE',
+  CLIFF_DROP: 'anomaly.CLIFF_DROP',
+  FOLLOWER_LOSS: 'anomaly.FOLLOWER_LOSS',
 };
 
 export const ANOMALY_SEVERITY_TONE: Record<AnomalySeverity, 'danger' | 'warning'> = {
@@ -479,9 +489,9 @@ export const SENTIMENT_TONE: Record<Sentiment, 'success' | 'neutral' | 'danger'>
 };
 
 export const SENTIMENT_LABELS: Record<Sentiment, string> = {
-  POSITIVE: 'Positive',
-  NEUTRAL: 'Neutral',
-  NEGATIVE: 'Negative',
+  POSITIVE: 'engagement.positive',
+  NEUTRAL: 'engagement.neutral',
+  NEGATIVE: 'engagement.negative',
 };
 
 export interface EngagementComment {
@@ -656,16 +666,16 @@ export interface VariantGenerateResult {
 }
 
 export const VARIANT_STYLE_LABELS: Record<VariantStyle, string> = {
-  short: 'Short',
-  long: 'Long',
-  formal: 'Formal',
-  social: 'Social',
+  short: 'variant.short',
+  long: 'variant.long',
+  formal: 'variant.formal',
+  social: 'variant.social',
 };
 
 export const AUDIT_GRADE_LABELS: Record<string, string> = {
-  good: 'Good',
-  'needs-work': 'Needs work',
-  poor: 'Poor',
+  good: 'audit.grade.good',
+  'needs-work': 'audit.grade.needsWork',
+  poor: 'audit.grade.poor',
 };
 
 export const AUDIT_GRADE_TONE: Record<string, 'success' | 'warning' | 'danger'> = {

@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { Badge, Button, Card, Input, Select } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
 import { Table } from '@/components/Table';
@@ -13,11 +14,13 @@ import {
   SocialAccount,
   TeamHealthSummary,
 } from '@/lib/types';
+import { useT } from '@/lib/i18n';
 
 type BindMode = 'manual' | 'oauth';
 
 /** Result banner shown after the OAuth provider redirects back to this page. */
 function OAuthBanner() {
+  const { t } = useT();
   const params = useSearchParams();
   const oauth = params.get('oauth');
   if (oauth !== 'success' && oauth !== 'error') return null;
@@ -34,18 +37,20 @@ function OAuthBanner() {
     >
       {oauth === 'success' ? (
         <>
-          Successfully bound{platform ? ` ${platform}` : ''} account via OAuth
-          {params.get('account') ? ` (${params.get('account')})` : ''}.
+          {t('common.success')}{platform ? ` · ${platform} ${t('accounts.connectOAuth')}` : ''}
+          {params.get('account') ? ` (${params.get('account')})` : ''}
         </>
       ) : (
-        <>OAuth binding failed{platform ? ` for ${platform}` : ''}
-          {message ? `: ${decodeURIComponent(message)}` : '.'}</>
+        <>{t('common.error')}{platform ? ` · ${platform}` : ''}
+          {message ? `: ${decodeURIComponent(message)}` : ''}</>
       )}
     </div>
   );
 }
 
 export default function AccountsPage() {
+  const { t } = useT();
+  const { activeTeamId } = useAuth();
   const [rows, setRows] = useState<SocialAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -57,7 +62,8 @@ export default function AccountsPage() {
   const [accountName, setAccountName] = useState('');
   const [appid, setAppid] = useState('');
   const [secret, setSecret] = useState('');
-  const [teamId, setTeamId] = useState('default-team');
+  // Active team is owned by AuthProvider (resolved from GET /teams).
+  const teamId = activeTeamId;
 
   // OAuth fields: the developer-registered *app* credentials for the platform.
   const [oauthAppKey, setOauthAppKey] = useState('');
@@ -193,15 +199,15 @@ export default function AccountsPage() {
   return (
     <div className="pb-20 md:pb-8">
       <PageHeader
-        title="Accounts"
-        subtitle="Bind and manage social platform accounts"
+        title={t('accounts.title')}
+        subtitle={t('accounts.subtitle')}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={runHealthCheck} disabled={checking}>
-              {checking ? 'Checking…' : 'Run health check'}
+              {checking ? t('accounts.checking') : t('accounts.runHealthCheck')}
             </Button>
             <Button onClick={() => setShowForm((s) => !s)}>
-              {showForm ? 'Cancel' : '+ Bind account'}
+              {showForm ? t('common.cancel') : t('accounts.bindAccount')}
             </Button>
           </div>
         }
@@ -213,11 +219,11 @@ export default function AccountsPage() {
         <Card className="mb-6">
           <div className="flex flex-wrap items-center gap-4">
             <span className="text-sm font-medium text-slate-600">
-              Account health
+              {t('accounts.health')}
             </span>
-            <Badge tone="success">{health.totals.healthy} healthy</Badge>
-            <Badge tone="warning">{health.totals.warning} warning</Badge>
-            <Badge tone="danger">{health.totals.critical} critical</Badge>
+            <Badge tone="success">{health.totals.healthy} {t('accounts.healthy')}</Badge>
+            <Badge tone="warning">{health.totals.warning} {t('accounts.warning')}</Badge>
+            <Badge tone="danger">{health.totals.critical} {t('accounts.critical')}</Badge>
             <span className="ml-auto text-xs text-slate-400">
               {health.totals.total} account(s) · evaluated{' '}
               {new Date(health.evaluatedAt).toLocaleString()}
@@ -238,7 +244,7 @@ export default function AccountsPage() {
                   : 'bg-slate-100 text-slate-600'
               }`}
             >
-              Paste credentials
+              {t('accounts.pasteCredentials')}
             </button>
             <button
               type="button"
@@ -249,7 +255,7 @@ export default function AccountsPage() {
                   : 'bg-slate-100 text-slate-600'
               }`}
             >
-              Connect via OAuth
+              {t('accounts.connectOAuth')}
             </button>
           </div>
 
@@ -258,41 +264,36 @@ export default function AccountsPage() {
               <Select value={platform} onChange={(e) => setPlatform(e.target.value)}>
                 {PLATFORMS.map((p) => (
                   <option key={p.value} value={p.value}>
-                    {p.label}
+                    {t(p.label)}
                   </option>
                 ))}
               </Select>
               <Input
-                placeholder="Account ID"
+                placeholder={t('accounts.accountId')}
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
                 required
               />
               <Input
-                placeholder="Account name"
+                placeholder={t('accounts.accountName')}
                 value={accountName}
                 onChange={(e) => setAccountName(e.target.value)}
                 required
               />
               <Input
-                placeholder="App ID / Key"
+                placeholder={t('accounts.appId')}
                 value={appid}
                 onChange={(e) => setAppid(e.target.value)}
               />
               <Input
-                placeholder="Secret"
+                placeholder={t('accounts.secret')}
                 type="password"
                 value={secret}
                 onChange={(e) => setSecret(e.target.value)}
               />
-              <Input
-                placeholder="Team ID"
-                value={teamId}
-                onChange={(e) => setTeamId(e.target.value)}
-              />
               <div className="sm:col-span-2 flex justify-end">
                 <Button type="submit" disabled={submitting}>
-                  {submitting ? 'Binding…' : 'Bind account'}
+                  {submitting ? t('accounts.binding') : t('accounts.bind')}
                 </Button>
               </div>
             </form>
@@ -306,37 +307,31 @@ export default function AccountsPage() {
               <Select value={platform} onChange={(e) => setPlatform(e.target.value)}>
                 {PLATFORMS.map((p) => (
                   <option key={p.value} value={p.value}>
-                    {p.label}
+                    {t(p.label)}
                   </option>
                 ))}
               </Select>
               <Input
-                placeholder="Account name (optional)"
+                placeholder={t('accounts.accountName')}
                 value={oauthAccountName}
                 onChange={(e) => setOauthAccountName(e.target.value)}
               />
               <Input
-                placeholder="App key / client key"
+                placeholder={t('accounts.appId')}
                 value={oauthAppKey}
                 onChange={(e) => setOauthAppKey(e.target.value)}
                 required
               />
               <Input
-                placeholder="App secret / client secret"
+                placeholder={t('accounts.secret')}
                 type="password"
                 value={oauthAppSecret}
                 onChange={(e) => setOauthAppSecret(e.target.value)}
                 required
               />
-              <Input
-                placeholder="Team ID"
-                value={teamId}
-                onChange={(e) => setTeamId(e.target.value)}
-                required
-              />
               <div className="sm:col-span-2 flex justify-end">
                 <Button type="submit" disabled={submitting}>
-                  {submitting ? 'Redirecting…' : 'Connect via OAuth'}
+                  {submitting ? t('accounts.redirecting') : t('accounts.connectOAuth')}
                 </Button>
               </div>
             </form>
@@ -345,27 +340,27 @@ export default function AccountsPage() {
       )}
 
       {loading ? (
-        <div className="text-slate-400">Loading…</div>
+        <div className="text-slate-400">{t('common.loading')}</div>
       ) : (
         <div className="overflow-x-auto">
           <Table<SocialAccount>
             rows={rows}
-            emptyMessage="No accounts bound yet."
+            emptyMessage={t('accounts.empty')}
             columns={[
-            { key: 'name', header: 'Account', render: (r) => r.accountName },
+            { key: 'name', header: t('accounts.column.account'), render: (r) => r.accountName },
             {
               key: 'platform',
-              header: 'Platform',
+              header: t('accounts.column.platform'),
               render: (r) => r.platform,
             },
             {
               key: 'followers',
-              header: 'Followers',
+              header: t('accounts.column.followers'),
               render: (r) => (r.followerCount ?? 0).toLocaleString(),
             },
             {
               key: 'health',
-              header: 'Health',
+              header: t('accounts.column.health'),
               render: (r) => {
                 const found = health?.accounts.find((a) => a.accountId === r.id);
                 if (!found) return <span className="text-slate-400">—</span>;
@@ -377,7 +372,7 @@ export default function AccountsPage() {
                 ).length;
                 const label =
                   found.health === 'HEALTHY'
-                    ? 'Healthy'
+                    ? t('accounts.healthy')
                     : `${critical}C / ${warnings}W`;
                 return <Badge tone={HEALTH_TONE[found.health]}>{label}</Badge>;
               },

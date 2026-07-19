@@ -7,8 +7,10 @@ import { Button, Card, Badge } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
 import { Table } from '@/components/Table';
 import { Notification, NOTIFICATION_TONE, Paginated } from '@/lib/types';
+import { useT } from '@/lib/i18n';
 
 export default function NotificationsPage() {
+  const { t } = useT();
   const [rows, setRows] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -46,55 +48,55 @@ export default function NotificationsPage() {
   return (
     <div className="pb-20 md:pb-8">
       <PageHeader
-        title="Notifications"
-        subtitle={`${unread} unread`}
+        title={t('notifications.title')}
+        subtitle={`${unread} ${t('notifications.unread')}`}
         actions={
           unread > 0 ? (
-            <Button variant="secondary" onClick={markAll}>Mark all read</Button>
+            <Button variant="secondary" onClick={markAll}>{t('notifications.markAllRead')}</Button>
           ) : undefined
         }
       />
 
       <Card className="mb-6">
         <div className="flex flex-wrap gap-2">
-          <Button variant={filter === 'all' ? 'primary' : 'secondary'} onClick={() => setFilter('all')}>All</Button>
-          <Button variant={filter === 'unread' ? 'primary' : 'secondary'} onClick={() => setFilter('unread')}>Unread</Button>
+          <Button variant={filter === 'all' ? 'primary' : 'secondary'} onClick={() => setFilter('all')}>{t('notifications.all')}</Button>
+          <Button variant={filter === 'unread' ? 'primary' : 'secondary'} onClick={() => setFilter('unread')}>{t('notifications.unread')}</Button>
         </div>
       </Card>
 
       {loading ? (
-        <div className="text-slate-400">Loading…</div>
+        <div className="text-slate-400">{t('common.loading')}</div>
       ) : (
         <div className="overflow-x-auto">
           <Table<Notification>
             rows={rows}
-            emptyMessage={filter === 'unread' ? 'No unread notifications.' : 'No notifications.'}
+            emptyMessage={filter === 'unread' ? t('notifications.noUnread') : t('notifications.noNotifications')}
             columns={[
               {
                 key: 'type',
-                header: 'Type',
+                header: t('notifications.column.type'),
                 render: (r) => <Badge tone={NOTIFICATION_TONE[r.type]}>{r.type}</Badge>,
               },
               {
                 key: 'title',
-                header: 'Title',
+                header: t('notifications.column.title'),
                 render: (r) => (
                   <button onClick={() => markOne(r.id)} className="text-left hover:underline">
                     <div className={`text-sm ${r.read ? 'text-slate-600' : 'font-semibold text-slate-900'}`}>{r.title}</div>
                     <div className="line-clamp-1 text-xs text-slate-400">{r.body}</div>
-                    {r.link && <Link href={r.link} className="text-xs text-primary hover:underline">Open</Link>}
+                    {r.link && <Link href={r.link} className="text-xs text-primary hover:underline">{t('notifications.open')}</Link>}
                   </button>
                 ),
               },
-              { key: 'when', header: 'When', render: (r) => <span className="text-xs text-slate-400">{new Date(r.createdAt).toLocaleString()}</span> },
+              { key: 'when', header: t('notifications.column.when'), render: (r) => <span className="text-xs text-slate-400">{new Date(r.createdAt).toLocaleString()}</span> },
               {
                 key: 'state',
-                header: 'State',
+                header: t('notifications.column.state'),
                 render: (r) =>
                   r.read ? (
-                    <span className="text-xs text-slate-400">Read</span>
+                    <span className="text-xs text-slate-400">{t('notifications.read')}</span>
                   ) : (
-                    <Button variant="ghost" onClick={() => markOne(r.id)}>Mark read</Button>
+                    <Button variant="ghost" onClick={() => markOne(r.id)}>{t('notifications.markRead')}</Button>
                   ),
               },
             ]}

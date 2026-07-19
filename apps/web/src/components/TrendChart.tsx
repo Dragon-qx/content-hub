@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useT } from '@/lib/i18n';
 
 export interface TrendPoint {
   date: string;
@@ -25,6 +26,7 @@ export default function TrendChart({
   stroke?: string;
   fill?: string;
 }) {
+  const { t } = useT();
   const [mountedHeight, setMountedHeight] = useState(baseHeight);
 
   useEffect(() => {
@@ -47,7 +49,7 @@ export default function TrendChart({
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center rounded-lg bg-slate-50 text-sm text-slate-400" style={{ height }}>
-        No trend data.
+        {t('analytics.empty')}
       </div>
     );
   }
@@ -79,7 +81,7 @@ export default function TrendChart({
     .filter((_, i) => i % labelStep === 0);
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label="Trend chart">
+    <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label={t('analytics.trend')}>
       {gridlines.map((g, i) => (
         <g key={i}>
           <line x1={padLeft} y1={g.y} x2={width - padX} y2={g.y} stroke="#e2e8f0" strokeWidth={1} />

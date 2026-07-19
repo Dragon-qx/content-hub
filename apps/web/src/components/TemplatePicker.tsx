@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { Button, Card, Input } from '@/lib/ui';
 import { ContentTemplate, Paginated, TemplateDraftSeed, TemplateVariable } from '@/lib/types';
+import { useT } from '@/lib/i18n';
 
 /**
  * Pick a team template and apply it to seed a draft. Fetches the team's
@@ -19,6 +20,7 @@ export default function TemplatePicker({
   onApply: (seed: TemplateDraftSeed) => void;
   onCancel: () => void;
 }) {
+  const { t } = useT();
   const [templates, setTemplates] = useState<ContentTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +41,7 @@ export default function TemplatePicker({
         const res = await api.get<Paginated<ContentTemplate>>(`/templates?${qs.toString()}`);
         if (active) setTemplates(res.items);
       } catch (err: any) {
-        if (active) setError(err?.message ?? 'Failed to load templates.');
+        if (active) setError(err?.message ?? t('common.error'));
       } finally {
         if (active) setLoading(false);
       }
@@ -49,17 +51,17 @@ export default function TemplatePicker({
     };
   }, [teamId, search]);
 
-  const choose = async (t: ContentTemplate) => {
-    setApplying(t.id);
+  const choose = async (tpl: ContentTemplate) => {
+    setApplying(tpl.id);
     setError(null);
     try {
-      const seed = await api.post<TemplateDraftSeed>(`/templates/${t.id}/apply`, {
+      const seed = await api.post<TemplateDraftSeed>(`/templates/${tpl.id}/apply`, {
         teamId,
         values: Object.keys(variableValues).length > 0 ? variableValues : undefined,
       });
       onApply(seed);
     } catch (err: any) {
-      setError(err?.message ?? 'Failed to apply template.');
+      setError(err?.message ?? t('common.error'));
     } finally {
       setApplying(null);
     }
@@ -101,13 +103,13 @@ export default function TemplatePicker({
   return (
     <Card className="flex flex-col gap-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="text-sm font-semibold text-slate-900">Load from template</h3>
+        <h3 className="text-sm font-semibold text-slate-900">{t('content.edit')}</h3>
         <Button variant="secondary" onClick={onCancel}>
-          Close
+          {t('common.close')}
         </Button>
       </div>
       <Input
-        placeholder="Search templates…"
+        placeholder={t('common.search')}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
@@ -117,7 +119,7 @@ export default function TemplatePicker({
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-medium text-slate-700">{selectedTemplate.title}</h4>
             <Button variant="secondary" onClick={() => setSelectedTemplate(null)}>
-              Back
+              {t('common.back')}
             </Button>
           </div>
           {selectedTemplate.variables && selectedTemplate.variables.length > 0 ? (
@@ -140,55 +142,55 @@ export default function TemplatePicker({
               </div>
               {resolvedPreview && (
                 <div className="flex flex-col gap-2 rounded-lg bg-slate-50 p-3">
-                  <p className="text-xs font-medium text-slate-500">Preview</p>
+                  <p className="text-xs font-medium text-slate-500">{t('reports.preview')}</p>
                   <p className="text-sm font-medium text-slate-700">{resolvedPreview.title}</p>
-                  <p className="whitespace-pre-wrap text-xs text-slate-600">{resolvedPreview.body || '(empty body)'}</p>
+                  <p className="whitespace-pre-wrap text-xs text-slate-600">{resolvedPreview.body || t('common.empty')}</p>
                 </div>
               )}
               <div className="flex justify-end">
                 <Button onClick={applyWithVariables} disabled={applying === selectedTemplate.id}>
-                  {applying === selectedTemplate.id ? 'Applying…' : 'Use this template'}
+                  {applying === selectedTemplate.id ? t('common.submitting') : t('common.actions')}
                 </Button>
               </div>
             </>
           ) : (
             <div className="flex flex-col gap-2">
-              <p className="text-sm text-slate-500">No variables defined for this template.</p>
+              <p className="text-sm text-slate-500">{t('common.empty')}</p>
               <div className="flex justify-end">
                 <Button onClick={applyWithVariables} disabled={applying === selectedTemplate.id}>
-                  {applying === selectedTemplate.id ? 'Applying…' : 'Use this template'}
+                  {applying === selectedTemplate.id ? t('common.submitting') : t('common.actions')}
                 </Button>
               </div>
             </div>
           )}
         </div>
       ) : loading ? (
-        <p className="text-sm text-slate-400">Loading templates…</p>
+        <p className="text-sm text-slate-400">{t('common.loading')}</p>
       ) : templates.length === 0 ? (
         <p className="text-sm text-slate-400">
-          No templates for this team yet. Save any piece of content as a template to reuse it.
+          {t('common.empty')}
         </p>
       ) : (
         <ul className="flex max-h-72 flex-col gap-2 overflow-y-auto">
-          {templates.map((t) => (
+          {templates.map((tpl) => (
             <li
-              key={t.id}
+              key={tpl.id}
               className="flex flex-col gap-2 rounded-lg border border-slate-100 p-2 sm:flex-row sm:items-center sm:justify-between sm:px-3 sm:py-2"
             >
               <div className="min-w-0">
-                <div className="truncate text-xs font-medium text-slate-700 sm:text-sm">{t.title}</div>
+                <div className="truncate text-xs font-medium text-slate-700 sm:text-sm">{tpl.title}</div>
                 <div className="text-[10px] text-slate-400 sm:text-xs">
-                  {t.contentType}
-                  {t.tags.length > 0 && <> · {t.tags.join(', ')}</>}
-                  {t.variables && t.variables.length > 0 && (
+                  {tpl.contentType}
+                  {tpl.tags.length > 0 && <> · {tpl.tags.join(', ')}</>}
+                  {tpl.variables && tpl.variables.length > 0 && (
                     <span className="ml-1 rounded bg-blue-100 px-1 py-0.5 text-blue-700">
-                      {t.variables.length} var{t.variables.length > 1 ? 's' : ''}
+                      {tpl.variables.length} var{tpl.variables.length > 1 ? 's' : ''}
                     </span>
                   )}
                 </div>
               </div>
-              <Button disabled={applying === t.id} onClick={() => previewVariables(t)}>
-                {applying === t.id ? 'Loading…' : 'Use'}
+              <Button disabled={applying === tpl.id} onClick={() => previewVariables(tpl)}>
+                {applying === tpl.id ? t('common.loading') : t('common.actions')}
               </Button>
             </li>
           ))}

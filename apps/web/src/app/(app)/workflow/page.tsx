@@ -7,9 +7,11 @@ import PageHeader from '@/components/PageHeader';
 import { Table } from '@/components/Table';
 import { Workflow, Paginated } from '@/lib/types';
 import { useAuth } from '@/lib/auth';
+import { useT } from '@/lib/i18n';
 
 export default function WorkflowPage() {
   const { user } = useAuth();
+  const { t } = useT();
   const [rows, setRows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -42,28 +44,28 @@ export default function WorkflowPage() {
 
   return (
     <div className="pb-20 md:pb-8">
-      <PageHeader title="Approvals" subtitle="Review and decide on pending workflows" />
+      <PageHeader title={t('workflow.title')} subtitle={t('workflow.subtitle')} />
 
       {loading ? (
-        <div className="text-slate-400">Loading…</div>
+        <div className="text-slate-400">{t('common.loading')}</div>
       ) : (
         <div className="overflow-x-auto">
           <Table<Workflow>
             rows={rows}
-            emptyMessage="No workflows."
+            emptyMessage={t('workflow.empty')}
             columns={[
-              { key: 'id', header: 'ID', render: (r) => <span className="font-mono text-xs">{r.id}</span> },
-              { key: 'content', header: 'Content', render: (r) => r.contentId ?? '—' },
-              { key: 'status', header: 'Status', render: (r) => <StatusBadge status={r.status} /> },
-              { key: 'created', header: 'Created', render: (r) => new Date(r.createdAt).toLocaleString() },
+              { key: 'id', header: t('workflow.column.id'), render: (r) => <span className="font-mono text-xs">{r.id}</span> },
+              { key: 'content', header: t('workflow.column.content'), render: (r) => r.contentId ?? '—' },
+              { key: 'status', header: t('workflow.column.status'), render: (r) => <StatusBadge status={r.status} /> },
+              { key: 'created', header: t('workflow.column.created'), render: (r) => new Date(r.createdAt).toLocaleString() },
               {
                 key: 'actions',
-                header: 'Actions',
+                header: t('workflow.column.actions'),
                 render: (r) =>
                   r.status === 'PENDING' ? (
                     <div className="flex gap-2">
-                      <Button variant="primary" onClick={() => act(r.id, 'approve')}>Approve</Button>
-                      <Button variant="danger" onClick={() => act(r.id, 'reject')}>Reject</Button>
+                      <Button variant="primary" onClick={() => act(r.id, 'approve')}>{t('workflow.approve')}</Button>
+                      <Button variant="danger" onClick={() => act(r.id, 'reject')}>{t('workflow.reject')}</Button>
                     </div>
                   ) : (
                     <span className="text-xs text-slate-400">—</span>

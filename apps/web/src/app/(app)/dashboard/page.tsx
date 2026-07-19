@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { Badge, Card, Select } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
 import TrendChart from '@/components/TrendChart';
@@ -15,6 +16,7 @@ import {
   TrendPeriod,
   TREND_PERIODS,
 } from '@/lib/types';
+import { useT } from '@/lib/i18n';
 
 /* -------------------------------------------------------------------------- */
 /*  Shapes (mirror the un-enveloped analytics/health responses).              */
@@ -64,6 +66,7 @@ function KpiCard({
   value: string | number;
   change?: string;
 }) {
+  const { t } = useT();
   const negative = change?.startsWith('-');
   return (
     <Card className="p-3 md:p-5">
@@ -77,7 +80,7 @@ function KpiCard({
             negative ? 'text-red-500' : 'text-emerald-600'
           }`}
         >
-          {change} vs prev.
+          {change} {t('analytics.vsPrev')}
         </div>
       )}
     </Card>
@@ -85,16 +88,17 @@ function KpiCard({
 }
 
 const HEALTH_LABEL: Record<string, string> = {
-  HEALTHY: 'Healthy',
-  WARNING: 'Warning',
-  CRITICAL: 'Critical',
+  HEALTHY: 'accounts.healthy',
+  WARNING: 'accounts.warning',
+  CRITICAL: 'accounts.critical',
 };
 
 function HealthPill({ summary }: { summary: TeamHealthSummary | null }) {
+  const { t } = useT();
   if (!summary) {
     return (
       <span className="inline-flex items-center gap-1.5 text-sm text-slate-500">
-        <span className="h-2 w-2 rounded-full bg-slate-300" /> No accounts
+        <span className="h-2 w-2 rounded-full bg-slate-300" /> {t('dashboard.noAccounts')}
       </span>
     );
   }
@@ -102,10 +106,10 @@ function HealthPill({ summary }: { summary: TeamHealthSummary | null }) {
   return (
     <span className="inline-flex items-center gap-2 text-sm">
       <Badge tone="success">
-        {healthy}/{total} healthy
+        {healthy}/{total} {t('accounts.healthy')}
       </Badge>
-      {warning > 0 && <Badge tone="warning">{warning} warning</Badge>}
-      {critical > 0 && <Badge tone="danger">{critical} critical</Badge>}
+      {warning > 0 && <Badge tone="warning">{warning} {t('accounts.warning')}</Badge>}
+      {critical > 0 && <Badge tone="danger">{critical} {t('accounts.critical')}</Badge>}
     </span>
   );
 }
@@ -115,6 +119,8 @@ function HealthPill({ summary }: { summary: TeamHealthSummary | null }) {
 /* -------------------------------------------------------------------------- */
 
 export default function DashboardPage() {
+  const { t } = useT();
+  const { activeTeamId } = useAuth();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [top, setTop] = useState<TopItem[]>([]);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
@@ -129,13 +135,10 @@ export default function DashboardPage() {
 
   const load = useCallback(async () => {
     try {
-      // Resolve the user's team from their accounts so we can surface the
-      // account-health rollup. Everything else is independent and runs in
-      // parallel.
-      const accountsRes = await api.get<{ items: { teamId: string }[] }>(
-        '/accounts?skip=0&take=50',
-      );
-      const teamId = accountsRes.items?.[0]?.teamId;
+      // Team comes from AuthProvider (resolved from GET /teams). This is the
+      // source of truth, so the health panel works even before any accounts
+      // are bound.
+      const teamId = activeTeamId;
 
       const [ov, tp, hist, aud, healthRes] = await Promise.all([
         api.get<Overview>('/analytics/overview?days=30'),
@@ -198,8 +201,8 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Dashboard"
-        subtitle="Analytics hub — your content operations at a glance"
+        title={t('dashboard.title')}
+        subtitle={t('dashboard.subtitle')}
         actions={
           <div className="flex items-center gap-3">
             <span className="inline-flex items-center gap-1.5 text-sm">
@@ -208,7 +211,7 @@ export default function DashboardPage() {
                   liveOk ? 'bg-emerald-500' : 'bg-red-500'
                 }`}
               />
-              API {liveOk ? 'OK' : 'Down'}
+              API {liveOk ? t('dashboard.apiOk') : t('dashboard.apiDown')}
             </span>
             <button
               type="button"
@@ -219,43 +222,43 @@ export default function DashboardPage() {
               }}
               className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 min-h-[44px]"
             >
-              Refresh
+              {t('common.refresh')}
             </button>
             {updatedAt && (
-              <span className="text-xs text-slate-400">Updated {updatedAt}</span>
+              <span className="text-xs text-slate-400">{t('dashboard.updated', { time: updatedAt })}</span>
             )}
           </div>
         }
       />
 
       {loading ? (
-        <div className="text-slate-400">Loading…</div>
+        <div className="text-slate-400">{t('common.loading')}</div>
       ) : (
         <>
           {/* KPI cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
             <KpiCard
-              label="Followers"
+              label={t('dashboard.followers')}
               value={overview?.followers.value ?? '—'}
               change={overview?.followers.change}
             />
             <KpiCard
-              label="Impressions"
+              label={t('dashboard.impressions')}
               value={overview?.impressions.value ?? '—'}
               change={overview?.impressions.change}
             />
             <KpiCard
-              label="Engagements"
+              label={t('dashboard.engagements')}
               value={overview?.engagements.value ?? '—'}
               change={overview?.engagements.change}
             />
-            <KpiCard label="Eng. rate" value={overview?.engagementRate ?? '—'} />
+            <KpiCard label={t('dashboard.engRate')} value={overview?.engagementRate ?? '—'} />
           </div>
 
           {/* Trend chart */}
           <Card>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2 md:gap-3">
-              <h2 className="text-base font-semibold">Trend</h2>
+              <h2 className="text-base font-semibold">{t('dashboard.trend')}</h2>
               <div className="flex gap-2">
                 <Select
                   value={metric}
@@ -264,7 +267,7 @@ export default function DashboardPage() {
                 >
                   {ANALYTICS_METRICS.map((m) => (
                     <option key={m} value={m}>
-                      {METRIC_LABELS[m]}
+                      {t(METRIC_LABELS[m])}
                     </option>
                   ))}
                 </Select>
@@ -291,7 +294,7 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Top content */}
             <Card>
-              <h2 className="mb-3 text-base font-semibold">Top content</h2>
+              <h2 className="mb-3 text-base font-semibold">{t('dashboard.topContent')}</h2>
               {top.length ? (
                 <ul className="divide-y divide-slate-100">
                   {top.map((item, i) => (
@@ -315,14 +318,14 @@ export default function DashboardPage() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-slate-400">No published content yet.</p>
+                <p className="text-sm text-slate-400">{t('common.empty')}</p>
               )}
             </Card>
 
             {/* Account health */}
             <Card>
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-base font-semibold">Account health</h2>
+                <h2 className="text-base font-semibold">{t('accounts.health')}</h2>
                 <HealthPill summary={health} />
               </div>
               {health?.accounts.length ? (
@@ -336,13 +339,13 @@ export default function DashboardPage() {
                         <div className="truncate text-slate-700">{a.accountName}</div>
                         <div className="text-xs text-slate-400">{a.platform}</div>
                       </div>
-                      <Badge tone={HEALTH_TONE[a.health]}>{HEALTH_LABEL[a.health]}</Badge>
+                      <Badge tone={HEALTH_TONE[a.health]}>{t(HEALTH_LABEL[a.health])}</Badge>
                     </li>
                   ))}
                 </ul>
               ) : (
                 <p className="text-sm text-slate-400">
-                  Bind a platform account to start monitoring health.
+                  {t('dashboard.noAccounts')}
                 </p>
               )}
             </Card>
@@ -350,7 +353,7 @@ export default function DashboardPage() {
 
           {/* Recent activity */}
           <Card>
-            <h2 className="mb-3 text-base font-semibold">Recent activity</h2>
+            <h2 className="mb-3 text-base font-semibold">{t('dashboard.recentActivity')}</h2>
             {activity.length ? (
               <ul className="divide-y divide-slate-100">
                 {activity.map((log) => (
@@ -366,7 +369,7 @@ export default function DashboardPage() {
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-slate-400">No recent activity.</p>
+              <p className="text-sm text-slate-400">{t('common.empty')}</p>
             )}
           </Card>
         </>

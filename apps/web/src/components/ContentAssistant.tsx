@@ -16,6 +16,8 @@ import {
   VARIANT_STYLE_LABELS,
   VariantStyle,
 } from '@/lib/types';
+import { useT } from '@/lib/i18n';
+import type { ZhCnKey } from '@/lib/locales/zhCn';
 
 /**
  * AI Content Assistant panel (PRD §3.3 V1.1 AI 辅助写作). Offers four
@@ -45,21 +47,29 @@ export default function ContentAssistant({
   onApplyTags?: (tags: string[]) => void;
   onApplyBody?: (body: string) => void;
 }) {
+  const { t } = useT();
   const [tab, setTab] = useState<'titles' | 'tags' | 'audit' | 'variants'>('titles');
+
+  const tabLabels: Record<'titles' | 'tags' | 'audit' | 'variants', ZhCnKey> = {
+    titles: 'content.title_label',
+    tags: 'content.tags',
+    audit: 'nav.audit',
+    variants: 'content.contentType',
+  };
 
   return (
     <Card>
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-slate-900">AI assistant</h2>
+        <h2 className="text-base font-semibold text-slate-900">{t('assistant.title')}</h2>
         <div className="flex gap-1">
-          {(['titles', 'tags', 'audit', 'variants'] as const).map((t) => (
+          {(['titles', 'tags', 'audit', 'variants'] as const).map((tabKey) => (
             <Button
-              key={t}
-              variant={tab === t ? 'primary' : 'secondary'}
+              key={tabKey}
+              variant={tab === tabKey ? 'primary' : 'secondary'}
               className="px-2 py-1 text-xs"
-              onClick={() => setTab(t)}
+              onClick={() => setTab(tabKey)}
             >
-              {t}
+              {t(tabLabels[tabKey])}
             </Button>
           ))}
         </div>
@@ -116,6 +126,7 @@ function TitleTab({
   platforms?: string[];
   onApply?: (title: string) => void;
 }) {
+  const { t } = useT();
   const payload = useAssistantPayload(body, contentType);
   const [result, setResult] = useState<TitleOptimizeResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -144,10 +155,10 @@ function TitleTab({
 
   return (
     <div className="flex flex-col gap-2">
-      {loading && <p className="text-sm text-slate-400">Generating titles…</p>}
+      {loading && <p className="text-sm text-slate-400">{t('common.loading')}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
       {!loading && !error && result && result.variants.length === 0 && (
-        <p className="text-sm text-slate-400">Write some body text to generate titles.</p>
+        <p className="text-sm text-slate-400">{t('assistant.writeDraft')}</p>
       )}
       {!loading && result?.variants.map((v, i) => (
         <div key={i} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2">
@@ -157,7 +168,7 @@ function TitleTab({
           </div>
           {onApply && (
             <Button variant="secondary" className="shrink-0 text-xs" onClick={() => onApply(v.title)}>
-              Use
+              {t('common.actions')}
             </Button>
           )}
         </div>
@@ -175,6 +186,7 @@ function TagTab({
   body: string;
   onApply?: (tags: string[]) => void;
 }) {
+  const { t } = useT();
   const payload = useAssistantPayload(body, 'TEXT');
   const [result, setResult] = useState<TagExtractResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -203,22 +215,22 @@ function TagTab({
 
   return (
     <div className="flex flex-col gap-2">
-      {loading && <p className="text-sm text-slate-400">Extracting tags…</p>}
+      {loading && <p className="text-sm text-slate-400">{t('common.loading')}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
       {!loading && result && result.tags.length === 0 && (
-        <p className="text-sm text-slate-400">No strong keywords detected yet.</p>
+        <p className="text-sm text-slate-400">{t('common.empty')}</p>
       )}
       {!loading && result && result.tags.length > 0 && (
         <>
           <div className="flex flex-wrap gap-2">
-            {result.tags.map((t) => (
-              <Badge key={t}>#{t}</Badge>
+            {result.tags.map((tag) => (
+              <Badge key={tag}>#{tag}</Badge>
             ))}
           </div>
           {onApply && (
             <div className="flex justify-end">
               <Button variant="secondary" className="text-xs" onClick={() => onApply(result.tags)}>
-                Add tags
+                {t('content.create')}
               </Button>
             </div>
           )}
@@ -245,6 +257,7 @@ function AuditTab({
   videoDurationSec?: number;
   platforms?: string[];
 }) {
+  const { t } = useT();
   const payload = useAssistantPayload(body, contentType);
   const [result, setResult] = useState<ContentAuditResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -285,7 +298,7 @@ function AuditTab({
 
   return (
     <div className="flex flex-col gap-3">
-      {loading && <p className="text-sm text-slate-400">Auditing…</p>}
+      {loading && <p className="text-sm text-slate-400">{t('common.loading')}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
       {!loading && result && (
         <>
@@ -333,6 +346,7 @@ function VariantTab({
   contentType: string;
   onApply?: (body: string) => void;
 }) {
+  const { t } = useT();
   const payload = useAssistantPayload(body, contentType);
   const [result, setResult] = useState<VariantGenerateResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -361,7 +375,7 @@ function VariantTab({
 
   return (
     <div className="flex flex-col gap-3">
-      {loading && <p className="text-sm text-slate-400">Generating variants…</p>}
+      {loading && <p className="text-sm text-slate-400">{t('common.loading')}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
       {!loading && result?.variants.map((v) => (
         <VariantRow key={v.style} variant={v} onApply={onApply} />
@@ -371,6 +385,7 @@ function VariantTab({
 }
 
 function VariantRow({ variant, onApply }: { variant: CopyVariant; onApply?: (body: string) => void }) {
+  const { t } = useT();
   return (
     <div className="rounded-lg border border-slate-200 p-3">
       <div className="mb-2 flex items-center justify-between">
@@ -379,7 +394,7 @@ function VariantRow({ variant, onApply }: { variant: CopyVariant; onApply?: (bod
         </span>
         {onApply && (
           <Button variant="secondary" className="shrink-0 text-xs" onClick={() => onApply(variant.body)}>
-            Use this
+            {t('common.actions')}
           </Button>
         )}
       </div>

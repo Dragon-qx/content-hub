@@ -2,12 +2,16 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { Button, Card, Input, StatusBadge } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
 import { Table } from '@/components/Table';
 import { Member, Paginated, Team } from '@/lib/types';
+import { useT } from '@/lib/i18n';
 
 export default function TeamsPage() {
+  const { setActiveTeamId, refreshTeams } = useAuth();
+  const { t } = useT();
   const [teams, setTeams] = useState<Team[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [activeTeam, setActiveTeam] = useState<string | null>(null);
@@ -50,11 +54,16 @@ export default function TeamsPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await api.post('/teams', { name, description });
+      const team = await api.post<Team>('/teams', { name, description });
       setName('');
       setDescription('');
       setShowForm(false);
       await loadTeams();
+      // Make the newly created team the active one so downstream pages
+      // (accounts, contents, dashboard) immediately scope to it.
+      setActiveTeam(team.id);
+      setActiveTeamId(team.id);
+      await refreshTeams();
     } finally {
       setSubmitting(false);
     }
@@ -63,11 +72,11 @@ export default function TeamsPage() {
   return (
     <div className="pb-20 md:pb-8">
       <PageHeader
-        title="Teams"
-        subtitle="Manage your teams and members"
+        title={t('teams.title')}
+        subtitle={t('teams.subtitle')}
         actions={
           <Button onClick={() => setShowForm((s) => !s)}>
-            {showForm ? 'Cancel' : '+ New team'}
+            {showForm ? t('common.cancel') : t('teams.newTeam')}
           </Button>
         }
       />
@@ -75,11 +84,11 @@ export default function TeamsPage() {
       {showForm && (
         <Card className="mb-6">
           <form onSubmit={submit} className="flex flex-col gap-3">
-            <Input placeholder="Team name" value={name} onChange={(e) => setName(e.target.value)} required />
-            <Input placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+            <Input placeholder={t('teams.teamName')} value={name} onChange={(e) => setName(e.target.value)} required />
+            <Input placeholder={t('teams.description')} value={description} onChange={(e) => setDescription(e.target.value)} />
             <div className="flex justify-end">
               <Button type="submit" disabled={submitting}>
-                {submitting ? 'Creating…' : 'Create team'}
+                {submitting ? t('teams.creating') : t('teams.createTeam')}
               </Button>
             </div>
           </form>
@@ -87,7 +96,7 @@ export default function TeamsPage() {
       )}
 
       {loading ? (
-        <div className="text-slate-400">Loading…</div>
+        <div className="text-slate-400">{t('common.loading')}</div>
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <Card className="lg:col-span-1">
@@ -105,7 +114,7 @@ export default function TeamsPage() {
                   </button>
                 </li>
               ))}
-              {teams.length === 0 && <li className="text-sm text-slate-400">No teams yet.</li>}
+              {teams.length === 0 && <li className="text-sm text-slate-400">{t('teams.empty')}</li>}
             </ul>
           </Card>
 
@@ -113,11 +122,11 @@ export default function TeamsPage() {
             <div className="overflow-x-auto">
               <Table<Member>
                 rows={members}
-                emptyMessage={activeTeam ? 'No members in this team.' : 'Select a team.'}
+                emptyMessage={activeTeam ? t('teams.noMembers') : t('teams.selectTeam')}
                 columns={[
-                { key: 'user', header: 'User', render: (r) => <span className="font-mono text-xs">{r.userId}</span> },
-                { key: 'role', header: 'Role', render: (r) => <StatusBadge status={r.role} /> },
-                { key: 'joined', header: 'Joined', render: (r) => new Date(r.joinedAt).toLocaleDateString() },
+                { key: 'user', header: t('teams.user'), render: (r) => <span className="font-mono text-xs">{r.userId}</span> },
+                { key: 'role', header: t('teams.role'), render: (r) => <StatusBadge status={t(`teams.role.${r.role.toLowerCase()}`)} /> },
+                { key: 'joined', header: t('teams.joined'), render: (r) => new Date(r.joinedAt).toLocaleDateString() },
                 ]}
               />
             </div>

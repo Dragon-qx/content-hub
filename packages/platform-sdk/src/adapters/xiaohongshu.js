@@ -4,13 +4,6 @@ exports.XiaoHongShuAdapter = void 0;
 const crypto_1 = require("crypto");
 const adapter_base_1 = require("../adapter-base");
 const types_1 = require("../types");
-/**
- * 小红书专业号 (XiaoHongShu / Red) open-platform adapter.
- * Note: the real API uses request signing (signature = HMAC-SHA256 of the
- * canonical request); we mirror that shape here so a real integration only
- * needs real credentials and hostnames.
- * See: https://open.xiaohongshu.com/document/doc?docId=64f1b21a00000000
- */
 class XiaoHongShuAdapter extends adapter_base_1.BaseAdapter {
     constructor(config) {
         super();
@@ -20,7 +13,6 @@ class XiaoHongShuAdapter extends adapter_base_1.BaseAdapter {
         this.tokenExpire = 0;
         this.refreshTokenValue = null;
     }
-    /** Sign a request body per the Red open-platform spec. */
     sign(body) {
         return (0, crypto_1.createHmac)('sha256', this.config.appSecret).update(body).digest('hex');
     }
@@ -32,8 +24,6 @@ class XiaoHongShuAdapter extends adapter_base_1.BaseAdapter {
         const payload = JSON.stringify({ app_key: this.config.appKey, app_secret: this.config.appSecret, code, grant_type: 'authorization_code' });
         const data = await this.call('https://customer.xiaohongshu.com/api/oauth/v1/token', { method: 'POST', headers: { 'X-Signature': this.sign(payload) }, body: payload });
         this.accessToken = data.access_token;
-        // The token endpoint returns a refresh token alongside the access token;
-        // persist it so refreshToken() can rotate without a fresh handshake.
         if (data.refresh_token)
             this.refreshTokenValue = data.refresh_token;
         this.tokenExpire = Date.now() + data.expires_in * 1000;
@@ -73,10 +63,6 @@ class XiaoHongShuAdapter extends adapter_base_1.BaseAdapter {
             return (await this.refreshToken()).accessToken;
         throw new Error('XiaoHongShu adapter is not authenticated');
     }
-    /**
-     * Upload media to XiaoHongShu and return the platform media URL.
-     * Real API: POST /api/media/v1/upload with HMAC signature.
-     */
     async uploadMedia(mediaUrl, type = 'image') {
         const token = await this.getToken();
         const bytes = await this.fetchMediaBytes(mediaUrl);
@@ -89,7 +75,6 @@ class XiaoHongShuAdapter extends adapter_base_1.BaseAdapter {
     }
     async publish(post) {
         const token = await this.getToken();
-        // Upload media first if provided, then use returned URLs
         let mediaUrls = post.mediaUrls ?? [];
         if (mediaUrls.length > 0) {
             const type = mediaUrls[0].match(/\.(mp4|mov|avi)$/i) ? 'video' : 'image';

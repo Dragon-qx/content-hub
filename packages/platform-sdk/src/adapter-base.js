@@ -2,24 +2,12 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BaseAdapter = void 0;
 const oauth_callback_1 = require("./oauth-callback");
-/**
- * Shared helpers and sensible defaults for every ConcreteAdapter.
- * Platform-specific adapters extend this class and override the operations
- * that the platform's API actually supports. Operations that a platform does
- * not implement throw a clear, typed error so callers can branch on it.
- */
 class BaseAdapter {
     constructor() {
-        /**
-         * Token injected from stored credentials (e.g. a persisted OAuth access
-         * token). When present, adapters use it instead of performing a live
-         * OAuth handshake. `expiresAt` defaults to ~1h out if omitted.
-         */
         this.injectedToken = null;
         this.injectedRefreshToken = null;
         this.injectedTokenExpire = 0;
     }
-    /** Seed the adapter with credentials already stored for the account. */
     setCredentials(creds) {
         this.injectedToken = creds.accessToken ?? null;
         this.injectedRefreshToken = creds.refreshToken ?? null;
@@ -37,16 +25,9 @@ class BaseAdapter {
             this.injectedTokenExpire = Date.now() + 3600_000;
         }
     }
-    /**
-     * OAuth2 callback URL for this platform, derived from the shared
-     * OAUTH_CALLBACK_BASE (so new deployments stop hard-coding
-     * `https://your-domain.com`). Subclasses call this from getAuthUrl /
-     * handleCallback instead of inlining the host.
-     */
     callbackFor(platform = this.platform) {
         return (0, oauth_callback_1.callbackUrlFor)(platform);
     }
-    /** True when the adapter can publish without a fresh OAuth handshake. */
     hasInjectedToken() {
         return !!this.injectedToken && Date.now() < this.injectedTokenExpire - 60000;
     }
@@ -56,7 +37,6 @@ class BaseAdapter {
     getInjectedRefreshToken() {
         return this.injectedRefreshToken;
     }
-    /** Perform an authenticated fetch against the platform API. */
     async call(url, init = {}) {
         const headers = {};
         const src = init.headers;
@@ -70,8 +50,6 @@ class BaseAdapter {
         else if (src) {
             Object.assign(headers, src);
         }
-        // Only default to JSON when the caller has not already specified a
-        // Content-Type (e.g. form-urlencoded OAuth token exchanges).
         if (!headers['Content-Type'] && !headers['content-type']) {
             headers['Content-Type'] = 'application/json';
         }
@@ -81,10 +59,6 @@ class BaseAdapter {
         }
         return (await res.json());
     }
-    /**
-     * Perform a multipart/form-data upload against the platform API.
-     * Does NOT set Content-Type header (browser/fetch will set the boundary).
-     */
     async callMultipart(url, formData, extraHeaders) {
         const res = await fetch(url, {
             method: 'POST',
@@ -96,7 +70,6 @@ class BaseAdapter {
         }
         return (await res.json());
     }
-    /** Fetch media bytes from a URL (HTTP/HTTPS) or local path. */
     async fetchMediaBytes(mediaUrl) {
         const res = await fetch(mediaUrl);
         if (!res.ok) {
@@ -107,7 +80,6 @@ class BaseAdapter {
     async refreshToken() {
         throw new Error(`${this.platform} does not support token refresh`);
     }
-    // ── Engagement ─────────────────────────────────────────────────────
     async fetchComments(accountId, postId) {
         throw new Error(`${this.platform} does not expose a comments API`);
     }

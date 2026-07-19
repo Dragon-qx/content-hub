@@ -11,11 +11,6 @@ const youtube_1 = require("./adapters/youtube");
 const wechat_video_1 = require("./adapters/wechat-video");
 const wechat_official_1 = require("./wechat-official");
 class PlatformAdapterFactory {
-    /**
-     * Build the adapter responsible for a given platform. Returns null when the
-     * platform has no supported adapter yet, so callers can show a clean
-     * "not supported" state rather than throwing.
-     */
     static create(platform, config = {}) {
         switch (platform) {
             case types_1.Platform.WECHAT_OFFICIAL:

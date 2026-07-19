@@ -3,15 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.YouTubeAdapter = void 0;
 const adapter_base_1 = require("../adapter-base");
 const types_1 = require("../types");
-/**
- * YouTube adapter — OAuth2 Authorization Code flow + YouTube Data API v3.
- * See: https://developers.google.com/youtube/v3/docs
- *
- * Capabilities: auth, publish (the metadata create — the binary upload is a
- * separate resumable-upload step the platform requires), channel metrics, and
- * comment threads (fetch + reply). YouTube has no inbox-style DM surface, so
- * fetchMessages falls back to the BaseAdapter "not supported" error.
- */
 class YouTubeAdapter extends adapter_base_1.BaseAdapter {
     constructor(config) {
         super();
@@ -78,11 +69,6 @@ class YouTubeAdapter extends adapter_base_1.BaseAdapter {
             return (await this.refreshToken()).accessToken;
         throw new Error('YouTube adapter is not authenticated');
     }
-    /**
-     * Register upload metadata. YouTube requires a multipart resumable upload for
-     * the video binary first; this call creates the video resource (the scaffold
-     * the binary is attached to) so the external id + url exist immediately.
-     */
     async publish(post) {
         const token = await this.getToken();
         const data = await this.call('https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status&uploadType=resumable', {

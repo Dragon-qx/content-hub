@@ -5,10 +5,6 @@ export interface BilibiliConfig {
     secretKey: string;
     accountId: string;
 }
-/**
- * B站 (Bilibili) 开放平台 adapter — 创作姬 / 个人空间发布能力。
- * See: https://open.bilibili.com/doc
- */
 export declare class BilibiliAdapter extends BaseAdapter {
     private config;
     platform: Platform;

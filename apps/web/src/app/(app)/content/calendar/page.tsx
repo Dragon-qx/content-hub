@@ -14,6 +14,7 @@ import {
   STATUS_LABELS,
   CALENDAR_EVENT_TONE,
 } from '@/lib/types';
+import { useT } from '@/lib/i18n';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -37,6 +38,7 @@ function startOfMonthGrid(year: number, month: number): Date {
 }
 
 export default function ContentCalendarPage() {
+  const { t } = useT();
   const [year, setYear] = useState(() => new Date().getUTCFullYear());
   const [month, setMonth] = useState(() => new Date().getUTCMonth() + 1);
   const [data, setData] = useState<CalendarResponse | null>(null);
@@ -117,7 +119,7 @@ export default function ContentCalendarPage() {
   return (
     <div>
       <PageHeader
-        title="Content Calendar"
+        title={t('nav.calendar')}
         subtitle={`${monthHeading(year, month)} · ${totalScheduled} scheduled`}
         actions={
           <Button variant="secondary" onClick={goToday}>
@@ -128,7 +130,7 @@ export default function ContentCalendarPage() {
 
       <Card className="mb-6">
         <div className="mb-4 flex items-center justify-between">
-          <Button variant="ghost" onClick={() => goTo(-1)} aria-label="Previous month">
+          <Button variant="ghost" onClick={() => goTo(-1)} aria-label={t('common.prev')}>
             ←
           </Button>
           <div className="text-center">
@@ -136,7 +138,7 @@ export default function ContentCalendarPage() {
               {monthHeading(year, month)}
             </div>
           </div>
-          <Button variant="ghost" onClick={() => goTo(1)} aria-label="Next month">
+          <Button variant="ghost" onClick={() => goTo(1)} aria-label={t('common.next')}>
             →
           </Button>
         </div>
@@ -297,7 +299,7 @@ export default function ContentCalendarPage() {
                         : 'bg-slate-100 text-slate-600',
                     ].join(' ')}
                   >
-                    {STATUS_LABELS[r.status as keyof typeof STATUS_LABELS] ?? r.status}
+                    {t(STATUS_LABELS[r.status as keyof typeof STATUS_LABELS]) ?? r.status}
                   </span>
                 ),
               },

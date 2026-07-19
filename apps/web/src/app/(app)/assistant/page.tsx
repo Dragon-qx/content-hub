@@ -6,6 +6,7 @@ import PageHeader from '@/components/PageHeader';
 import MarkdownEditor from '@/components/MarkdownEditor';
 import ContentAssistant from '@/components/ContentAssistant';
 import { CONTENT_TYPES } from '@/lib/types';
+import { useT } from '@/lib/i18n';
 
 /**
  * Standalone AI Content Assistant workspace (PRD §3.3 V1.1 AI 辅助写作).
@@ -14,6 +15,7 @@ import { CONTENT_TYPES } from '@/lib/types';
  * copy before creating a formal content item.
  */
 export default function AssistantPage() {
+  const { t } = useT();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [contentType, setContentType] = useState('TEXT');
@@ -21,21 +23,21 @@ export default function AssistantPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="AI assistant"
-        subtitle="Optimize titles, extract tags, audit quality, and generate copy variants over a draft."
+        title={t('assistant.title')}
+        subtitle={t('assistant.subtitle')}
       />
 
       <Card>
         <div className="flex flex-col gap-3">
           <Input
-            placeholder="Draft title (optional)"
+            placeholder={t('assistant.draftTitle')}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
           <MarkdownEditor
             value={body}
             onChange={setBody}
-            placeholder="Write or paste a draft to get AI suggestions…"
+            placeholder={t('assistant.writeDraft')}
           />
           <div className="flex justify-end">
             <Select value={contentType} onChange={(e) => setContentType(e.target.value)} className="w-full sm:max-w-xs">
@@ -55,7 +57,7 @@ export default function AssistantPage() {
       />
 
       <div className="text-center text-xs text-slate-400">
-        All suggestions are generated locally over your draft and never persisted automatically.
+        {t('assistant.localNote')}
       </div>
     </div>
   );

@@ -4,8 +4,10 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import LoginForm from '@/components/LoginForm';
+import { useT } from '@/lib/i18n';
 
 export default function LoginPage() {
+  const { t } = useT();
   const { user, loading } = useAuth();
   const router = useRouter();
 
@@ -16,7 +18,7 @@ export default function LoginPage() {
   if (loading || user) {
     return (
       <div className="flex h-screen items-center justify-center text-slate-400">
-        Loading…
+        {t('common.loading')}
       </div>
     );
   }

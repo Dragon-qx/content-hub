@@ -8,6 +8,7 @@ import {
   PlatformAdaptation,
   PlatformRule,
 } from '@/lib/types';
+import { useT } from '@/lib/i18n';
 
 /**
  * Live "how will this look on each platform" panel (PRD §3.4 适配预览). The
@@ -28,6 +29,7 @@ export default function AdaptationPreview({
   videoCount: number;
   videoDurationSec: number;
 }) {
+  const { t } = useT();
   const [result, setResult] = useState<AdaptationResult | null>(null);
   const [rules, setRules] = useState<PlatformRule[]>([]);
   const [loading, setLoading] = useState(false);
@@ -96,16 +98,16 @@ export default function AdaptationPreview({
     <Card>
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-base font-semibold text-slate-900">
-          Platform adaptation preview
+          {t('analytics.platformBreakdown')}
         </h2>
         {summary && (
           <Badge tone={summary.fits === summary.total ? 'success' : 'warning'}>
-            {summary.fits}/{summary.total} platforms fit
+            {summary.fits}/{summary.total} {t('analytics.platformBreakdown')}
           </Badge>
         )}
       </div>
 
-      {loading && <p className="text-sm text-slate-400">Projecting…</p>}
+      {loading && <p className="text-sm text-slate-400">{t('analytics.scanning')}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {!loading && !error && result && (
@@ -130,6 +132,7 @@ function PlatformRow({
   adaptation: PlatformAdaptation;
   label: string;
 }) {
+  const { t } = useT();
   const { platform, fits, truncated, bodyLength, maxLength, warnings, hints } =
     adaptation;
 
@@ -147,19 +150,19 @@ function PlatformRow({
           <span className="font-mono text-[10px] text-slate-400 sm:text-xs">{platform}</span>
         </div>
         <Badge tone={fits ? 'success' : 'danger'}>
-          <span className="hidden sm:inline">{fits ? 'Fits' : 'Needs attention'}</span>
-          <span className="sm:hidden">{fits ? 'Fit' : 'No'}</span>
+          <span className="hidden sm:inline">{fits ? t('status.APPROVED') : t('status.IN_REVIEW')}</span>
+          <span className="sm:hidden">{fits ? t('status.APPROVED') : t('status.IN_REVIEW')}</span>
         </Badge>
       </div>
 
       <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500 sm:text-xs">
         <span>
-          Body: {bodyLength}/{maxLength}
+          {t('content.body')} {bodyLength}/{maxLength}
           {truncated && <span className="ml-1 text-amber-600">(truncated)</span>}
         </span>
         {adaptation.imageMax > 0 && (
           <span>
-            Images: {adaptation.imagesUsed}/{adaptation.imageMax}
+            {t('media.image')} {adaptation.imagesUsed}/{adaptation.imageMax}
             {adaptation.imagesDropped > 0 && (
               <span className="ml-1 text-amber-600">(-{adaptation.imagesDropped})</span>
             )}
@@ -167,7 +170,7 @@ function PlatformRow({
         )}
         {adaptation.videoMax > 0 && (
           <span>
-            Videos: {adaptation.videosUsed}/{adaptation.videoMax}
+            {t('media.video')} {adaptation.videosUsed}/{adaptation.videoMax}
             {adaptation.videosDropped > 0 && (
               <span className="ml-1 text-amber-600">(-{adaptation.videosDropped})</span>
             )}

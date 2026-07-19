@@ -1,10 +1,13 @@
 'use client';
 
 import { useAuth } from '@/lib/auth';
+import { useT, useLocale } from '@/lib/i18n';
 import { AuthUser } from '@/lib/types';
 import NotificationBell from './NotificationBell';
 
 export default function Topbar({ user, onMenuClick }: { user: AuthUser | null; onMenuClick?: () => void }) {
+  const { t } = useT();
+  const [locale, setLocale] = useLocale();
   const { logout } = useAuth();
 
   return (
@@ -14,7 +17,7 @@ export default function Topbar({ user, onMenuClick }: { user: AuthUser | null; o
           type="button"
           onClick={onMenuClick}
           className="md:hidden p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-lg"
-          aria-label="Toggle navigation"
+          aria-label={t('nav.dashboard')}
         >
           <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <line x1="3" y1="6" x2="17" y2="6" />
@@ -22,19 +25,27 @@ export default function Topbar({ user, onMenuClick }: { user: AuthUser | null; o
             <line x1="3" y1="14" x2="17" y2="14" />
           </svg>
         </button>
-        <span className="text-sm text-slate-500 hidden sm:inline">Multi-platform content operations</span>
+        <span className="text-sm text-slate-500 hidden sm:inline">{t('app.subtitle')}</span>
       </div>
       <div className="flex items-center gap-2 md:gap-4">
         <NotificationBell />
         <span className="text-xs md:text-sm text-slate-600 truncate max-w-[120px] md:max-w-none">
-          {user ? `${user.name} · ${user.role}` : 'Guest'}
+          {user ? `${user.name} · ${user.role}` : t('common.guest')}
         </span>
+        <button
+          type="button"
+          onClick={() => setLocale(locale === 'zhCn' ? 'en' : 'zhCn')}
+          className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs md:px-3 md:text-sm text-slate-600 hover:bg-slate-50"
+          aria-label={t('topbar.language')}
+        >
+          {locale === 'zhCn' ? 'EN' : '中'}
+        </button>
         {user && (
           <button
             onClick={logout}
             className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs md:px-3 md:text-sm text-slate-600 hover:bg-slate-50"
           >
-            Sign out
+            {t('topbar.logout')}
           </button>
         )}
       </div>

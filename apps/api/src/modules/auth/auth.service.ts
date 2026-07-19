@@ -10,6 +10,7 @@ import * as argon2 from 'argon2';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { AuditService } from '../audit/audit.service';
+import { TeamService } from '../team/team.service';
 import { MfaService } from './mfa.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto, RefreshTokenDto } from './dto/login.dto';
@@ -30,6 +31,7 @@ export class AuthService {
     private readonly crypto: CryptoService,
     private readonly mfa: MfaService,
     private readonly audit: AuditService,
+    private readonly teams: TeamService,
   ) {}
 
   private accessExpiresIn(): string {
@@ -97,6 +99,13 @@ export class AuthService {
         passwordHash,
         role: UserRole.OWNER,
       },
+    });
+
+    // Every user needs a team to operate. Auto-provision a personal default
+    // team so team-scoped flows (accounts, contents, analytics) work out of
+    // the box. teamService.create also adds the creator as an ADMIN member.
+    await this.teams.create(user.id, {
+      name: `${user.name}的团队`,
     });
 
     return this.signTokens(user.id, user.email, user.role);

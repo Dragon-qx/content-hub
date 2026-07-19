@@ -2,16 +2,25 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useT } from '@/lib/i18n';
+import type { ZhCnKey } from '@/lib/locales/zhCn';
 
-const BOTTOM_NAV = [
-  { key: 'home', label: 'Home', icon: '🏠', href: '/dashboard' },
-  { key: 'content', label: 'Content', icon: '📝', href: '/content' },
-  { key: 'analytics', label: 'Analytics', icon: '📈', href: '/analytics' },
-  { key: 'reports', label: 'Reports', icon: '📋', href: '/reports' },
-  { key: 'more', label: 'More', icon: '⋯', href: '/settings' },
+interface BottomNavItem {
+  key: ZhCnKey;
+  icon: string;
+  href: string;
+}
+
+const BOTTOM_NAV: BottomNavItem[] = [
+  { key: 'nav.dashboard', icon: '🏠', href: '/dashboard' },
+  { key: 'nav.content', icon: '📝', href: '/content' },
+  { key: 'nav.analytics', icon: '📈', href: '/analytics' },
+  { key: 'nav.reports', icon: '📋', href: '/reports' },
+  { key: 'nav.settings', icon: '⋯', href: '/settings' },
 ];
 
 export default function MobileNav() {
+  const { t } = useT();
   const pathname = usePathname();
 
   return (
@@ -31,7 +40,7 @@ export default function MobileNav() {
             }`}
           >
             <span className="text-lg leading-none">{item.icon}</span>
-            <span>{item.label}</span>
+            <span>{t(item.key)}</span>
           </Link>
         );
       })}
