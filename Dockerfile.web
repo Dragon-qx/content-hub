@@ -25,15 +25,24 @@ RUN cd /app/apps/web && pnpm run build
 FROM base AS runner
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-# Next.js standalone output carries its own node_modules. The standalone tree is
-# rooted at `apps/web/` (so server.js lives at that nested path), therefore we
-# copy it to /app and enter that subdir both for `server.js` and for `public/`.
+# Next.js standalone builder emits `apps/web/.next/standalone/` preserving the
+# workspace path, so the standalone tree's *root* is `apps/web/` and looks like
+#   standalone/apps/web/{server.js,package.json,public,node_modules}
+#                                     .next/{BUILD_ID,*.json,...}
+# (Note: there is NO `static` folder here — `.next/static` lives *outside* the
+# standalone tree and is copied in separately below.)
+#
+# Recreate the workspace layout under /app so the SDK/node_modules resolution
+# that worked in the builder carries over unchanged. The only file we
+# explicitly reference later is apps/web/server.js.
+#
+# The standalone tree's root is `apps/web/` (it preserves the workspace path),
+# so we copy it to `./` — that places server.js at /app/apps/web/server.js.
 COPY --from=builder /app/apps/web/.next/standalone ./
-# .next/static lives outside the standalone tree, so it must be copied in
-# separately and placed next to the standalone's server.js (under apps/web).
-COPY --from=builder /app/apps/web/.next/static ./.next/static
-COPY --from=builder /app/apps/web/public ./public
-WORKDIR /app/apps/web
+# .next/static is outside the standalone tree — place it next to server.js.
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+# static assets (manifest, icons, service worker)
+COPY --from=builder /app/apps/web/public ./apps/web/public
 
 EXPOSE 3001
-CMD ["node", "server.js"]
+CMD ["node", "apps/web/server.js"]
