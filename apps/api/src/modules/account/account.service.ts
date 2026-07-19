@@ -211,6 +211,13 @@ export class AccountService {
       throw new BadRequestException('Unsupported platform');
     }
 
+    // Validate the team exists before we hit Prisma's FK constraint — otherwise
+    // the raw database error leaks to the client as a 500 with no useful detail.
+    const team = await this.prisma.team.findUnique({ where: { id: teamId } });
+    if (!team) {
+      throw new NotFoundException('Team not found — please refresh and select a valid team');
+    }
+
     const existing = await this.prisma.socialAccount.findUnique({
       where: {
         platform_accountId: { platform: dto.platform, accountId: dto.accountId },
