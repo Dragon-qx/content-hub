@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { Badge, Button, Card, Input, Select } from '@/lib/ui';
+import { Badge, Button, Card, Field, Input, Select } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
 import { Table } from '@/components/Table';
 import {
@@ -17,6 +17,16 @@ import {
 import { useT } from '@/lib/i18n';
 
 type BindMode = 'manual' | 'oauth';
+
+interface ValidationResult {
+  accountId: string;
+  platform: string;
+  valid: boolean;
+  status: string;
+  message: string;
+  checks: { name: string; ok: boolean; detail: string }[];
+  suggestions: string[];
+}
 
 /** Result banner shown after the OAuth provider redirects back to this page. */
 function OAuthBanner() {
@@ -200,6 +210,120 @@ export default function AccountsPage() {
     }
   };
 
+  // Account validation (row-level)
+  const [validating, setValidating] = useState(false);
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
+  const [showValidation, setShowValidation] = useState(false);
+
+  // Pre-save validation (form-level)
+  const [formValidating, setFormValidating] = useState(false);
+  const [formValidation, setFormValidation] = useState<ValidationResult | null>(null);
+
+  const validateBeforeSave = async (formPlatform: string, appId: string, secret: string) => {
+    setFormValidating(true);
+    setFormValidation(null);
+    try {
+      const res = await api.post<ValidationResult>('/accounts/validate', {
+        teamId,
+        platform: formPlatform,
+        accountName: 'validation-check',
+        accountId: 'validation-check',
+        appid: appId || undefined,
+        secret: secret || undefined,
+      });
+      setFormValidation(res);
+    } catch {
+      setFormValidation({
+        accountId: '',
+        platform: formPlatform,
+        valid: false,
+        status: 'ERROR',
+        message: '验证请求失败',
+        checks: [],
+        suggestions: ['请检查网络连接'],
+      });
+    } finally {
+      setFormValidating(false);
+    }
+  };
+
+  // Account edit
+  const [editingAccount, setEditingAccount] = useState<SocialAccount | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editAppId, setEditAppId] = useState('');
+  const [editSecret, setEditSecret] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // Account delete
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const validateAccount = async (accountId: string) => {
+    setValidating(true);
+    setValidationResult(null);
+    setShowValidation(true);
+    try {
+      const res = await api.post<ValidationResult>(`/accounts/${accountId}/validate`);
+      setValidationResult(res);
+    } catch (err: unknown) {
+      setValidationResult({
+        accountId,
+        platform: '',
+        valid: false,
+        status: 'ERROR',
+        message: err instanceof Error ? err.message : '验证失败',
+        checks: [],
+        suggestions: ['请检查网络连接或联系管理员'],
+      });
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  // Edit account
+  const startEdit = (account: SocialAccount) => {
+    setEditingAccount(account);
+    setEditName(account.accountName);
+    setEditAppId('');
+    setEditSecret('');
+  };
+
+  const saveEdit = async () => {
+    if (!editingAccount) return;
+    setSavingEdit(true);
+    try {
+      const body: Record<string, string> = { accountName: editName };
+      if (editAppId) body.appid = editAppId;
+      if (editAppId) body.appId = editAppId;
+      if (editSecret) body.secret = editSecret;
+      await api.patch(`/accounts/${editingAccount.id}`, body);
+      setEditingAccount(null);
+      await load();
+      await loadHealth();
+    } catch (err: unknown) {
+      window.alert(err instanceof Error ? err.message : '保存失败');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // Delete account
+  const confirmDelete = async (accountId: string) => {
+    setDeletingId(accountId);
+  };
+
+  const executeDelete = async () => {
+    if (!deletingId) return;
+    try {
+      await api.del(`/accounts/${deletingId}`);
+      setDeletingId(null);
+      await load();
+      await loadHealth();
+    } catch (err: unknown) {
+      window.alert(err instanceof Error ? err.message : '删除失败');
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="pb-20 md:pb-8">
       <PageHeader
@@ -295,7 +419,31 @@ export default function AccountsPage() {
                 value={secret}
                 onChange={(e) => setSecret(e.target.value)}
               />
-              <div className="sm:col-span-2 flex justify-end">
+
+              {/* Inline validation result */}
+              {formValidation && (
+                <div className="sm:col-span-2 rounded-lg border border-slate-200 p-3">
+                  <div className={`mb-2 text-sm font-medium ${formValidation.valid ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {formValidation.valid ? '✓ ' : '✗ '}{formValidation.message}
+                  </div>
+                  {formValidation.checks.map((c, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs text-slate-600">
+                      <span className={c.ok ? 'text-emerald-500' : 'text-red-500'}>{c.ok ? '✓' : '✗'}</span>
+                      <span>{c.name}: {c.detail}</span>
+                    </div>
+                  ))}
+                  {formValidation.suggestions.length > 0 && (
+                    <div className="mt-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-700">
+                      {formValidation.suggestions[0]}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="sm:col-span-2 flex justify-end gap-2">
+                <Button type="button" variant="secondary" disabled={formValidating || !appid || !secret} onClick={() => validateBeforeSave(platform, appid, secret)}>
+                  {formValidating ? t('accounts.validating') : t('accounts.validate')}
+                </Button>
                 <Button type="submit" disabled={submitting}>
                   {submitting ? t('accounts.binding') : t('accounts.bind')}
                 </Button>
@@ -343,6 +491,74 @@ export default function AccountsPage() {
         </Card>
       )}
 
+      {/* Validation result modal */}
+      {showValidation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">{t('accounts.validateTitle')}</h3>
+              <button
+                onClick={() => setShowValidation(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            {validating && (
+              <div className="flex items-center gap-2 text-sm text-slate-500">
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-primary" />
+                {t('accounts.validating')}
+              </div>
+            )}
+
+            {!validating && validationResult && (
+              <div className="flex flex-col gap-4">
+                {/* Status banner */}
+                <div
+                  className={`rounded-lg px-4 py-3 text-sm font-medium ${
+                    validationResult.valid
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'bg-red-50 text-red-700'
+                  }`}
+                >
+                  {validationResult.valid ? '✓ ' : '✗ '}
+                  {validationResult.message}
+                </div>
+
+                {/* Checks */}
+                <div className="flex flex-col gap-2">
+                  <span className="text-sm font-medium text-slate-600">{t('accounts.validateChecks')}</span>
+                  {validationResult.checks.map((check, i) => (
+                    <div key={i} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className={check.ok ? 'text-emerald-500' : 'text-red-500'}>
+                          {check.ok ? '✓' : '✗'}
+                        </span>
+                        <span className="text-sm text-slate-700">{check.name}</span>
+                      </div>
+                      <span className="text-xs text-slate-500">{check.detail}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Suggestions */}
+                {validationResult.suggestions.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm font-medium text-slate-600">{t('accounts.validateSuggestions')}</span>
+                    <ul className="list-inside list-disc rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                      {validationResult.suggestions.map((s, i) => (
+                        <li key={i}>{s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="text-slate-400">{t('common.loading')}</div>
       ) : (
@@ -381,8 +597,100 @@ export default function AccountsPage() {
                 return <Badge tone={HEALTH_TONE[found.health]}>{label}</Badge>;
               },
             },
+            {
+              key: 'actions',
+              header: t('common.actions'),
+              render: (r) => (
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" onClick={() => startEdit(r)}>{t('common.edit')}</Button>
+                  <Button variant="ghost" onClick={() => confirmDelete(r.id)}>{t('common.delete')}</Button>
+                  <Button variant="secondary" disabled={validating} onClick={() => validateAccount(r.id)}>
+                    {validating ? t('common.loading') : t('accounts.validate')}
+                  </Button>
+                </div>
+              ),
+            },
             ]}
           />
+        </div>
+      )}
+
+      {/* Edit account dialog */}
+      {editingAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="mb-4 text-lg font-semibold">{t('common.edit')} — {editingAccount.accountName}</h3>
+            <div className="flex flex-col gap-4">
+              <Field label={t('accounts.column.platform')}>
+                <Input value={editingAccount.platform} disabled className="bg-slate-50" />
+              </Field>
+              <Field label={t('accounts.accountId')}>
+                <Input value={editingAccount.accountId} disabled className="bg-slate-50" />
+              </Field>
+              <Field label={t('accounts.accountName')}>
+                <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+              </Field>
+              <Field label={t('accounts.appId')}>
+                <Input
+                  placeholder={t('accounts.appId')}
+                  value={editAppId}
+                  onChange={(e) => setEditAppId(e.target.value)}
+                />
+              </Field>
+              <Field label={t('accounts.secret')}>
+                <Input
+                  type="password"
+                  placeholder="••••••••"
+                  value={editSecret}
+                  onChange={(e) => setEditSecret(e.target.value)}
+                />
+              </Field>
+              <p className="text-xs text-slate-400">{t('accounts.leaveBlankToKeep')}</p>
+
+              {/* Inline validation result */}
+              {formValidation && (
+                <div className="rounded-lg border border-slate-200 p-3">
+                  <div className={`mb-2 text-sm font-medium ${formValidation.valid ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {formValidation.valid ? '✓ ' : '✗ '}{formValidation.message}
+                  </div>
+                  {formValidation.checks.map((c, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs text-slate-600">
+                      <span className={c.ok ? 'text-emerald-500' : 'text-red-500'}>{c.ok ? '✓' : '✗'}</span>
+                      <span>{c.name}: {c.detail}</span>
+                    </div>
+                  ))}
+                  {formValidation.suggestions.length > 0 && (
+                    <div className="mt-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-700">
+                      {formValidation.suggestions[0]}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setEditingAccount(null)}>{t('common.cancel')}</Button>
+              <Button variant="secondary" disabled={formValidating || !editAppId || !editSecret} onClick={() => validateBeforeSave(editingAccount.platform, editAppId, editSecret)}>
+                {formValidating ? t('accounts.validating') : t('accounts.validate')}
+              </Button>
+              <Button onClick={saveEdit} disabled={savingEdit}>
+                {savingEdit ? t('common.saving') : t('common.save')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation dialog */}
+      {deletingId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="mb-2 text-lg font-semibold">{t('common.delete')}</h3>
+            <p className="mb-6 text-sm text-slate-600">Are you sure you want to unbind this account? This cannot be undone.</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setDeletingId(null)}>{t('common.cancel')}</Button>
+              <Button variant="danger" onClick={executeDelete}>{t('common.delete')}</Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

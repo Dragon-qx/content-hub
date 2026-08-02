@@ -17,6 +17,7 @@ import { LoginDto, RefreshTokenDto } from './dto/login.dto';
 import { AuthTokens, JwtPayload } from './dto/auth.dto';
 import { MfaCodeDto, MfaLoginDto, MfaRequiredView, MfaSetupView } from './dto/mfa.dto';
 import { MfaJwtPayload, SessionJwtPayload } from './dto/auth.dto';
+import { RefreshTokenService } from './refresh-token/refresh-token.service';
 
 export type LoginResult =
   | AuthTokens
@@ -32,6 +33,7 @@ export class AuthService {
     private readonly mfa: MfaService,
     private readonly audit: AuditService,
     private readonly teams: TeamService,
+    private readonly refreshTokenService: RefreshTokenService,
   ) {}
 
   private accessExpiresIn(): string {
@@ -50,25 +52,16 @@ export class AuthService {
     );
   }
 
+  /**
+   * Create a new token pair with server-side refresh token storage.
+   * The refresh token is stored hashed in the database for rotation and revocation.
+   */
   private async signTokens(
     sub: string,
     email: string,
     role: UserRole,
   ): Promise<AuthTokens> {
-    const payload: JwtPayload = { sub, email, role, type: 'access' };
-    const refreshPayload: JwtPayload = { sub, email, role, type: 'refresh' };
-
-    const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload, {
-        expiresIn: this.accessExpiresIn(),
-      }),
-      this.jwtService.signAsync(refreshPayload, {
-        expiresIn: this.refreshExpiresIn(),
-        secret: this.refreshSecret(),
-      }),
-    ]);
-
-    return { accessToken, refreshToken };
+    return this.refreshTokenService.createTokenPair(sub, email, role);
   }
 
   /**
@@ -292,29 +285,18 @@ export class AuthService {
   }
 
   async refresh(dto: RefreshTokenDto): Promise<AuthTokens> {
-    let payload: JwtPayload;
-    try {
-      payload = await this.jwtService.verifyAsync<JwtPayload>(
-        dto.refreshToken,
-        { secret: this.refreshSecret() },
-      );
-    } catch {
-      throw new UnauthorizedException('刷新令牌无效或已过期');
-    }
+    // Use server-side refresh token rotation for security
+    const result = await this.refreshTokenService.rotateRefreshToken(
+      dto.refreshToken,
+      {
+        userAgent: dto.userAgent,
+        ipAddress: dto.ipAddress,
+      },
+    );
 
-    if (payload.type !== 'refresh') {
-      throw new UnauthorizedException('刷新令牌类型错误');
-    }
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
-      select: { id: true, email: true, role: true, isActive: true },
-    });
-
-    if (!user || !user.isActive) {
-      throw new UnauthorizedException('用户不存在或已被禁用');
-    }
-
-    return this.signTokens(user.id, user.email, user.role);
+    return {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+    };
   }
 }

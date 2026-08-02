@@ -3,10 +3,13 @@ import { Reflector } from '@nestjs/core';
 import { PlatformSdkController } from './platform-sdk.controller';
 import { PlatformSdkService } from './platform-sdk.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { TeamAccessGuard } from '../common/team-access/team-access.guard';
 
 describe('PlatformSdkController', () => {
   let controller: PlatformSdkController;
   let service: any;
+
+  const mockUser = { userId: 'u1', email: 'a@b.com', role: 'OWNER' };
 
   beforeEach(async () => {
     service = {
@@ -26,6 +29,8 @@ describe('PlatformSdkController', () => {
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: () => true })
+      .overrideGuard(TeamAccessGuard)
+      .useValue({ canActivate: () => true })
       .compile();
 
     controller = module.get(PlatformSdkController);
@@ -40,10 +45,11 @@ describe('PlatformSdkController', () => {
 
   it('publish forwards contentId, platform and payload', async () => {
     await controller.publish(
+      mockUser as any,
       { contentId: 'c1', platform: 'TWITTER' as any, payload: { foo: 'bar' } },
       undefined,
     );
-    expect(service.publish).toHaveBeenCalledWith('c1', 'TWITTER', { foo: 'bar' }, undefined);
+    expect(service.publish).toHaveBeenCalledWith('c1', 'TWITTER', { foo: 'bar' }, undefined, 'u1');
   });
 
   it('validate forwards platform and credentials', async () => {

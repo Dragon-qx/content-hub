@@ -59,6 +59,7 @@ export const mockPrisma = () => ({
   },
   content: {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     findMany: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
@@ -79,6 +80,7 @@ export const mockPrisma = () => ({
   },
   mediaAsset: {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     findMany: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
@@ -87,6 +89,7 @@ export const mockPrisma = () => ({
   },
   publishReceipt: {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     findMany: jest.fn().mockResolvedValue([]),
     create: jest.fn(),
     update: jest.fn(),

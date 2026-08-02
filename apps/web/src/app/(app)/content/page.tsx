@@ -339,7 +339,7 @@ export default function ContentPage() {
               ),
             },
             { key: 'type', header: t('content.column.type'), render: (r) => <span className="text-slate-500">{r.contentType}</span> },
-            { key: 'status', header: t('content.column.status'), render: (r) => <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">{t(STATUS_LABELS[r.status]) ?? r.status}</span> },
+            { key: 'status', header: t('content.column.status'), render: (r) => <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">{t(STATUS_LABELS[r.status as ContentStatus]) ?? r.status}</span> },
             { key: 'updated', header: t('content.column.updated'), render: (r) => new Date(r.updatedAt).toLocaleString() },
           ]}
         />

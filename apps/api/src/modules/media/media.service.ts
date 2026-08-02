@@ -1,6 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { MediaType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { existsSync, unlinkSync } from 'fs';
+import { join } from 'path';
 
 /** Fields the API layer reads from an uploaded file (multipart). */
 export interface UploadedMultipartFile {
@@ -8,11 +10,21 @@ export interface UploadedMultipartFile {
   filename?: string;
   originalname?: string;
   size?: number;
+  path?: string; // diskStorage adds this
   width?: number;
   height?: number;
   duration?: number;
   uploadedBy?: string;
 }
+
+/** Allowed MIME types grouped by media category. */
+const ALLOWED_MIMES: Record<string, string[]> = {
+  IMAGE: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'],
+  VIDEO: ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'],
+  AUDIO: ['audio/mpeg', 'audio/wav', 'audio/ogg'],
+};
+
+const MAX_DIMENSION = 16384; // max width/height in pixels
 
 /** Query params for listing media assets. */
 export interface ListMediaParams {
@@ -28,11 +40,22 @@ export class MediaService {
   constructor(private readonly prisma: PrismaService) {}
 
   async upload(file: UploadedMultipartFile, contentId?: string) {
+    // Validate file was actually written to disk by multer diskStorage
+    if (!file.path || !existsSync(file.path)) {
+      throw new BadRequestException('File was not saved to disk');
+    }
+
+    // Determine media type from MIME
+    const mediaType = this.mapMimeTypeToMediaType(file.mimetype);
+
+    // Use the diskStorage-generated filename for the URL
+    const urlPath = `/uploads/media/${file.filename}`;
+
     return this.prisma.mediaAsset.create({
       data: {
         contentId: contentId ?? null,
-        type: this.mapMimeTypeToMediaType(file.mimetype),
-        url: `/uploads/media/${file.filename ?? file.originalname}`,
+        type: mediaType,
+        url: urlPath,
         thumbnailUrl: null,
         width: file.width ?? null,
         height: file.height ?? null,
@@ -42,6 +65,25 @@ export class MediaService {
         uploadedBy: file.uploadedBy ?? null,
       },
     });
+  }
+
+  /**
+   * Safely delete a media asset: removes both the DB record and the physical file.
+   */
+  async removeWithFile(id: string): Promise<{ success: boolean; id: string }> {
+    const asset = await this.findOne(id);
+    // Attempt to delete the physical file (best-effort)
+    try {
+      if (asset.url) {
+        const filePath = join(process.cwd(), 'uploads', asset.url.replace('/uploads/', ''));
+        if (existsSync(filePath)) {
+          unlinkSync(filePath);
+        }
+      }
+    } catch {
+      // File deletion failure should not block DB deletion
+    }
+    return this.remove(id);
   }
 
   /**

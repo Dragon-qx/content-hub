@@ -4,6 +4,7 @@ import { ContentController } from './content.controller';
 import { ContentService } from './content.service';
 import { AuditService } from '../audit/audit.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { TeamAccessGuard } from '../common/team-access/team-access.guard';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
 describe('ContentController', () => {
@@ -35,6 +36,8 @@ describe('ContentController', () => {
       ],
     })
       .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(TeamAccessGuard)
       .useValue({ canActivate: () => true })
       .compile();
 
@@ -74,15 +77,18 @@ describe('ContentController', () => {
   });
 
   it('findAll forwards normalized query params', async () => {
-    await controller.findAll({
-      skip: 0,
-      take: 10,
-      status: undefined,
-      teamId: 'team-1',
-      search: undefined,
-    } as any);
+    await controller.findAll(
+      { userId: 'user-1', email: 'a@b.com', role: 'OWNER' } as any,
+      {
+        skip: 0,
+        take: 10,
+        status: undefined,
+        teamId: 'team-1',
+        search: undefined,
+      } as any,
+    );
     expect(service.findAll).toHaveBeenCalledWith(
-      expect.objectContaining({ skip: 0, take: 10, teamId: 'team-1' }),
+      expect.objectContaining({ skip: 0, take: 10, teamId: 'team-1', userId: 'user-1' }),
     );
   });
 

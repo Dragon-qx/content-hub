@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { WorkflowService } from '../workflow/workflow.service';
+import { TeamAccessService } from '../common/team-access/team-access.service';
 
 /** A single scheduled item on the content calendar for one day. */
 export interface CalendarEvent {
@@ -62,6 +63,7 @@ export interface ListContentParams {
   teamId?: string;
   createdBy?: string;
   search?: string;
+  userId?: string; // when set and no teamId, filters to user's teams
 }
 
 /** Input shape for creating a new version — see CreateContentVersionDto. */
@@ -115,6 +117,7 @@ export class ContentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workflow: WorkflowService,
+    private readonly teamAccess: TeamAccessService,
   ) {}
 
   // ===== CRUD =====
@@ -123,6 +126,8 @@ export class ContentService {
     if (!dto.teamId) {
       throw new BadRequestException('teamId 不能为空');
     }
+    // Verify user is a member of the target team
+    await this.teamAccess.assertUserInTeam(userId, dto.teamId);
     const version = 1;
     const content = await this.prisma.content.create({
       data: {
@@ -155,7 +160,30 @@ export class ContentService {
   async findAll(params: ListContentParams = {}) {
     const where: Prisma.ContentWhereInput = {};
     if (params.status) where.status = params.status;
-    if (params.teamId) where.teamId = params.teamId;
+    if (params.teamId) {
+      // Explicit teamId: validate access
+      where.teamId = params.teamId;
+    } else if (params.userId) {
+      // No teamId: filter to content from teams the user belongs to
+      const memberships = await this.prisma.member.findMany({
+        where: { userId: params.userId },
+        select: { teamId: true },
+      });
+      const teamIds = memberships.map((m) => m.teamId);
+      // Also include teams the user owns
+      const ownedTeams = await this.prisma.team.findMany({
+        where: { ownerId: params.userId },
+        select: { id: true },
+      });
+      const ownedTeamIds = ownedTeams.map((t) => t.id);
+      const allTeamIds = [...new Set([...teamIds, ...ownedTeamIds])];
+      if (allTeamIds.length > 0) {
+        where.teamId = { in: allTeamIds };
+      } else {
+        // User has no teams — return nothing
+        return { items: [], total: 0, skip: params.skip ?? 0, take: params.take ?? 20 };
+      }
+    }
     if (params.createdBy) where.createdBy = params.createdBy;
     if (params.search) {
       where.OR = [
@@ -277,17 +305,21 @@ export class ContentService {
     return { year, month, days };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId?: string) {
     const content = await this.prisma.content.findUnique({
       where: { id },
       include: { tags: true, platformPosts: true, versions: true, workflow: true },
     });
     if (!content) throw new NotFoundException(`Content ${id} not found`);
+    // Verify team access when userId is provided
+    if (userId) {
+      await this.teamAccess.assertUserInTeam(userId, content.teamId);
+    }
     return content;
   }
 
   async update(id: string, dto: UpdateContentInput, userId?: string) {
-    await this.findOne(id);
+    await this.findOne(id, userId);
 
     // Enforce the status state machine whenever a status change is requested.
     if (dto.status !== undefined) {
@@ -315,8 +347,8 @@ export class ContentService {
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, userId?: string) {
+    await this.findOne(id, userId);
     await this.prisma.content.delete({ where: { id } });
     return { success: true, id };
   }

@@ -4,6 +4,7 @@ import { ContentStatus, ContentType, JobStatus } from '@prisma/client';
 import { ContentService, CONTENT_TRANSITIONS } from './content.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { WorkflowService } from '../workflow/workflow.service';
+import { TeamAccessService } from '../common/team-access/team-access.service';
 import { mockPrisma } from '../../../test/prisma.mock';
 
 describe('ContentService', () => {
@@ -20,6 +21,7 @@ describe('ContentService', () => {
         ContentService,
         { provide: PrismaService, useValue: prisma },
         { provide: WorkflowService, useValue: workflow },
+        { provide: TeamAccessService, useValue: { assertUserInTeam: jest.fn().mockResolvedValue(undefined), assertResourceInTeam: jest.fn().mockResolvedValue(undefined), assertUserRole: jest.fn().mockResolvedValue(undefined), firstTeamForUser: jest.fn().mockResolvedValue('team-1'), resolveTeamId: jest.fn().mockResolvedValue('team-1'), getAccountInTeam: jest.fn(), getContentInTeam: jest.fn(), getMediaInTeam: jest.fn(), getJobInTeam: jest.fn(), getReceiptInTeam: jest.fn() } },
       ],
     }).compile();
 

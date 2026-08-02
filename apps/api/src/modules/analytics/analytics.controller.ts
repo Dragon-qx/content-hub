@@ -10,6 +10,8 @@ import {
 } from '@nestjs/swagger';
 import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { TeamService } from '../team/team.service';
 import { AnalyticsQueryDto, HistoryQueryDto, TopContentQueryDto } from './dto/analytics-query.dto';
 import { SnapshotCreateDto } from './dto/snapshot-create.dto';
 import { AnomalyAlertsQueryDto, ScanAnomalyDto } from './dto/anomaly.dto';
@@ -20,7 +22,10 @@ import { ReportConfigDto } from './dto/report.dto';
 @Controller('analytics')
 @UseGuards(JwtAuthGuard)
 export class AnalyticsController {
-  constructor(private readonly analytics: AnalyticsService) {}
+  constructor(
+    private readonly analytics: AnalyticsService,
+    private readonly teamService: TeamService,
+  ) {}
 
   /** 团队数据总览（聚合所有账号） */
   @ApiOperation({ summary: 'Team dashboard', description: 'Aggregated metrics across all of the user\'s accounts.' })
@@ -159,19 +164,20 @@ export class AnalyticsController {
   @ApiOperation({ summary: 'Save a report', description: 'Persists a custom report configuration for later reuse.' })
   @Post('reports')
   @ApiCreatedResponse({ description: 'Report saved.' })
-  async saveReport(@Body() dto: ReportConfigDto) {
-    // In a real app, userId/teamId come from the JWT. Use a placeholder for now.
-    const teamId = 'default-team';
-    const userId = 'system';
-    return this.analytics.saveReport(teamId, userId, { ...dto, name: dto.name ?? 'Untitled report' });
+  async saveReport(
+    @CurrentUser() user: { userId: string },
+    @Body() dto: ReportConfigDto,
+  ) {
+    const teamId = await this.teamService.firstTeamForUser(user.userId);
+    return this.analytics.saveReport(teamId, user.userId, { ...dto, name: dto.name ?? 'Untitled report' });
   }
 
   /** List saved reports for the current team. */
   @ApiOperation({ summary: 'List saved reports', description: 'Returns all saved custom reports for the team.' })
   @Get('reports')
   @ApiOkResponse({ description: 'List of saved reports.' })
-  listReports() {
-    const teamId = 'default-team';
+  async listReports(@CurrentUser() user: { userId: string }) {
+    const teamId = await this.teamService.firstTeamForUser(user.userId);
     return this.analytics.listReports(teamId);
   }
 

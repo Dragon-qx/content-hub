@@ -98,6 +98,9 @@ export class QueueService {
       throw new Error(`Queue kind '${this.kind}' is wired to the Prisma seam only`);
     }
 
+    // Recover jobs stuck in RUNNING with expired lease (worker crash recovery)
+    await this.scheduler.recoverStaleJobs(now);
+
     const due = await this.scheduler.getDueJobs(now, limit);
     let succeeded = 0;
     let failed = 0;

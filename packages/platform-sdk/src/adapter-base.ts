@@ -72,8 +72,50 @@ export abstract class BaseAdapter implements PlatformAdapter {
     return this.injectedRefreshToken;
   }
 
+  /** Default timeout for all external platform requests (15s). */
+  protected static readonly REQUEST_TIMEOUT_MS = 15_000;
+
+  /** Max response body size for JSON responses (5 MiB). */
+  protected static readonly MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
+
+  /**
+   * Validate a URL before fetching — blocks SSRF to internal networks.
+   * Only allows https:// with a public destination.
+   */
+  protected validateUrl(url: string): void {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new Error(`Invalid URL: ${url}`);
+    }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      throw new Error(`Unsupported protocol ${parsed.protocol} — only http/https allowed`);
+    }
+    const hostname = parsed.hostname.toLowerCase();
+    // Block loopback
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname.startsWith('127.')) {
+      throw new Error(`Blocked internal address: ${hostname}`);
+    }
+    // Block RFC1918 / private ranges
+    if (
+      hostname.startsWith('10.') ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('0.') ||
+      hostname.startsWith('169.254.') ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(hostname)
+    ) {
+      throw new Error(`Blocked private network address: ${hostname}`);
+    }
+    // Block cloud metadata
+    if (hostname === '169.254.169.254' || hostname === 'metadata.google.internal') {
+      throw new Error(`Blocked metadata address: ${hostname}`);
+    }
+  }
+
   /** Perform an authenticated fetch against the platform API. */
   protected async call<T>(url: string, init: RequestInit = {}): Promise<T> {
+    this.validateUrl(url);
     const headers: Record<string, string> = {};
     const src = init.headers;
     if (src instanceof Headers) {
@@ -88,11 +130,21 @@ export abstract class BaseAdapter implements PlatformAdapter {
     if (!headers['Content-Type'] && !headers['content-type']) {
       headers['Content-Type'] = 'application/json';
     }
-    const res = await fetch(url, { ...init, headers });
-    if (!res.ok) {
-      throw new Error(`${this.platform} request failed: HTTP ${res.status}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), BaseAdapter.REQUEST_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, { ...init, headers, signal: controller.signal });
+      if (!res.ok) {
+        throw new Error(`${this.platform} request failed: HTTP ${res.status}`);
+      }
+      const text = await res.text();
+      if (text.length > BaseAdapter.MAX_RESPONSE_BYTES) {
+        throw new Error(`${this.platform} response too large: ${text.length} bytes`);
+      }
+      return JSON.parse(text) as T;
+    } finally {
+      clearTimeout(timeout);
     }
-    return (await res.json()) as T;
   }
 
   /**
@@ -100,24 +152,47 @@ export abstract class BaseAdapter implements PlatformAdapter {
    * Does NOT set Content-Type header (browser/fetch will set the boundary).
    */
   protected async callMultipart<T>(url: string, formData: FormData, extraHeaders?: Record<string, string>): Promise<T> {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: extraHeaders ?? {},
-      body: formData,
-    });
-    if (!res.ok) {
-      throw new Error(`${this.platform} multipart upload failed: HTTP ${res.status}`);
+    this.validateUrl(url);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), BaseAdapter.REQUEST_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: extraHeaders ?? {},
+        body: formData,
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        throw new Error(`${this.platform} multipart upload failed: HTTP ${res.status}`);
+      }
+      const text = await res.text();
+      if (text.length > BaseAdapter.MAX_RESPONSE_BYTES) {
+        throw new Error(`${this.platform} response too large: ${text.length} bytes`);
+      }
+      return JSON.parse(text) as T;
+    } finally {
+      clearTimeout(timeout);
     }
-    return (await res.json()) as T;
   }
 
-  /** Fetch media bytes from a URL (HTTP/HTTPS) or local path. */
+  /** Fetch media bytes from a URL — with SSRF protection and size limits. */
   protected async fetchMediaBytes(mediaUrl: string): Promise<ArrayBuffer> {
-    const res = await fetch(mediaUrl);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch media from ${mediaUrl}: HTTP ${res.status}`);
+    this.validateUrl(mediaUrl);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), BaseAdapter.REQUEST_TIMEOUT_MS);
+    try {
+      const res = await fetch(mediaUrl, { signal: controller.signal });
+      if (!res.ok) {
+        throw new Error(`Failed to fetch media from ${mediaUrl}: HTTP ${res.status}`);
+      }
+      const buf = await res.arrayBuffer();
+      if (buf.byteLength > 100 * 1024 * 1024) {
+        throw new Error(`Media too large: ${buf.byteLength} bytes (max 100 MiB)`);
+      }
+      return buf;
+    } finally {
+      clearTimeout(timeout);
     }
-    return res.arrayBuffer();
   }
 
   // ── Auth ────────────────────────────────────────────────────────────
@@ -160,5 +235,18 @@ export abstract class BaseAdapter implements PlatformAdapter {
     _content: string,
   ): Promise<void> {
     throw new Error(`${this.platform} does not support replying to private messages`);
+  }
+
+  /**
+   * Validate that the stored credentials are valid against the platform API.
+   * Returns true if valid, throws with a descriptive error if not.
+   * Default implementation tries getAccessToken(); adapters can override.
+   */
+  async validateCredentials(): Promise<boolean> {
+    if (typeof (this as unknown as { getAccessToken?: () => Promise<string> }).getAccessToken === 'function') {
+      await (this as unknown as { getAccessToken: () => Promise<string> }).getAccessToken();
+      return true;
+    }
+    throw new Error(`${this.platform} does not support credential validation`);
   }
 }

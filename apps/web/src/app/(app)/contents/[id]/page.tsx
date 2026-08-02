@@ -2,16 +2,20 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { Button, Card, Input, Select, Textarea, Badge, StatusBadge } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
 import MarkdownEditor, { renderMarkdown } from '@/components/MarkdownEditor';
-import WysiwygEditor from '@/components/WysiwygEditor';
-import MediaLibrary from '@/components/MediaLibrary';
-import AdaptationPreview from '@/components/AdaptationPreview';
-import TemplatePicker from '@/components/TemplatePicker';
-import ContentAssistant from '@/components/ContentAssistant';
+
+// Heavy components loaded on demand (only when editing)
+const WysiwygEditor = dynamic(() => import('@/components/WysiwygEditor'), { ssr: false });
+const MediaLibrary = dynamic(() => import('@/components/MediaLibrary'), { ssr: false });
+const AdaptationPreview = dynamic(() => import('@/components/AdaptationPreview'), { ssr: false });
+const TemplatePicker = dynamic(() => import('@/components/TemplatePicker'), { ssr: false });
+const ContentAssistant = dynamic(() => import('@/components/ContentAssistant'), { ssr: false });
+const PublishDialog = dynamic(() => import('@/components/PublishDialog'), { ssr: false });
 import {
   Content,
   ContentVersion,
@@ -92,6 +96,9 @@ function ContentDetail({ id }: { id: string }) {
 
   // Version rollback
   const [rollingBackVersion, setRollingBackVersion] = useState<number | null>(null);
+
+  // Publish dialog
+  const [showPublishDialog, setShowPublishDialog] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -185,11 +192,14 @@ function ContentDetail({ id }: { id: string }) {
         case 'archive':
           await api.post(`/contents/${id}/archive`, {});
           break;
-        case 'retry':
-          // FAILED → SCHEDULED is a valid transition; re-open for publishing.
-          await api.put(`/contents/${id}`, { status: 'SCHEDULED' as ContentStatus });
-          break;
-      }
+         case 'retry':
+           // FAILED → SCHEDULED is a valid transition; re-open for publishing.
+           await api.put(`/contents/${id}`, { status: 'SCHEDULED' as ContentStatus });
+           break;
+         case 'publish':
+           setShowPublishDialog(true);
+           break;
+       }
       setPendingAction(null);
       setActionNote('');
       await load();
@@ -234,7 +244,7 @@ function ContentDetail({ id }: { id: string }) {
   if (error && !content) return <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>;
   if (!content) return null;
 
-  const actions = STATUS_ACTIONS[content.status] ?? [];
+  const actions: StatusAction[] = STATUS_ACTIONS[content.status as ContentStatus] ?? [];
   const versions: ContentVersion[] = [...(content.versions ?? [])].sort(
     (a, b) => b.version - a.version,
   );
@@ -402,6 +412,15 @@ function ContentDetail({ id }: { id: string }) {
       {/* Media library modal */}
       {showMedia && (
         <MediaLibrary contentId={id} onSelect={insertMedia} onClose={() => setShowMedia(false)} />
+      )}
+
+      {/* Publish dialog */}
+      {showPublishDialog && (
+        <PublishDialog
+          contentId={id}
+          onClose={() => setShowPublishDialog(false)}
+          onSuccess={() => { setShowPublishDialog(false); load(); }}
+        />
       )}
 
       {/* Versions */}

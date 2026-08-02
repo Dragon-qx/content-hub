@@ -10,6 +10,10 @@ build/
 out/
 .nuxt/
 
+# Accidentally compiled JS/MAP files in src directories (not dist/)
+packages/*/src/**/*.js
+packages/*/src/**/*.js.map
+
 # Environment
 .env
 .env.local

@@ -33,7 +33,7 @@ import { TranscodeVideoDto, TRANSCODE_RESOLUTIONS, TRANSCODE_FORMATS } from './d
 const TRANSCODE_RESOLUTIONS_MUTABLE = [...TRANSCODE_RESOLUTIONS];
 const TRANSCODE_FORMATS_MUTABLE = [...TRANSCODE_FORMATS];
 import { ExtractCoverDto } from './dto/extract-cover.dto';
-import { mkdirSync } from 'fs';
+import { mkdirSync, existsSync } from 'fs';
 
 @ApiTags('Media')
 @ApiBearerAuth()
@@ -63,6 +63,10 @@ export class MediaController {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
+    // diskStorage writes the file; validate it exists before creating DB record
+    if (!file.path || !existsSync(file.path)) {
+      throw new BadRequestException('File was not saved to disk');
+    }
     return this.media.upload(file, contentId);
   }
 
@@ -85,7 +89,7 @@ export class MediaController {
 
   @ApiOperation({ summary: 'Delete media asset' })
   @ApiParam({ name: 'id', description: 'Media asset id' })
-  @Delete(':id') remove(@Param('id') id: string) { return this.media.remove(id); }
+  @Delete(':id') remove(@Param('id') id: string) { return this.media.removeWithFile(id); }
 
   @ApiOperation({
     summary: 'Transcode a video to multiple resolutions',

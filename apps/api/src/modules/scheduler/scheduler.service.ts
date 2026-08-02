@@ -130,15 +130,55 @@ export class SchedulerService {
    * Returns true if this call claimed the job, false if it was already claimed
    * or completed (status had changed), so the caller can skip double execution.
    */
+  /** Lease duration for a RUNNING job before it's considered stale (5 min). */
+  private static readonly LEASE_DURATION_MS = 5 * 60 * 1000;
+
   async markRunning(jobId: string): Promise<boolean> {
     const res = await this.prisma.publishJob.updateMany({
       where: {
         id: jobId,
         status: { in: [JobStatus.QUEUED, JobStatus.RETRYING] },
       },
-      data: { status: JobStatus.RUNNING, startedAt: new Date() },
+      data: {
+        status: JobStatus.RUNNING,
+        startedAt: new Date(),
+        leaseExpiresAt: new Date(Date.now() + SchedulerService.LEASE_DURATION_MS),
+      },
     });
     return res.count > 0;
+  }
+
+  /**
+   * Recover jobs stuck in RUNNING with an expired lease (worker crashed).
+   * Resets them to RETRYING so they can be picked up by another worker.
+   */
+  async recoverStaleJobs(now: Date = new Date()): Promise<number> {
+    const stale = await this.prisma.publishJob.updateMany({
+      where: {
+        status: JobStatus.RUNNING,
+        leaseExpiresAt: { lt: now },
+      },
+      data: {
+        status: JobStatus.RETRYING,
+        leaseExpiresAt: null,
+        retryCount: { increment: 1 },
+      },
+    });
+    if (stale.count > 0) {
+      this.logger.warn(`Recovered ${stale.count} stale RUNNING job(s) with expired lease`);
+    }
+    return stale.count;
+  }
+
+  /**
+   * Renew the lease for a currently running job (heartbeat).
+   * Call periodically during long-running operations.
+   */
+  async renewLease(jobId: string): Promise<void> {
+    await this.prisma.publishJob.update({
+      where: { id: jobId },
+      data: { leaseExpiresAt: new Date(Date.now() + SchedulerService.LEASE_DURATION_MS) },
+    });
   }
 
   /**

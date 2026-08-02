@@ -38,11 +38,12 @@ import {
   RejectContentDto,
 } from './dto/content.dto';
 import { ContentStatus } from '@prisma/client';
+import { TeamAccessGuard } from '../common/team-access/team-access.guard';
 
 @ApiTags('Content')
 @ApiBearerAuth()
 @Controller('contents')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TeamAccessGuard)
 export class ContentController {
   constructor(
     private readonly content: ContentService,
@@ -73,13 +74,14 @@ export class ContentController {
   @ApiOperation({ summary: 'List / search content', description: 'Paginated listing with status, team and free-text filters.' })
   @ApiOkResponse({ description: 'Paginated content list.' })
   @Get()
-  findAll(@Query() query: ListContentQueryDto) {
+  findAll(@CurrentUser() user: AuthUser, @Query() query: ListContentQueryDto) {
     return this.content.findAll({
       skip: query.skip,
       take: query.take,
       status: query.status,
       teamId: query.teamId,
       search: query.search,
+      userId: user.userId,
     });
   }
 
@@ -95,8 +97,8 @@ export class ContentController {
   @ApiOkResponse({ description: 'Content detail.' })
   @ApiNotFoundResponse({ description: 'Content not found.' })
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.content.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user?: AuthUser) {
+    return this.content.findOne(id, user?.userId);
   }
 
   @ApiOperation({ summary: 'Update content', description: 'Partial update of title, body, type or status.' })
@@ -128,7 +130,7 @@ export class ContentController {
     @CurrentUser() user: AuthUser,
     @Req() req: { ip?: string },
   ) {
-    const result = await this.content.remove(id);
+    const result = await this.content.remove(id, user.userId);
     await this.audit.log('DELETE', user.userId, 'Content', id, null, req.ip as string | undefined);
     return result;
   }

@@ -27,6 +27,9 @@ const mockPrisma = () => ({
     update: jest.fn(),
     delete: jest.fn(),
   },
+  team: {
+    findUnique: jest.fn().mockResolvedValue({ id: 'team-1' }),
+  },
   member: { findMany: jest.fn().mockResolvedValue([]) },
 });
 

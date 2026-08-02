@@ -22,6 +22,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
@@ -46,9 +47,9 @@ services:
       # Secrets: for local one-click runs these may be empty — the entrypoint
       # (docker-entrypoint.sh) auto-generates throwaway values. For real
       # deployments, set them via `.env` or Docker secrets.
-      JWT_SECRET: ${JWT_SECRET:-}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-}
-      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required in production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required in production}
+      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?CREDENTIAL_ENCRYPTION_KEY is required in production}
       # Used by the entrypoint's DB liveness probe (defaults below match db:)
       DB_HOST: db
       DB_PORT: "5432"
@@ -58,14 +59,28 @@ services:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/health']
+      test: ['CMD-SHELL', 'node -e "require(\'http\').get(\'http://localhost:3000/api/v1/health\', r => process.exit(r.statusCode === 200 ? 0 : 1)).on(\'error\', () => process.exit(1))"']
       interval: 15s
       timeout: 5s
       start_period: 45s
       retries: 5
     restart: unless-stopped
+    # Security: read-only root filesystem, drop all capabilities, no privilege escalation
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=64M
+      - /app/uploads:size=256M
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
 
   web:
     build:
@@ -77,8 +92,61 @@ services:
       # expects 3001, so we pin it here.
       PORT: "3001"
     depends_on:
-      - api
+      api:
+        condition: service_started
+    healthcheck:
+      test: ['CMD-SHELL', 'node -e "require(\'http\').get(\'http://localhost:3001/health\', r => process.exit(r.statusCode === 200 ? 0 : 1)).on(\'error\', () => process.exit(1))"']
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
     restart: unless-stopped
+    # Security: read-only root filesystem, drop all capabilities
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=64M
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    command: worker
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://user:pass@db:5432/contenthub
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?CREDENTIAL_ENCRYPTION_KEY is required}
+      DB_HOST: db
+      DB_PORT: "5432"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    # Security: drop all capabilities, no privilege escalation
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=64M
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
 
   nginx:
     image: nginx:alpine

@@ -169,8 +169,8 @@ async function bootstrap() {
   process.exit(0);
 }
 
-bootstrap().catch((err) => {
-  // eslint-disable-next-line no-console
-  console.error('Publish worker failed to start', err);
+bootstrap().catch((err: unknown) => {
+  const logger = new Logger('PublishWorker');
+  logger.error('Publish worker failed to start', err instanceof Error ? err.stack : undefined);
   process.exit(1);
 });

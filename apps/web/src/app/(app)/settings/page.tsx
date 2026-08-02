@@ -150,17 +150,20 @@ export default function SettingsPage() {
         {setup && !mfaEnabled && (
           <div className="mb-4 flex flex-col gap-4 rounded-lg border border-slate-200 p-4">
             <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-              <img
-                src={qrCodeUrl(setup.otpauthUrl)}
-                alt="Scan this QR code with your authenticator app"
-                width={160}
-                height={160}
-                className="rounded-lg border border-slate-200"
-              />
+              {qrCodeUrl(setup.otpauthUrl) && (
+                <img
+                  src={qrCodeUrl(setup.otpauthUrl) ?? undefined}
+                  alt="Scan this QR code with your authenticator app"
+                  width={160}
+                  height={160}
+                  className="rounded-lg border border-slate-200"
+                />
+              )}
               <div className="flex-1 text-sm text-slate-600">
                 <p className="mb-2">
-                  Scan the QR code with your authenticator app, or enter this
-                  secret manually:
+                  {qrCodeUrl(setup.otpauthUrl)
+                    ? 'Scan the QR code with your authenticator app, or enter this secret manually:'
+                    : 'Enter this secret manually in your authenticator app:'}
                 </p>
                 <code className="block break-all rounded bg-slate-100 px-2 py-1 font-mono text-xs">
                   {setup.secret}
