@@ -10,6 +10,47 @@ import {
   PublishResult,
 } from './types';
 import { callbackUrlFor } from './oauth-callback';
+import * as dns from 'node:dns';
+import { isIPv4, isIPv6 } from 'node:net';
+
+/** Normalize an IPv6 address by stripping brackets and lowering case. */
+function normalizeIP(address: string): string {
+  return address.startsWith('[') && address.endsWith(']') ? address.slice(1, -1).toLowerCase() : address.toLowerCase();
+}
+
+/**
+ * True if a resolved IPv4/IPv6 address is private, loopback, link-local, or
+ * otherwise not a public internet address. Pure string/parse check — no deps.
+ */
+export function isPrivateIP(address: string): boolean {
+  const ip = normalizeIP(address);
+  if (isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    if (Number.isNaN(a)) return false;
+    // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 127.0.0.0/8, 0.0.0.0/8
+    return (
+      a === 10 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254) ||
+      a === 127 ||
+      a === 0
+    );
+  }
+  if (isIPv6(ip)) {
+    // ::1 loopback
+    if (ip === '::1' || ip === '0:0:0:0:0:0:0:1') return true;
+    // fc00::/7 unique-local
+    if (ip.startsWith('fc') || ip.startsWith('fd')) return true;
+    // fe80::/10 link-local
+    if (ip.startsWith('fe8') || ip.startsWith('fe9') || ip.startsWith('fea') || ip.startsWith('feb')) return true;
+    // ::ffff: Mapped IPv4 — recurse on the v4 part
+    const mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapped) return isPrivateIP(mapped[1]);
+    return false;
+  }
+  return false;
+}
 
 /**
  * Shared helpers and sensible defaults for every ConcreteAdapter.
@@ -80,17 +121,21 @@ export abstract class BaseAdapter implements PlatformAdapter {
 
   /**
    * Validate a URL before fetching — blocks SSRF to internal networks.
-   * Only allows https:// with a public destination.
+   * Only allows https:// with a public destination. Resolves the hostname and
+   * rejects private/loopback IPs to defeat DNS-rebinding bypasses of the
+   * hostname-string checks.
    */
-  protected validateUrl(url: string): void {
+  protected async validateUrl(url: string): Promise<void> {
     let parsed: URL;
     try {
       parsed = new URL(url);
     } catch {
       throw new Error(`Invalid URL: ${url}`);
     }
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-      throw new Error(`Unsupported protocol ${parsed.protocol} — only http/https allowed`);
+    // Only allow https. http exposes credentials and is unnecessary for the
+    // platform APIs and media origins we call.
+    if (parsed.protocol !== 'https:') {
+      throw new Error(`Unsupported protocol ${parsed.protocol} — only https allowed`);
     }
     const hostname = parsed.hostname.toLowerCase();
     // Block loopback
@@ -111,11 +156,35 @@ export abstract class BaseAdapter implements PlatformAdapter {
     if (hostname === '169.254.169.254' || hostname === 'metadata.google.internal') {
       throw new Error(`Blocked metadata address: ${hostname}`);
     }
+
+    // DNS-rebinding protection: resolve the hostname and verify that NONE of the
+    // resolved addresses land in a private/loopback range. The checks above are
+    // on the hostname string alone and are trivially bypassed if an attacker
+    // controls DNS responses.
+    const addresses = await dns.promises.lookup(hostname, { all: true });
+    for (const { address } of addresses) {
+      if (isPrivateIP(address)) {
+        throw new Error(`Blocked internal address resolved for ${hostname}: ${address}`);
+      }
+    }
+  }
+
+  /**
+   * Resolve a hostname to its IP addresses. Exposed for adapters that need the
+   * resolved address (e.g. to pin against DNS-rebinding). Returns [] on failure.
+   */
+  protected async resolveHost(hostname: string): Promise<string[]> {
+    try {
+      const addresses = await dns.promises.lookup(hostname.toLowerCase(), { all: true });
+      return addresses.map((a) => a.address);
+    } catch {
+      return [];
+    }
   }
 
   /** Perform an authenticated fetch against the platform API. */
   protected async call<T>(url: string, init: RequestInit = {}): Promise<T> {
-    this.validateUrl(url);
+    await this.validateUrl(url);
     const headers: Record<string, string> = {};
     const src = init.headers;
     if (src instanceof Headers) {
@@ -152,7 +221,7 @@ export abstract class BaseAdapter implements PlatformAdapter {
    * Does NOT set Content-Type header (browser/fetch will set the boundary).
    */
   protected async callMultipart<T>(url: string, formData: FormData, extraHeaders?: Record<string, string>): Promise<T> {
-    this.validateUrl(url);
+    await this.validateUrl(url);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), BaseAdapter.REQUEST_TIMEOUT_MS);
     try {
@@ -177,7 +246,7 @@ export abstract class BaseAdapter implements PlatformAdapter {
 
   /** Fetch media bytes from a URL — with SSRF protection and size limits. */
   protected async fetchMediaBytes(mediaUrl: string): Promise<ArrayBuffer> {
-    this.validateUrl(mediaUrl);
+    await this.validateUrl(mediaUrl);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), BaseAdapter.REQUEST_TIMEOUT_MS);
     try {
