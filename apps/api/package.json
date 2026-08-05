@@ -18,6 +18,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
+    "prisma:seed": "prisma db seed",
     "openapi": "ts-node scripts/export-openapi.ts",
     "clean": "rm -rf dist"
   },
@@ -74,6 +75,7 @@
     "webpack-cli": "^7.2.1"
   },
   "prisma": {
-    "schema": "prisma/schema.prisma"
+    "schema": "prisma/schema.prisma",
+    "seed": "ts-node ./prisma/seed.ts"
   }
 }

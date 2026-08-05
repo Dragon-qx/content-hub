@@ -1,0 +1,44 @@
+# Local development infrastructure for `pnpm dev`.
+#
+# Runs just PostgreSQL + Redis so the API and Web can run on the host with
+# `pnpm dev`. Appends to the default compose project; start with:
+#
+#   docker compose -f deploy/docker-compose.dev.yml up -d
+#
+# Credentials match .env.example (DATABASE_URL / REDIS_URL). Exposes the standard
+# ports on localhost. No api / web / nginx here — those run via `pnpm dev`.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: contenthub
+    volumes:
+      - pgdata-dev:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U user']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redisdata-dev:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  pgdata-dev:
+  redisdata-dev:

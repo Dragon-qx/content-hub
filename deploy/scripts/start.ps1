@@ -17,7 +17,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$compose = 'docker compose -f docker-compose.prod.yml'
+$compose = 'docker compose -f deploy/docker-compose.yml'
 
 if ($Down) {
   Write-Host '[contenthub] stopping stack ...'

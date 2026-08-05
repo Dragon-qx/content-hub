@@ -10,7 +10,7 @@ REM   start.bat --build    force rebuild
 REM   start.bat --down     stop and remove containers
 REM   start.bat --clean    stop + wipe named volumes (pgdata, redisdata)
 
-set COMPOSE=docker compose -f docker-compose.prod.yml
+set COMPOSE=docker compose -f deploy/docker-compose.yml
 
 if "%~1"=="" goto run
 if /i "%~1"=="--build" goto run

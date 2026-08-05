@@ -68,7 +68,7 @@ COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder /app/packages/platform-sdk/dist /app/packages/platform-sdk/dist
 COPY --from=builder /app/packages/platform-sdk/package.json /app/packages/platform-sdk/package.json
 COPY --from=builder /app/packages/shared-types/package.json /app/packages/shared-types/package.json
-COPY apps/api/docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY deploy/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Security: run as non-root user

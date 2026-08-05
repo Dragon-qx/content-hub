@@ -1,12 +1,13 @@
 # Production deployment: DB + Redis + API + Web (Next.js) + Nginx.
 #
 # One-command startup:
-#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f deploy/docker-compose.yml up -d --build
 #   open http://localhost
 #
-# Environment is read from the auto-generated `.env.prod`. Replace with your
-# own values (via `.env` or Docker secrets) before deploying for real.
-# Never commit real secrets.
+# For local runs the API entrypoint (deploy/entrypoint.sh) auto-generates
+# throwaway secrets if none are supplied. For real deployments, supply your own
+# JWT_SECRET, JWT_REFRESH_SECRET, and CREDENTIAL_ENCRYPTION_KEY via .env or
+# Docker secrets before launching. Never commit real secrets.
 
 services:
   db:
@@ -38,7 +39,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile.api
+      dockerfile: deploy/Dockerfile.api
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -47,9 +48,9 @@ services:
       # Secrets: for local one-click runs these may be empty — the entrypoint
       # (docker-entrypoint.sh) auto-generates throwaway values. For real
       # deployments, set them via `.env` or Docker secrets.
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required in production}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required in production}
-      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?CREDENTIAL_ENCRYPTION_KEY is required in production}
+      JWT_SECRET: ${JWT_SECRET::-}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET::-}
+      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY::-}
       # Used by the entrypoint's DB liveness probe (defaults below match db:)
       DB_HOST: db
       DB_PORT: "5432"
@@ -85,7 +86,7 @@ services:
   web:
     build:
       context: .
-      dockerfile: Dockerfile.web
+      dockerfile: deploy/Dockerfile.web
     environment:
       NODE_ENV: production
       # Next.js standalone server.js defaults to port 3000; the nginx upstream
@@ -118,15 +119,15 @@ services:
   worker:
     build:
       context: .
-      dockerfile: Dockerfile.api
+      dockerfile: deploy/Dockerfile.api
     command: worker
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://user:pass@db:5432/contenthub
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
-      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?CREDENTIAL_ENCRYPTION_KEY is required}
+      JWT_SECRET: ${JWT_SECRET::-}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET::-}
+      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY::-}
       DB_HOST: db
       DB_PORT: "5432"
     depends_on:
@@ -151,7 +152,7 @@ services:
   nginx:
     image: nginx:alpine
     volumes:
-      - ./nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
       - "80:80"
     depends_on:

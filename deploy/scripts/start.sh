@@ -13,7 +13,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-COMPOSE="docker compose -f docker-compose.prod.yml"
+COMPOSE="docker compose -f deploy/docker-compose.yml"
 
 case "${1:-}" in
   --down)
