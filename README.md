@@ -133,9 +133,6 @@ All endpoints are mounted under `/api/v1` and most require a Bearer JWT
 | Audit        | `POST/GET /audit`, `GET /:resourceType/:resourceId`                     | yes  |
 | Platform SDK | `POST /platform-sdk/publish`, `validate`                                 | yes  |
 
-Usage details (curl examples, request/response shapes) are documented in
-[`docs/API.md`](docs/API.md).
-
 ## Supported platforms
 
 The `packages/platform-sdk` abstraction layer (`PlatformAdapterFactory`) returns
