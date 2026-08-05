@@ -14,14 +14,26 @@ PRISMA_CLI="/app/apps/api/node_modules/.bin/prisma"
 API_DIR="/app/apps/api"
 
 # --- 1. Resolve / generate secrets ----------------------------------------
-# In production these must be supplied externally (compose, secrets, .env). For
-# local "one-click" runs where no secrets are furnished we mint throwaway ones
-# so the container still boots — override them for real deployments.
+# In production these MUST be supplied externally (compose, secrets, .env) — the
+# container refuses to boot with throwaway secrets. For local "one-click" runs
+# where no secrets are furnished we mint throwaway ones so the container still
+# boots — override them for real deployments.
 #
 # Important: use Node's crypto.randomBytes rather than shell tools (head,
 # hexdump, /dev/urandom). The bookworm-slim base does not ship hexdump, so the
 # old `$(... | hexdump ...)` substitution failed with `set -e` and reboot-looped
 # the container. Node is guaranteed to be present on this image.
+
+# Production: fail fast rather than silently mint weak secrets.
+if [ "${NODE_ENV:-development}" = "production" ]; then
+  for _v in JWT_SECRET JWT_REFRESH_SECRET CREDENTIAL_ENCRYPTION_KEY; do
+    if [ -z "${!_v:-}" ]; then
+      log "ERROR: $_v is required in production — refusing to auto-generate." >&2
+      exit 1
+    fi
+  done
+fi
+
 if [ -z "$JWT_SECRET" ]; then
   export JWT_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('base64').replace(/[/+=]/g,'').slice(0,48))")-localauto"
   log "JWT_SECRET auto-generated (override for production)."
