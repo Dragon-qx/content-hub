@@ -1,5 +1,4 @@
 "use strict";
-// packages/platform-sdk/src/types.ts
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Platform = void 0;
 var Platform;

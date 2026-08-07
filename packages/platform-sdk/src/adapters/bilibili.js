@@ -3,10 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.BilibiliAdapter = void 0;
 const adapter_base_1 = require("../adapter-base");
 const types_1 = require("../types");
-/**
- * B站 (Bilibili) 开放平台 adapter — 创作姬 / 个人空间发布能力。
- * See: https://open.bilibili.com/doc
- */
 class BilibiliAdapter extends adapter_base_1.BaseAdapter {
     constructor(config) {
         super();
@@ -85,12 +81,8 @@ class BilibiliAdapter extends adapter_base_1.BaseAdapter {
             body: JSON.stringify({ type: 1, oid: accountId, rpid: commentId, message }),
         });
     }
-    // B站 exposes a real message-reply surface (the web_im send_msg endpoint);
-    // every other platform degrades via the BaseAdapter default below.
     async replyToMessage(accountId, messageId, content) {
         const token = await this.getToken();
-        // The receiver is derived from the message being replied to. We encode the
-        // reply as JSON like the real platform expects (msg_type 1 = plain text).
         await this.call('https://api.vc.bilibili.com/web_im/v1/web_im/send_msg', {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` },

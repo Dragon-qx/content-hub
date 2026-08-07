@@ -5,10 +5,6 @@ export interface WeiboConfig {
     appSecret: string;
     uid: string;
 }
-/**
- * 新浪微博开放平台 (Weibo) adapter.
- * See: https://open.weibo.com/wiki/%E5%BE%AE%E5%8D%9AAPI
- */
 export declare class WeiboAdapter extends BaseAdapter {
     private config;
     platform: Platform;

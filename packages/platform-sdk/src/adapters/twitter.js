@@ -3,16 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TwitterAdapter = void 0;
 const adapter_base_1 = require("../adapter-base");
 const types_1 = require("../types");
-/**
- * X (Twitter) adapter — OAuth2 Authorization Code flow + X API v2.
- * See: https://developer.twitter.com/en/docs/twitter-api
- *
- * Capabilities: auth, publish, and account-level metrics. X's v2 free tier does
- * not expose an impressions/engagement endpoint, so those counters are left at
- * 0. Comments (quote tweets / replies threading) and DMs are not surfaced — the
- * BaseAdapter defaults throw a clear "not supported" error the engagement
- * layer branches on.
- */
 class TwitterAdapter extends adapter_base_1.BaseAdapter {
     constructor(config) {
         super();
@@ -25,9 +15,6 @@ class TwitterAdapter extends adapter_base_1.BaseAdapter {
     }
     getAuthUrl(state) {
         const redirect = encodeURIComponent(this.callbackFor());
-        // PKCE code_challenge is generated in a real client; `challenge` here is a
-        // placeholder standing in for S256(code_verifier). The redirect flow mints
-        // the challenge/verifier pair and swaps the code for a token server-side.
         const challenge = 'challenge';
         return `https://twitter.com/i/oauth2/authorize?response_type=code&client_id=${encodeURIComponent(this.config.clientKey)}&redirect_uri=${redirect}&scope=tweet.read%20tweet.write%20users.read%20offline.access&state=${encodeURIComponent(state)}&code_challenge=${challenge}&code_challenge_method=S256`;
     }
@@ -116,7 +103,6 @@ class TwitterAdapter extends adapter_base_1.BaseAdapter {
     }
 }
 exports.TwitterAdapter = TwitterAdapter;
-/** Build the HTTP Basic auth header for an OAuth2 client credentials pair. */
 function basicAuth(key, secret) {
     return { Authorization: `Basic ${globalThis.btoa(`${key}:${secret}`)}` };
 }

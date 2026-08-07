@@ -3,10 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DouyinAdapter = void 0;
 const adapter_base_1 = require("../adapter-base");
 const types_1 = require("../types");
-/**
- * 抖音开放平台 (Douyin) adapter.
- * See: https://open.douyin.com/platform/doc?doc=docs/open-interface Logistics/user-authorization
- */
 class DouyinAdapter extends adapter_base_1.BaseAdapter {
     constructor(config) {
         super();
@@ -46,10 +42,6 @@ class DouyinAdapter extends adapter_base_1.BaseAdapter {
             return (await this.refreshToken()).accessToken;
         throw new Error('Douyin adapter is not authenticated');
     }
-    /**
-     * Upload a video to Douyin and return the video_id.
-     * Real API: POST /api/apps/v1/video/upload/ with multipart form.
-     */
     async uploadVideo(mediaUrl) {
         const token = await this.getToken();
         const bytes = await this.fetchMediaBytes(mediaUrl);
@@ -60,7 +52,6 @@ class DouyinAdapter extends adapter_base_1.BaseAdapter {
     }
     async publish(post) {
         const token = await this.getToken();
-        // Upload video first if mediaUrls provided
         let videoId = '';
         if (post.mediaUrls?.length) {
             videoId = await this.uploadVideo(post.mediaUrls[0]);

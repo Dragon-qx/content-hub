@@ -3,10 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.WeiboAdapter = void 0;
 const adapter_base_1 = require("../adapter-base");
 const types_1 = require("../types");
-/**
- * 新浪微博开放平台 (Weibo) adapter.
- * See: https://open.weibo.com/wiki/%E5%BE%AE%E5%8D%9AAPI
- */
 class WeiboAdapter extends adapter_base_1.BaseAdapter {
     constructor(config) {
         super();

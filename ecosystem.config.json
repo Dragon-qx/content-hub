@@ -1,0 +1,23 @@
+{
+  "apps": [
+    {
+      "name": "content-hub-api",
+      "script": "scripts/start-api.sh",
+      "cwd": "/home/ubuntu/.openclaw/workspace/content-hub",
+      "max_memory_restart": "1G"
+    },
+    {
+      "name": "content-hub-web",
+      "script": "scripts/start-web.sh",
+      "cwd": "/home/ubuntu/.openclaw/workspace/content-hub",
+      "env": { "NODE_ENV": "production", "PORT": "3001" },
+      "max_memory_restart": "512M"
+    },
+    {
+      "name": "content-hub-worker",
+      "script": "scripts/start-worker.sh",
+      "cwd": "/home/ubuntu/.openclaw/workspace/content-hub",
+      "max_memory_restart": "512M"
+    }
+  ]
+}

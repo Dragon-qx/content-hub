@@ -9,10 +9,5 @@ import { WechatVideoAdapter } from './adapters/wechat-video';
 import { WechatOfficialAdapter } from './wechat-official';
 export type AdapterConfig = Record<string, unknown>;
 export declare class PlatformAdapterFactory {
-    /**
-     * Build the adapter responsible for a given platform. Returns null when the
-     * platform has no supported adapter yet, so callers can show a clean
-     * "not supported" state rather than throwing.
-     */
     static create(platform: Platform | string, config?: AdapterConfig): WechatOfficialAdapter | DouyinAdapter | XiaoHongShuAdapter | BilibiliAdapter | WeiboAdapter | TwitterAdapter | YouTubeAdapter | WechatVideoAdapter | null;
 }
