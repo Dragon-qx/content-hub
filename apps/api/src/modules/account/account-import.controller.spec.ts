@@ -8,6 +8,7 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { AccountController } from './account.controller';
 import { AccountTransferService } from './account-transfer.service';
+import { PlatformSdkService } from '../platform-sdk/platform-sdk.service';
 
 const validSummary = (over: Partial<BatchImportSummary> = {}): BatchImportSummary => ({
   total: 1,
@@ -41,6 +42,7 @@ describe('AccountController (batch import)', () => {
         { provide: AccountService, useValue: accountService },
         { provide: AccountTransferService, useValue: { initiate: jest.fn(), decide: jest.fn(), cancel: jest.fn(), listForTeam: jest.fn().mockResolvedValue([]) } },
         { provide: AuditService, useValue: { log: jest.fn() } },
+        { provide: PlatformSdkService, useValue: { validateAccount: jest.fn().mockResolvedValue({ valid: true }), validateRaw: jest.fn().mockResolvedValue({ valid: true }), validate: jest.fn().mockResolvedValue({ valid: true }) } },
       ],
     }).compile();
 

@@ -75,18 +75,8 @@ export class OAuthAuthorizeController {
     );
   }
 
-  @ApiOperation({ summary: 'Start OAuth2 binding (GET)', description: 'GET variant for a plain link-based authorize flow.' })
-  @ApiParam({ name: 'platform', description: 'Target platform' })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
-  @Get(':platform/authorize')
-  authorizeGet(
-    @CurrentUser() user: AuthUser,
-    @Param('platform') platform: string,
-    @Query() dto: OAuthAuthorizeDto,
-  ) {
-    return this.authorize(user, platform, dto);
-  }
+  // GET variant intentionally removed: credentials in query strings leak into
+  // browser history, proxy logs, and server access logs. Use POST only.
 }
 
 @ApiTags('Accounts / OAuth')

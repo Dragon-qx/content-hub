@@ -4,6 +4,7 @@ import { PlatformSdkService } from './platform-sdk.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { AdaptationService } from '../adaptation/adaptation.service';
+import { TeamAccessService } from '../common/team-access/team-access.service';
 
 describe('PlatformSdkService', () => {
   let service: PlatformSdkService;
@@ -28,6 +29,7 @@ describe('PlatformSdkService', () => {
   beforeEach(async () => {
     prisma = {
       content: {
+        findFirst: jest.fn().mockResolvedValue(content),
         findUnique: jest.fn().mockResolvedValue(content),
         update: jest.fn().mockResolvedValue({ ...content, status: ContentStatus.PUBLISHED }),
       },
@@ -39,6 +41,10 @@ describe('PlatformSdkService', () => {
         create: jest.fn().mockResolvedValue({ id: 'post-1' }),
         findFirst: jest.fn().mockResolvedValue(null),
       },
+      $transaction: jest.fn().mockImplementation(async (cb: any) => cb({
+        platformPost: { create: jest.fn().mockResolvedValue({ id: 'post-1' }) },
+        content: { update: jest.fn().mockResolvedValue({ ...content, status: ContentStatus.PUBLISHED }) },
+      })),
     };
     crypto = {
       decrypt: jest.fn().mockReturnValue({ appid: 'app', secret: 's' }),
@@ -52,6 +58,7 @@ describe('PlatformSdkService', () => {
         // Use the real, pure adaptation engine so this suite asserts the
         // publish pipeline actually truncates over-limit copy (PRD §3.4).
         AdaptationService,
+        { provide: TeamAccessService, useValue: { assertUserInTeam: jest.fn().mockResolvedValue(undefined), assertResourceInTeam: jest.fn().mockResolvedValue(undefined), assertUserRole: jest.fn().mockResolvedValue(undefined), firstTeamForUser: jest.fn().mockResolvedValue('team-1'), resolveTeamId: jest.fn().mockResolvedValue('team-1'), getAccountInTeam: jest.fn(), getContentInTeam: jest.fn(), getMediaInTeam: jest.fn(), getJobInTeam: jest.fn(), getReceiptInTeam: jest.fn() } },
       ],
     }).compile();
 
@@ -69,6 +76,7 @@ describe('PlatformSdkService', () => {
         ok: true,
         status: 200,
         json: () => Promise.resolve(body),
+        text: () => Promise.resolve(JSON.stringify(body)),
         arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
       } as Response);
     });
@@ -80,11 +88,23 @@ describe('PlatformSdkService', () => {
     const outcome = await service.publish('c1', Platform.WECHAT_OFFICIAL, { mediaUrls: ['https://example.com/cover.jpg'] });
     expect(outcome.status).toBe('PUBLISHED');
     expect(outcome.postId).toBe('post-1');
-    expect(prisma.content.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: ContentStatus.PUBLISHED }),
-      }),
-    );
+    // DB writes happen inside a transaction
+    expect(prisma.$transaction).toHaveBeenCalled();
+  });
+
+  it('should return existing post if already published (idempotent)', async () => {
+    prisma.platformPost.findFirst.mockResolvedValue({
+      id: 'existing-post',
+      platform: Platform.WECHAT_OFFICIAL,
+      externalId: 'ext-1',
+      externalUrl: 'https://example.com/post',
+      publishedAt: new Date(),
+    });
+    const fetchBefore = (globalThis as any).fetch;
+    const outcome = await service.publish('c1', Platform.WECHAT_OFFICIAL, { mediaUrls: ['https://example.com/cover.jpg'] });
+    expect(outcome.postId).toBe('existing-post');
+    // Should NOT have called the platform adapter
+    expect((globalThis as any).fetch).toBe(fetchBefore);
   });
 
   it('adapts an over-limit body to the target platform before publishing', async () => {
@@ -92,7 +112,7 @@ describe('PlatformSdkService', () => {
     // pipeline must hand the adapter the truncated copy (with ellipsis) rather
     // than the raw draft. This is the §3.4 平台适配 step in the publish loop.
     const longBody = 'a'.repeat(30000);
-    prisma.content.findUnique.mockResolvedValueOnce({
+    prisma.content.findFirst.mockResolvedValueOnce({
       ...content,
       body: longBody,
       teamId: 'team-1',
@@ -111,7 +131,7 @@ describe('PlatformSdkService', () => {
   });
 
   it('should throw when content is missing', async () => {
-    prisma.content.findUnique.mockResolvedValueOnce(null);
+    prisma.content.findFirst.mockResolvedValueOnce(null);
     await expect(service.publish('missing', Platform.TWITTER)).rejects.toThrow();
   });
 

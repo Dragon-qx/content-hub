@@ -1,8 +1,9 @@
 import { ReactNode } from 'react';
+import { useT } from '@/lib/i18n';
 
 export interface Column<T> {
   key: string;
-  header: string;
+  header: ReactNode;
   render: (row: T) => ReactNode;
   className?: string;
 }
@@ -10,16 +11,18 @@ export interface Column<T> {
 export function Table<T extends { id: string }>({
   columns,
   rows,
-  emptyMessage = 'No data yet.',
+  emptyMessage,
 }: {
   columns: Column<T>[];
   rows: T[];
-  emptyMessage?: string;
+  emptyMessage?: ReactNode;
 }) {
+  const { t } = useT();
+  const msg = emptyMessage ?? t('common.empty');
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-400">
-        {emptyMessage}
+        {msg}
       </div>
     );
   }

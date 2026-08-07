@@ -6,6 +6,7 @@ import { Button, Card, Input, Select } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
 import { Table } from '@/components/Table';
 import { AuditLog } from '@/lib/types';
+import { useT } from '@/lib/i18n';
 
 interface AuditFilters {
   action: string;
@@ -39,6 +40,7 @@ function buildQuery(filters: AuditFilters, skip: number, take: number): string {
 }
 
 export default function AuditPage() {
+  const { t } = useT();
   const [filters, setFilters] = useState<AuditFilters>(INITIAL_FILTERS);
   const [items, setItems] = useState<AuditLog[]>([]);
   const [total, setTotal] = useState(0);
@@ -96,11 +98,11 @@ export default function AuditPage() {
   return (
     <div className="pb-20 md:pb-8">
       <PageHeader
-        title="Audit log"
-        subtitle={`${total} recorded operation${total === 1 ? '' : 's'}`}
+        title={t('audit.title')}
+        subtitle={total === 1 ? t('audit.subtitleOne') : t('audit.subtitle', { count: total })}
         actions={
           <Button variant="secondary" onClick={onExport} disabled={exporting}>
-            {exporting ? 'Exporting…' : 'Export CSV'}
+            {exporting ? t('audit.exporting') : t('audit.exportCsv')}
           </Button>
         }
       />
@@ -116,7 +118,7 @@ export default function AuditPage() {
           >
             {ACTIONS.map((a) => (
               <option key={a} value={a}>
-                {a === '' ? 'All actions' : a}
+                {a === '' ? t('audit.allActions') : a}
               </option>
             ))}
           </Select>
@@ -126,12 +128,12 @@ export default function AuditPage() {
           >
             {RESOURCE_TYPES.map((r) => (
               <option key={r} value={r}>
-                {r === '' ? 'All resources' : r}
+                {r === '' ? t('audit.allResources') : r}
               </option>
             ))}
           </Select>
           <Input
-            placeholder="Operator name or email"
+            placeholder={t('audit.operator')}
             value={filters.operator}
             onChange={(e) => setFilters((f) => ({ ...f, operator: e.target.value }))}
           />
@@ -148,22 +150,22 @@ export default function AuditPage() {
         </form>
         <div className="mt-3 flex justify-end gap-2">
           <Button variant="ghost" onClick={reset}>
-            Reset
+            {t('audit.reset')}
           </Button>
         </div>
       </Card>
 
       {loading ? (
-        <div className="text-slate-400">Loading…</div>
+        <div className="text-slate-400">{t('common.loading')}</div>
       ) : (
         <div className="overflow-x-auto">
           <Table<AuditLog>
             rows={items}
-            emptyMessage="No audit records match the current filters."
+            emptyMessage={t('common.empty')}
             columns={[
             {
               key: 'time',
-              header: 'Timestamp',
+              header: t('audit.column.timestamp'),
               render: (r) => (
                 <span className="text-slate-700">
                   {new Date(r.createdAt).toLocaleString()}
@@ -172,14 +174,14 @@ export default function AuditPage() {
             },
             {
               key: 'operator',
-              header: 'Operator',
+              header: t('audit.column.operator'),
               render: (r) => (
                 <span className="font-medium text-slate-700">{effectiveOperator(r)}</span>
               ),
             },
             {
               key: 'action',
-              header: 'Action',
+              header: t('audit.column.action'),
               render: (r) => (
                 <span className="rounded bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
                   {r.action}
@@ -188,7 +190,7 @@ export default function AuditPage() {
             },
             {
               key: 'resource',
-              header: 'Resource',
+              header: t('audit.column.resource'),
               render: (r) => (
                 <span className="text-slate-600">
                   {r.entityType}
@@ -198,7 +200,7 @@ export default function AuditPage() {
             },
             {
               key: 'ip',
-              header: 'IP',
+              header: t('audit.column.ip'),
               render: (r) => <span className="text-slate-500">{r.ipAddress ?? '—'}</span>,
             },
             {
@@ -206,7 +208,7 @@ export default function AuditPage() {
               header: '',
               render: (r) => (
                 <Button variant="ghost" onClick={() => setDetail(r)}>
-                  Details
+                  {t('audit.details')}
                 </Button>
               ),
             },
@@ -217,7 +219,7 @@ export default function AuditPage() {
 
       <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
         <div>
-          Page {page} of {pageCount}
+          {t('common.page', { page, total: pageCount })}
         </div>
         <div className="flex gap-2">
           <Button
@@ -225,14 +227,14 @@ export default function AuditPage() {
             disabled={skip === 0}
             onClick={() => load(Math.max(0, skip - take))}
           >
-            Previous
+            {t('common.prev')}
           </Button>
           <Button
             variant="secondary"
             disabled={skip + take >= total}
             onClick={() => load(skip + take)}
           >
-            Next
+            {t('common.next')}
           </Button>
         </div>
       </div>
@@ -247,33 +249,33 @@ export default function AuditPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="mb-1 text-lg font-semibold text-slate-900">
-              Audit entry detail
+              {t('audit.details')}
             </h2>
             <p className="mb-4 text-sm text-slate-500">
               {detail.action} · {new Date(detail.createdAt).toLocaleString()}
             </p>
             <dl className="space-y-2 text-sm">
               <div className="flex justify-between border-b border-slate-100 py-1">
-                <dt className="text-slate-500">Operator</dt>
+                <dt className="text-slate-500">{t('audit.column.operator')}</dt>
                 <dd className="font-medium text-slate-700">{effectiveOperator(detail)}</dd>
               </div>
               <div className="flex justify-between border-b border-slate-100 py-1">
-                <dt className="text-slate-500">Action</dt>
+                <dt className="text-slate-500">{t('audit.action')}</dt>
                 <dd className="text-slate-700">{detail.action}</dd>
               </div>
               <div className="flex justify-between border-b border-slate-100 py-1">
-                <dt className="text-slate-500">Resource</dt>
+                <dt className="text-slate-500">{t('audit.resource')}</dt>
                 <dd className="text-slate-700">
                   {detail.entityType}
                   {detail.entityId ? ` (${detail.entityId})` : ''}
                 </dd>
               </div>
               <div className="flex justify-between border-b border-slate-100 py-1">
-                <dt className="text-slate-500">IP address</dt>
+                <dt className="text-slate-500">{t('audit.ipAddress')}</dt>
                 <dd className="text-slate-700">{detail.ipAddress ?? '—'}</dd>
               </div>
               <div className="pt-1">
-                <dt className="mb-1 text-slate-500">Change details (metadata)</dt>
+                <dt className="mb-1 text-slate-500">{t('audit.changeDetails')}</dt>
                 <dd>
                   <pre className="max-h-60 overflow-auto rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
                     {metadataPreview}
@@ -282,7 +284,7 @@ export default function AuditPage() {
               </div>
             </dl>
             <div className="mt-6 flex justify-end">
-              <Button onClick={() => setDetail(null)}>Close</Button>
+              <Button onClick={() => setDetail(null)}>{t('audit.close')}</Button>
             </div>
           </div>
         </div>

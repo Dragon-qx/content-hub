@@ -2,11 +2,13 @@ import { Test } from '@nestjs/testing';
 import { Reflector } from '@nestjs/core';
 import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
+import { TeamService } from '../team/team.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 describe('AnalyticsController', () => {
   let controller: AnalyticsController;
   let service: any;
+  let teamService: any;
 
   beforeEach(async () => {
     service = {
@@ -16,7 +18,6 @@ describe('AnalyticsController', () => {
       getTopContent: jest.fn().mockResolvedValue({ items: [] }),
       getAccountMetrics: jest.fn().mockResolvedValue({}),
       recordSnapshot: jest.fn().mockResolvedValue({ id: 'snap-1' }),
-      // Custom reports (PRD §3.5)
       getAvailableFields: jest.fn().mockResolvedValue({ categories: [] }),
       generateReport: jest.fn().mockResolvedValue({ fields: [], rows: [], totalCount: 0, generatedAt: '' }),
       saveReport: jest.fn().mockResolvedValue({ id: 'rpt-1' }),
@@ -24,10 +25,16 @@ describe('AnalyticsController', () => {
       getReport: jest.fn().mockResolvedValue({ id: 'rpt-1' }),
       deleteReport: jest.fn().mockResolvedValue({ success: true, deletedId: 'rpt-1' }),
     };
+    teamService = {
+      firstTeamForUser: jest.fn().mockResolvedValue('team-from-jwt'),
+    };
 
     const module = await Test.createTestingModule({
       controllers: [AnalyticsController],
-      providers: [{ provide: AnalyticsService, useValue: service }],
+      providers: [
+        { provide: AnalyticsService, useValue: service },
+        { provide: TeamService, useValue: teamService },
+      ],
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: () => true })
@@ -90,20 +97,24 @@ describe('AnalyticsController', () => {
     );
   });
 
-  it('saveReport delegates to service with default team/user', async () => {
+  it('saveReport resolves team from JWT and delegates to service', async () => {
     const dto = { fieldIds: ['impressions'], name: 'Test report' };
-    const result = await controller.saveReport(dto as any);
+    const user = { userId: 'user-1' };
+    const result = await controller.saveReport(user as any, dto as any);
+    expect(teamService.firstTeamForUser).toHaveBeenCalledWith('user-1');
     expect(service.saveReport).toHaveBeenCalledWith(
-      'default-team',
-      'system',
+      'team-from-jwt',
+      'user-1',
       { ...dto, name: 'Test report' },
     );
     expect(result).toEqual({ id: 'rpt-1' });
   });
 
-  it('listReports delegates to service with default team', async () => {
-    await controller.listReports();
-    expect(service.listReports).toHaveBeenCalledWith('default-team');
+  it('listReports resolves team from JWT and delegates to service', async () => {
+    const user = { userId: 'user-1' };
+    await controller.listReports(user as any);
+    expect(teamService.firstTeamForUser).toHaveBeenCalledWith('user-1');
+    expect(service.listReports).toHaveBeenCalledWith('team-from-jwt');
   });
 
   it('getReport delegates to service with the report id', async () => {

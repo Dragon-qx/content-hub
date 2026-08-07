@@ -5,11 +5,12 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { Platform, ContentStatus, Prisma } from '@prisma/client';
-import { Comment, Message, PublishRequest } from '@content-hub/platform-sdk';
+import { Comment, Message, PublishRequest, PublishResult } from '@content-hub/platform-sdk';
 import { PlatformAdapterFactory } from '@content-hub/platform-sdk';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { AdaptationService } from '../adaptation/adaptation.service';
+import { TeamAccessService } from '../common/team-access/team-access.service';
 
 export interface PublishOutcome {
   postId: string;
@@ -77,6 +78,7 @@ export class PlatformSdkService {
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly adaptation: AdaptationService,
+    private readonly teamAccess: TeamAccessService,
   ) {}
 
   /**
@@ -92,12 +94,34 @@ export class PlatformSdkService {
     platform: Platform | string,
     payload: Record<string, unknown> = {},
     accountId?: string,
+    userId?: string,
   ): Promise<PublishOutcome> {
-    const content = await this.prisma.content.findUnique({
+    const content = await this.prisma.content.findFirst({
       where: { id: contentId },
     });
     if (!content) {
       throw new NotFoundException(`Content ${contentId} not found`);
+    }
+
+    // Verify user has access to the content's team
+    if (userId) {
+      await this.teamAccess.assertUserInTeam(userId, content.teamId);
+    }
+
+    // Idempotency check: if already published to this platform, return existing post
+    const existingPost = await this.prisma.platformPost.findFirst({
+      where: { contentId, platform: platform as Platform },
+    });
+    if (existingPost) {
+      this.logger.log(`Content ${contentId} already published to ${platform} (post ${existingPost.id}) — idempotent return`);
+      return {
+        postId: existingPost.id,
+        platform: existingPost.platform,
+        externalId: existingPost.externalId,
+        externalUrl: existingPost.externalUrl,
+        status: 'PUBLISHED',
+        publishedAt: existingPost.publishedAt,
+      };
     }
 
     const account = await this.resolveAccount(content.teamId, platform, accountId);
@@ -143,40 +167,66 @@ export class PlatformSdkService {
       extra: { title: content.title, ...payload },
     };
 
-    const result = await adapter.publish(request);
+    let result: PublishResult;
+    try {
+      result = await adapter.publish(request);
+    } catch (err: unknown) {
+      // Classify errors: network/timeout = retryable, auth/validation = permanent
+      const msg = err instanceof Error ? err.message.toLowerCase() : '';
+      const retryable = msg.includes('timeout') || msg.includes('econnrefused') ||
+        msg.includes('enotfound') || msg.includes('network') || msg.includes('429') ||
+        msg.includes('503') || msg.includes('502') || msg.includes('504');
+      this.logger.warn(`Publish to ${platform} failed (${retryable ? 'retryable' : 'permanent'}): ${err instanceof Error ? err.message : err}`);
+      throw err;
+    }
 
-    const post = await this.prisma.platformPost.create({
-      data: {
-        contentId: content.id,
+    // Wrap DB writes in a transaction so PlatformPost + Content are atomic
+    try {
+      const post = await this.prisma.$transaction(async (tx) => {
+        const newPost = await tx.platformPost.create({
+          data: {
+            contentId: content.id,
+            platform: account.platform,
+            externalId: result.externalId,
+            externalUrl: result.externalUrl,
+            status: 'PUBLISHED',
+            publishedAt: result.publishedAt ?? new Date(),
+            metrics: payload.initialMetrics ?? undefined,
+          },
+        });
+
+        await tx.content.update({
+          where: { id: contentId },
+          data: {
+            status: ContentStatus.PUBLISHED,
+            publishedAt: result.publishedAt ?? new Date(),
+          },
+        });
+
+        return newPost;
+      });
+
+      this.logger.log(
+        `Published content ${contentId} to ${platform} (post ${post.id})`,
+      );
+
+      return {
+        postId: post.id,
         platform: account.platform,
         externalId: result.externalId,
         externalUrl: result.externalUrl,
         status: 'PUBLISHED',
-        publishedAt: result.publishedAt ?? new Date(),
-        metrics: payload.initialMetrics ?? undefined,
-      },
-    });
-
-    await this.prisma.content.update({
-      where: { id: contentId },
-      data: {
-        status: ContentStatus.PUBLISHED,
-        publishedAt: result.publishedAt ?? new Date(),
-      },
-    });
-
-    this.logger.log(
-      `Published content ${contentId} to ${platform} (post ${post.id})`,
-    );
-
-    return {
-      postId: post.id,
-      platform: account.platform,
-      externalId: result.externalId,
-      externalUrl: result.externalUrl,
-      status: 'PUBLISHED',
-      publishedAt: result.publishedAt,
-    };
+        publishedAt: result.publishedAt,
+      };
+    } catch (dbErr: unknown) {
+      // Platform succeeded but DB write failed — log for manual reconciliation
+      // The idempotency check at the top will handle retries gracefully
+      this.logger.error(
+        `CRITICAL: Platform publish succeeded but DB write failed for content ${contentId} on ${platform}. ` +
+        `External ID: ${result.externalId}. Manual reconciliation may be needed.`,
+      );
+      throw dbErr;
+    }
   }
 
   /** Decrypt stored credentials back into a plain object. */
@@ -481,22 +531,215 @@ export class PlatformSdkService {
   }
 
   /** Validate that a platform adapter can be built for given credentials. */
+  /** Validate that a platform adapter can be built for given credentials. */
   async validate(
     platform: Platform | string,
     credentials: Record<string, unknown>,
   ) {
     const adapter = PlatformAdapterFactory.create(platform, credentials);
     if (!adapter) {
+      return { platform, valid: false, message: `Platform ${platform} is not supported` };
+    }
+    return { platform, valid: true, message: 'Credentials validated (adapter constructed)' };
+  }
+
+  /**
+   * Validate raw credentials before binding/editing an account.
+   * Builds the adapter, calls validateCredentials(), and returns structured
+   * result with fix suggestions — same shape as validateAccount().
+   */
+  async validateRaw(
+    platform: Platform | string,
+    credentials: Record<string, unknown>,
+  ): Promise<{
+    platform: string;
+    valid: boolean;
+    message: string;
+    checks: { name: string; ok: boolean; detail: string }[];
+    suggestions: string[];
+  }> {
+    const checks: { name: string; ok: boolean; detail: string }[] = [];
+    const suggestions: string[] = [];
+
+    const adapter = PlatformAdapterFactory.create(platform, credentials);
+    const adapterOk = !!adapter;
+    checks.push({
+      name: '适配器构建',
+      ok: adapterOk,
+      detail: adapterOk ? `${platform} 适配器已构建` : '平台不支持或凭证格式错误',
+    });
+    if (!adapterOk) {
+      suggestions.push(`平台 ${platform} 不支持，请检查平台名称和必要字段`);
+      return { platform: String(platform), valid: false, message: '平台不支持或凭证格式错误', checks, suggestions };
+    }
+
+    // Check required fields per platform
+    const requiredMap: Record<string, string[]> = {
+      WECHAT_OFFICIAL: ['appid', 'secret'],
+      WECHAT_VIDEO: ['appid', 'secret'],
+      DOUYIN: ['clientKey', 'clientSecret'],
+      XIAOHONGSHU: ['appKey', 'appSecret'],
+      BILIBILI: ['accessKey'],
+      WEIBO: ['appKey', 'appSecret'],
+      TWITTER: ['apiKey', 'apiSecret'],
+      YOUTUBE: ['clientId', 'clientSecretYouTube'],
+    };
+    const required = requiredMap[platform] ?? [];
+    const missing = required.filter((k) => !credentials[k]);
+    const fieldsOk = missing.length === 0;
+    checks.push({
+      name: '必填字段',
+      ok: fieldsOk,
+      detail: fieldsOk ? '已填写' : `缺少: ${missing.join(', ')}`,
+    });
+    if (!fieldsOk) {
+      suggestions.push(`请填写必填字段: ${missing.join(', ')}`);
+    }
+
+    // Try API validation
+    let apiOk = false;
+    let apiDetail = '未检测';
+    if (fieldsOk) {
+      adapter.setCredentials({
+        accessToken: credentials.accessToken as string | null,
+        refreshToken: credentials.refreshToken as string | null,
+        expiresAt: credentials.expiresAt as string | number | Date | null,
+      });
+      try {
+        apiOk = await adapter.validateCredentials();
+        apiDetail = apiOk ? 'API 验证通过' : 'API 返回凭证无效';
+      } catch (err: unknown) {
+        apiDetail = err instanceof Error ? err.message : 'API 调用失败';
+        const msg = apiDetail.toLowerCase();
+        if (msg.includes('401') || msg.includes('unauthorized') || msg.includes('invalid') || msg.includes('appid') || msg.includes('40013')) {
+          suggestions.push('AppID 或 Secret 不正确，请检查后重试');
+        } else if (msg.includes('403') || msg.includes('forbidden')) {
+          suggestions.push('API 权限不足，请在开发者后台开通权限');
+        } else if (msg.includes('network') || msg.includes('enotfound') || msg.includes('timeout') || msg.includes('econnrefused')) {
+          suggestions.push('网络连接失败，请检查网络或稍后重试');
+        } else if (msg.includes('expired')) {
+          suggestions.push('Token 已过期，请重新授权');
+        } else {
+          suggestions.push(`API 错误: ${apiDetail}`);
+        }
+      }
+    }
+    checks.push({ name: 'API 验证', ok: apiOk, detail: apiDetail });
+    if (!apiOk && suggestions.length === 0) {
+      suggestions.push('凭证验证失败，请检查填写是否正确');
+    }
+
+    const valid = adapterOk && fieldsOk && apiOk;
+    return {
+      platform: String(platform),
+      valid,
+      message: valid ? '凭证有效，可以保存' : '凭证存在问题，请根据建议修复',
+      checks,
+      suggestions,
+    };
+  }
+
+  /**
+   * Deep-validate a stored social account by id.
+   *
+   * Decrypts the account's stored credentials, builds the platform adapter,
+   * seeds it with any stored OAuth token, then calls adapter.validateCredentials()
+   * (when the adapter exposes one) to confirm the credentials actually work
+   * against the platform's API. Returns a structured result with fix suggestions
+   * for the most common failure modes.
+   */
+  async validateAccount(accountId: string): Promise<{
+    accountId: string;
+    platform: string;
+    valid: boolean;
+    status: string;
+    message: string;
+    checks: { name: string; ok: boolean; detail: string }[];
+    suggestions: string[];
+  }> {
+    const account = await this.prisma.socialAccount.findUnique({
+      where: { id: accountId },
+    });
+    if (!account) {
       return {
-        platform,
+        accountId,
+        platform: '',
         valid: false,
-        message: `Platform ${platform} is not supported`,
+        status: 'NOT_FOUND',
+        message: '账号不存在',
+        checks: [],
+        suggestions: ['请确认账号 ID 是否正确'],
       };
     }
+
+    const checks: { name: string; ok: boolean; detail: string }[] = [];
+    const suggestions: string[] = [];
+
+    // Check 1: status is ACTIVE
+    const statusOk = account.status === 'ACTIVE';
+    checks.push({ name: '账号状态', ok: statusOk, detail: statusOk ? 'ACTIVE' : `当前状态: ${account.status}` });
+    if (!statusOk) {
+      suggestions.push('账号状态异常，请重新绑定或激活账号');
+    }
+
+    // Check 2: credentials exist
+    const credentials = this.decryptCredentials(account.credentials);
+    const hasCreds = credentials && Object.keys(credentials).length > 0;
+    checks.push({ name: '凭证存在', ok: hasCreds, detail: hasCreds ? '已存储' : '未找到凭证' });
+    if (!hasCreds) {
+      suggestions.push('凭证缺失，请重新绑定账号并填写完整的 AppID 和 Secret');
+    }
+
+    // Check 3: adapter can be constructed
+    const adapter = PlatformAdapterFactory.create(account.platform, credentials);
+    const adapterOk = !!adapter;
+    checks.push({ name: '适配器构建', ok: adapterOk, detail: adapterOk ? `${account.platform} 适配器已构建` : '平台不支持' });
+    if (!adapterOk) {
+      suggestions.push(`平台 ${account.platform} 暂不支持，请联系管理员`);
+    }
+
+    // Check 4: try to validate credentials against platform API
+    let apiOk = false;
+    let apiDetail = '未检测';
+    if (adapter) {
+      adapter.setCredentials({
+        accessToken: credentials.accessToken as string | null,
+        refreshToken: credentials.refreshToken as string | null,
+        expiresAt: credentials.expiresAt as string | number | Date | null,
+      });
+      try {
+        apiOk = await adapter.validateCredentials();
+        apiDetail = apiOk ? 'API 验证通过' : 'API 返回凭证无效';
+      } catch (err: unknown) {
+        apiDetail = err instanceof Error ? err.message : 'API 调用失败';
+        const msg = apiDetail.toLowerCase();
+        if (msg.includes('401') || msg.includes('unauthorized') || msg.includes('invalid') || msg.includes('appid')) {
+          suggestions.push('AppID 或 Secret 不正确，请检查后重新绑定');
+        } else if (msg.includes('403') || msg.includes('forbidden')) {
+          suggestions.push('API 权限不足，请在公众号后台开通开发者权限');
+        } else if (msg.includes('network') || msg.includes('enotfound') || msg.includes('timeout') || msg.includes('econnrefused')) {
+          suggestions.push('网络连接失败，请检查服务器网络或代理设置');
+        } else if (msg.includes('expired')) {
+          suggestions.push('Token 已过期，请重新授权');
+        } else {
+          suggestions.push(`API 错误: ${apiDetail}`);
+        }
+      }
+    }
+    checks.push({ name: 'API 验证', ok: apiOk, detail: apiDetail });
+    if (!apiOk && suggestions.length === 0) {
+      suggestions.push('凭证验证失败，请检查 AppID/Secret 是否正确');
+    }
+
+    const valid = statusOk && hasCreds && adapterOk && apiOk;
     return {
-      platform,
-      valid: true,
-      message: 'Credentials validated (adapter constructed)',
+      accountId,
+      platform: account.platform,
+      valid,
+      status: account.status,
+      message: valid ? '账号正常，可以发布' : '账号存在问题，请根据建议修复',
+      checks,
+      suggestions,
     };
   }
 }

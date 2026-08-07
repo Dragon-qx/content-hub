@@ -108,6 +108,25 @@ export class TeamService {
     }
   }
 
+  /** Resolve the first team a user belongs to (by membership, then owned). */
+  async firstTeamForUser(userId: string): Promise<string> {
+    const membership = await this.prisma.member.findFirst({
+      where: { userId },
+      orderBy: { joinedAt: 'asc' },
+      select: { teamId: true },
+    });
+    if (membership) return membership.teamId;
+
+    const owned = await this.prisma.team.findFirst({
+      where: { ownerId: userId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (owned) return owned.id;
+
+    throw new NotFoundException(`User ${userId} is not a member of any team`);
+  }
+
   private parseMemberRole(role: string): MemberRole {
     const allowed: MemberRole[] = [
       MemberRole.ADMIN,

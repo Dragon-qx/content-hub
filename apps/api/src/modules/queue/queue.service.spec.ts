@@ -11,6 +11,7 @@ const mockScheduler = () => ({
   schedule: jest.fn().mockResolvedValue({ id: 'job-1', status: 'QUEUED' }),
   getDueJobs: jest.fn().mockResolvedValue([]),
   executeJob: jest.fn().mockResolvedValue(undefined),
+  recoverStaleJobs: jest.fn().mockResolvedValue(0),
 });
 
 const mockEngagement = () => ({

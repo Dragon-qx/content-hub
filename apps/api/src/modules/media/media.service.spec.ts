@@ -33,7 +33,7 @@ describe('MediaService', () => {
     it('maps a video mimetype to the VIDEO media type', async () => {
       prisma.mediaAsset.create.mockResolvedValue({ id: 'm1' });
       const result = await service.upload(
-        { filename: 'clip.mp4', mimetype: 'video/mp4', size: 1024 },
+        { filename: 'clip.mp4', mimetype: 'video/mp4', size: 1024, path: __filename },
         'c1',
       );
       expect(prisma.mediaAsset.create).toHaveBeenCalledWith(
@@ -46,7 +46,7 @@ describe('MediaService', () => {
 
     it('defaults unknown mimetypes to IMAGE', async () => {
       prisma.mediaAsset.create.mockResolvedValue({ id: 'm2' });
-      await service.upload({ filename: 'x.xyz', mimetype: 'application/x-foo' });
+      await service.upload({ filename: 'x.xyz', mimetype: 'application/x-foo', path: __filename });
       const arg = prisma.mediaAsset.create.mock.calls[0][0];
       expect(arg.data.type).toBe('IMAGE');
     });

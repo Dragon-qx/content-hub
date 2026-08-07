@@ -19,6 +19,8 @@ import {
 } from '@nestjs/swagger';
 import { PlatformSdkService } from './platform-sdk.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { TeamAccessGuard } from '../common/team-access/team-access.guard';
+import { AuthUser, CurrentUser } from '../auth/decorators/current-user.decorator';
 import {
   FetchCommentsQueryDto,
   FetchMessagesQueryDto,
@@ -31,7 +33,7 @@ import {
 @ApiTags('Platform SDK')
 @ApiBearerAuth()
 @Controller('platform-sdk')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TeamAccessGuard)
 export class PlatformSdkController {
   constructor(private readonly platformSdk: PlatformSdkService) {}
 
@@ -40,12 +42,17 @@ export class PlatformSdkController {
   @ApiCreatedResponse({ description: 'Published; returns the platform post record.' })
   @ApiBadRequestResponse({ description: 'Validation error or content not APPROVED.' })
   @Post('publish')
-  publish(@Body() dto: PublishContentDto, @Query('accountId') accountId?: string) {
+  publish(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: PublishContentDto,
+    @Query('accountId') accountId?: string,
+  ) {
     return this.platformSdk.publish(
       dto.contentId,
       dto.platform,
       dto.payload ?? {},
       accountId,
+      user.userId,
     );
   }
 

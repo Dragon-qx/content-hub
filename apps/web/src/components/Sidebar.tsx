@@ -2,26 +2,36 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useT } from '@/lib/i18n';
 
-const NAV = [
-  { key: 'dashboard', label: 'Dashboard', icon: '📊', href: '/dashboard' },
-  { key: 'content', label: 'Content', icon: '📝', href: '/content' },
-  { key: 'assistant', label: 'AI assistant', icon: '✨', href: '/assistant' },
-  { key: 'calendar', label: 'Calendar', icon: '🗓️', href: '/content/calendar' },
-  { key: 'media', label: 'Media', icon: '🖼️', href: '/media' },
-  { key: 'scheduler', label: 'Scheduler', icon: '📅', href: '/scheduler' },
-  { key: 'workflow', label: 'Approvals', icon: '🔄', href: '/workflow' },
-  { key: 'analytics', label: 'Analytics', icon: '📈', href: '/analytics' },
-  { key: 'reports', label: 'Reports', icon: '📋', href: '/reports' },
-  { key: 'accounts', label: 'Accounts', icon: '🔗', href: '/accounts' },
-  { key: 'teams', label: 'Teams', icon: '👥', href: '/teams' },
-  { key: 'notifications', label: 'Notifications', icon: '🔔', href: '/notifications' },
-  { key: 'engagement', label: 'Engagement', icon: '💬', href: '/engagement' },
-  { key: 'audit', label: 'Audit log', icon: '🛡️', href: '/audit' },
-  { key: 'settings', label: 'Settings', icon: '⚙️', href: '/settings' },
+import type { ZhCnKey } from '@/lib/locales/zhCn';
+
+interface NavItem {
+  key: ZhCnKey;
+  icon: string;
+  href: string;
+}
+
+const NAV: NavItem[] = [
+  { key: 'nav.dashboard', icon: '📊', href: '/dashboard' },
+  { key: 'nav.content', icon: '📝', href: '/content' },
+  { key: 'nav.assistant', icon: '✨', href: '/assistant' },
+  { key: 'nav.calendar', icon: '🗓️', href: '/content/calendar' },
+  { key: 'nav.media', icon: '🖼️', href: '/media' },
+  { key: 'nav.scheduler', icon: '📅', href: '/scheduler' },
+  { key: 'nav.workflow', icon: '🔄', href: '/workflow' },
+  { key: 'nav.analytics', icon: '📈', href: '/analytics' },
+  { key: 'nav.reports', icon: '📋', href: '/reports' },
+  { key: 'nav.accounts', icon: '🔗', href: '/accounts' },
+  { key: 'nav.teams', icon: '👥', href: '/teams' },
+  { key: 'nav.notifications', icon: '🔔', href: '/notifications' },
+  { key: 'nav.engagement', icon: '💬', href: '/engagement' },
+  { key: 'nav.audit', icon: '🛡️', href: '/audit' },
+  { key: 'nav.settings', icon: '⚙️', href: '/settings' },
 ];
 
 export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => void }) {
+  const { t } = useT();
   const pathname = usePathname();
 
   return (
@@ -45,12 +55,12 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
         `}
       >
         <div className="px-6 py-6 text-lg font-bold tracking-wide flex items-center justify-between">
-          <span>ContentHub</span>
+          <span>{t('app.title')}</span>
           <button
             type="button"
             onClick={onClose}
             className="md:hidden p-1 text-indigo-200 hover:text-white"
-            aria-label="Close navigation"
+            aria-label={t('common.close')}
           >
             <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="4" y1="4" x2="16" y2="16" />
@@ -73,7 +83,7 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
                 }`}
               >
                 <span>{item.icon}</span>
-                <span>{item.label}</span>
+                <span>{t(item.key)}</span>
               </Link>
             );
           })}

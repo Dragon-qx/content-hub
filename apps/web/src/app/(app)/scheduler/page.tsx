@@ -6,8 +6,10 @@ import { Button, Card, Input, Select, StatusBadge } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
 import { Table } from '@/components/Table';
 import { PLATFORMS, PublishJob, Paginated } from '@/lib/types';
+import { useT } from '@/lib/i18n';
 
 export default function SchedulerPage() {
+  const { t } = useT();
   const [rows, setRows] = useState<PublishJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -53,11 +55,11 @@ export default function SchedulerPage() {
   return (
     <div className="pb-20 md:pb-8">
       <PageHeader
-        title="Scheduler"
-        subtitle="Schedule and monitor publish jobs"
+        title={t('scheduler.title')}
+        subtitle={t('scheduler.subtitle')}
         actions={
           <Button onClick={() => setShowForm((s) => !s)}>
-            {showForm ? 'Cancel' : '+ Schedule job'}
+            {showForm ? t('common.cancel') : t('scheduler.scheduleJob')}
           </Button>
         }
       />
@@ -65,7 +67,7 @@ export default function SchedulerPage() {
       {showForm && (
         <Card className="mb-6">
           <form onSubmit={submit} className="flex flex-col gap-3">
-            <Input placeholder="Content ID" value={contentId} onChange={(e) => setContentId(e.target.value)} required />
+            <Input placeholder={t('scheduler.contentId')} value={contentId} onChange={(e) => setContentId(e.target.value)} required />
             <Select value={platform} onChange={(e) => setPlatform(e.target.value)} required>
               {PLATFORMS.map((p) => (
                 <option key={p.value} value={p.value}>{p.label}</option>
@@ -79,7 +81,7 @@ export default function SchedulerPage() {
             />
             <div className="flex justify-end">
               <Button type="submit" disabled={submitting}>
-                {submitting ? 'Scheduling…' : 'Schedule'}
+                {submitting ? t('scheduler.scheduling') : t('scheduler.schedule')}
               </Button>
             </div>
           </form>
@@ -87,18 +89,18 @@ export default function SchedulerPage() {
       )}
 
       {loading ? (
-        <div className="text-slate-400">Loading…</div>
+        <div className="text-slate-400">{t('common.loading')}</div>
       ) : (
         <div className="overflow-x-auto">
           <Table<PublishJob>
             rows={rows}
-            emptyMessage="No scheduled jobs."
+            emptyMessage={t('scheduler.empty')}
             columns={[
-              { key: 'id', header: 'Job', render: (r) => <span className="font-mono text-xs">{r.id}</span> },
-              { key: 'content', header: 'Content', render: (r) => <span className="font-mono text-xs">{r.contentId}</span> },
-              { key: 'status', header: 'Status', render: (r) => <StatusBadge status={r.status} /> },
-              { key: 'scheduled', header: 'Scheduled', render: (r) => new Date(r.scheduledAt).toLocaleString() },
-              { key: 'retries', header: 'Retries', render: (r) => r.retryCount },
+              { key: 'id', header: t('scheduler.column.job'), render: (r) => <span className="font-mono text-xs">{r.id}</span> },
+              { key: 'content', header: t('scheduler.column.content'), render: (r) => <span className="font-mono text-xs">{r.contentId}</span> },
+              { key: 'status', header: t('scheduler.column.status'), render: (r) => <StatusBadge status={r.status} /> },
+              { key: 'scheduled', header: t('scheduler.column.scheduled'), render: (r) => new Date(r.scheduledAt).toLocaleString() },
+              { key: 'retries', header: t('scheduler.column.retries'), render: (r) => r.retryCount },
             ]}
           />
         </div>

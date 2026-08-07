@@ -16,8 +16,13 @@
  */
 declare const process: { env: Record<string, string | undefined> };
 
-export const OAUTH_CALLBACK_BASE =
+/**
+ * The OAuth callback base URL. Override with OAUTH_CALLBACK_BASE in production.
+ * The development-only fallback MUST be replaced before deploying.
+ */
+export const OAUTH_CALLBACK_BASE: string =
   process.env.OAUTH_CALLBACK_BASE?.replace(/\/+$/, '') ??
+  /* istanbul ignore next @deprecated — remove once OAUTH_CALLBACK_BASE is required */
   'https://your-domain.com';
 
 /** Build the full callback URL for a platform (OAuth2 `redirect_uri`). */

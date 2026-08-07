@@ -4,9 +4,11 @@ import { AuthService } from './auth.service';
 import { AuditService } from '../audit/audit.service';
 import { MfaService } from './mfa.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
+import { TeamService } from '../team/team.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { RefreshTokenService } from './refresh-token/refresh-token.service';
 
 jest.mock('argon2', () => ({
   hash: jest.fn().mockResolvedValue('hashed_password'),
@@ -20,7 +22,26 @@ const createMockPrisma = () => ({
     create: jest.fn(),
     update: jest.fn(),
   },
+  member: {
+    findFirst: jest.fn(),
+  },
+  team: {
+    findFirst: jest.fn(),
+  },
 });
+
+const mockTeamService = {
+  firstTeamForUser: jest.fn().mockResolvedValue('team-1'),
+  create: jest.fn().mockResolvedValue({ id: 'team-1', name: 'Test team' }),
+  findAllForUser: jest.fn().mockResolvedValue([]),
+  findById: jest.fn(),
+  update: jest.fn(),
+  remove: jest.fn(),
+  listMembers: jest.fn().mockResolvedValue([]),
+  addMember: jest.fn(),
+  removeMember: jest.fn(),
+  assertAdmin: jest.fn(),
+};
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -30,6 +51,7 @@ describe('AuthService', () => {
   let audit: any;
   let crypto: any;
   let mfa: any;
+  let mockRefreshTokenService: any;
 
   beforeEach(async () => {
     prisma = createMockPrisma();
@@ -53,6 +75,13 @@ describe('AuthService', () => {
       verify: jest.fn().mockReturnValue(false),
     };
 
+    mockRefreshTokenService = {
+      createTokenPair: jest.fn().mockResolvedValue({ accessToken: 'access-token', refreshToken: 'refresh-token' }),
+      rotateRefreshToken: jest.fn().mockResolvedValue({ accessToken: 'new-access', refreshToken: 'new-refresh', rotated: true }),
+      revokeAllUserTokens: jest.fn().mockResolvedValue(0),
+      cleanupExpiredTokens: jest.fn().mockResolvedValue(0),
+    };
+
     const module = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -62,6 +91,8 @@ describe('AuthService', () => {
         { provide: AuditService, useValue: audit },
         { provide: CryptoService, useValue: crypto },
         { provide: MfaService, useValue: mfa },
+        { provide: TeamService, useValue: mockTeamService },
+        { provide: RefreshTokenService, useValue: mockRefreshTokenService },
       ],
     }).compile();
 
@@ -79,7 +110,7 @@ describe('AuthService', () => {
 
       expect(result).toHaveProperty('accessToken');
       expect(result).toHaveProperty('refreshToken');
-      expect(jwt.signAsync).toHaveBeenCalledTimes(2);
+      expect(mockRefreshTokenService.createTokenPair).toHaveBeenCalledWith('1', dto.email, 'OWNER');
       expect(prisma.user.create).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({ email: dto.email, name: dto.name }),
       }));
@@ -328,38 +359,48 @@ describe('AuthService', () => {
   });
 
   describe('refresh', () => {
-    it('should reject non-refresh token type', async () => {
-      jwt.verifyAsync.mockResolvedValue({ sub: '1', type: 'access' });
-
-      await expect(service.refresh({ refreshToken: 'token' }))
-        .rejects.toThrow(UnauthorizedException);
-    });
-
-    it('should reject invalid token', async () => {
-      jwt.verifyAsync.mockRejectedValue(new Error('invalid'));
-
-      await expect(service.refresh({ refreshToken: 'bad-token' }))
-        .rejects.toThrow(UnauthorizedException);
-    });
-
-    it('should reject if user not found', async () => {
-      jwt.verifyAsync.mockResolvedValue({ sub: '999', type: 'refresh' });
-      prisma.user.findUnique.mockResolvedValue(null);
-
-      await expect(service.refresh({ refreshToken: 'token' }))
-        .rejects.toThrow(UnauthorizedException);
-    });
-
-    it('should reject if user is inactive', async () => {
-      jwt.verifyAsync.mockResolvedValue({ sub: '1', type: 'refresh' });
-      prisma.user.findUnique.mockResolvedValue({
-        id: '1',
-        isActive: false,
-        email: 'test@example.com',
-        role: 'OWNER',
+    it('should rotate refresh token via RefreshTokenService', async () => {
+      mockRefreshTokenService.rotateRefreshToken.mockResolvedValue({
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token',
+        rotated: true,
       });
 
-      await expect(service.refresh({ refreshToken: 'token' }))
+      const result = await service.refresh({ refreshToken: 'old-refresh-token' });
+
+      expect(mockRefreshTokenService.rotateRefreshToken).toHaveBeenCalledWith(
+        'old-refresh-token',
+        { userAgent: undefined, ipAddress: undefined },
+      );
+      expect(result.accessToken).toBe('new-access-token');
+      expect(result.refreshToken).toBe('new-refresh-token');
+    });
+
+    it('should pass userAgent and ipAddress to rotateRefreshToken', async () => {
+      mockRefreshTokenService.rotateRefreshToken.mockResolvedValue({
+        accessToken: 'access',
+        refreshToken: 'refresh',
+        rotated: true,
+      });
+
+      await service.refresh({
+        refreshToken: 'token',
+        userAgent: 'Mozilla/5.0',
+        ipAddress: '127.0.0.1',
+      });
+
+      expect(mockRefreshTokenService.rotateRefreshToken).toHaveBeenCalledWith(
+        'token',
+        { userAgent: 'Mozilla/5.0', ipAddress: '127.0.0.1' },
+      );
+    });
+
+    it('should propagate UnauthorizedException from RefreshTokenService', async () => {
+      mockRefreshTokenService.rotateRefreshToken.mockRejectedValue(
+        new UnauthorizedException('Invalid refresh token'),
+      );
+
+      await expect(service.refresh({ refreshToken: 'bad-token' }))
         .rejects.toThrow(UnauthorizedException);
     });
   });

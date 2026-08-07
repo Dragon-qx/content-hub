@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { MediaAsset, Paginated } from '@/lib/types';
 import { Button } from '@/lib/ui';
+import { useT } from '@/lib/i18n';
 
 /**
  * Media library picker. Browses uploaded media assets and reports the chosen
@@ -18,6 +19,7 @@ interface MediaLibraryProps {
 }
 
 export default function MediaLibrary({ contentId, onSelect, onClose }: MediaLibraryProps) {
+  const { t } = useT();
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [total, setTotal] = useState(0);
   const [type, setType] = useState<'IMAGE' | 'VIDEO' | ''>('');
@@ -69,12 +71,12 @@ export default function MediaLibrary({ contentId, onSelect, onClose }: MediaLibr
       >
         <div className="border-b border-slate-200">
           <div className="flex items-center justify-between px-4 py-3 md:px-5">
-            <h3 className="text-sm font-semibold text-slate-900">Media library</h3>
+            <h3 className="text-sm font-semibold text-slate-900">{t('media.title')}</h3>
             <button
               type="button"
               onClick={onClose}
               className="rounded px-2 py-1 text-slate-500 hover:bg-slate-100"
-              aria-label="Close"
+              aria-label={t('common.close')}
             >
               ✕
             </button>
@@ -86,9 +88,9 @@ export default function MediaLibrary({ contentId, onSelect, onClose }: MediaLibr
                 onChange={(e) => setType(e.target.value as '' | 'IMAGE' | 'VIDEO')}
                 className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs outline-none focus:border-primary md:w-auto"
               >
-                <option value="">All</option>
-                <option value="IMAGE">Images</option>
-                <option value="VIDEO">Videos</option>
+                <option value="">{t('common.all')}</option>
+                <option value="IMAGE">{t('media.image')}</option>
+                <option value="VIDEO">{t('media.video')}</option>
               </select>
               <Button
                 disabled={uploading}
@@ -103,7 +105,7 @@ export default function MediaLibrary({ contentId, onSelect, onClose }: MediaLibr
                   input.click();
                 }}
               >
-                {uploading ? 'Uploading…' : '+ Upload'}
+                {uploading ? t('common.uploading') : t('media.upload')}
               </Button>
             </div>
           </div>
@@ -113,10 +115,10 @@ export default function MediaLibrary({ contentId, onSelect, onClose }: MediaLibr
 
         <div className="flex-1 overflow-auto p-5">
           {loading ? (
-            <div className="py-10 text-center text-sm text-slate-400">Loading…</div>
+            <div className="py-10 text-center text-sm text-slate-400">{t('common.loading')}</div>
           ) : assets.length === 0 ? (
             <div className="py-10 text-center text-sm text-slate-400">
-              No media yet. Upload an image or video to get started.
+              {t('media.empty')}
             </div>
           ) : (
             <>

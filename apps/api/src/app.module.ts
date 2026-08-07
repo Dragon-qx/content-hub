@@ -2,10 +2,15 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import type { Request } from 'express';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AlertingModule } from './common/alerting/alerting.module';
 import { CryptoModule } from './common/crypto/crypto.module';
+import { MetricsModule } from './common/metrics/metrics.module';
 import { PrismaModule } from './common/prisma/prisma.module';
+import { TracingModule } from './common/tracing/tracing.module';
+import { TeamAccessModule } from './modules/common/team-access/team-access.module';
 import { AccountModule } from './modules/account/account.module';
 import { AdaptationModule } from './modules/adaptation/adaptation.module';
 import { ContentAssistantModule } from './modules/content-assistant/content-assistant.module';
@@ -27,6 +32,10 @@ import { WalletModule } from './modules/wallet/wallet.module';
 import { QueueModule } from './modules/queue/queue.module';
 import { ReceiptModule } from './modules/receipt/receipt.module';
 
+interface AuthenticatedRequest extends Request {
+  user?: { userId?: string };
+}
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -44,17 +53,22 @@ import { ReceiptModule } from './modules/receipt/receipt.module';
           const req = ctx.switchToHttp().getRequest();
           return req?.url?.includes('/health') ?? false;
         },
-        getTracker: (req: Record<string, any>) => {
-          const user = req?.user as { userId?: string } | undefined;
+        getTracker: (req: unknown) => {
+          const r = req as AuthenticatedRequest | undefined;
+          const user = r?.user;
           if (user?.userId) return user.userId;
-          const fwd = req?.headers?.['x-forwarded-for'];
+          const fwd = r?.headers?.['x-forwarded-for'];
           if (typeof fwd === 'string' && fwd.length > 0) return fwd.split(',')[0].trim();
-          return req?.ip ?? req?.socket?.remoteAddress ?? 'unknown';
+          return r?.ip ?? r?.socket?.remoteAddress ?? 'unknown';
         },
       },
     ]),
     PrismaModule,
     CryptoModule,
+    MetricsModule,
+    TracingModule,
+    AlertingModule,
+    TeamAccessModule,
     AuthModule,
     ContentModule,
     ContentTemplateModule,

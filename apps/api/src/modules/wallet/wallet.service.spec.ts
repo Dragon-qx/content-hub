@@ -7,6 +7,7 @@ import {
 import { TransactionType } from '@prisma/client';
 import { WalletService } from './wallet.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { TeamAccessService } from '../common/team-access/team-access.service';
 
 const mockPrisma = () => ({
   wallet: {
@@ -14,6 +15,7 @@ const mockPrisma = () => ({
     create: jest.fn(),
     upsert: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
     count: jest.fn(),
   },
   walletTransaction: {
@@ -34,6 +36,7 @@ describe('WalletService', () => {
       providers: [
         WalletService,
         { provide: PrismaService, useValue: prisma },
+        { provide: TeamAccessService, useValue: { assertUserInTeam: jest.fn().mockResolvedValue(undefined), assertResourceInTeam: jest.fn().mockResolvedValue(undefined), assertUserRole: jest.fn().mockResolvedValue(undefined), firstTeamForUser: jest.fn().mockResolvedValue('team-1'), resolveTeamId: jest.fn().mockResolvedValue('team-1'), getAccountInTeam: jest.fn(), getContentInTeam: jest.fn(), getMediaInTeam: jest.fn(), getJobInTeam: jest.fn(), getReceiptInTeam: jest.fn() } },
       ],
     }).compile();
     service = module.get(WalletService);
@@ -114,14 +117,8 @@ describe('WalletService', () => {
       expect(res).toBeNull();
     });
 
-    it('throws NotFound when wallet is missing', async () => {
-      prisma.wallet.findUnique.mockResolvedValue(null);
-      await expect(
-        service.debit('team-1', TransactionType.PUBLISH),
-      ).rejects.toBeInstanceOf(NotFoundException);
-    });
-
     it('throws ConflictException on insufficient balance', async () => {
+      prisma.wallet.updateMany.mockResolvedValue({ count: 0 });
       prisma.wallet.findUnique.mockResolvedValue({ id: 'w1', balance: 1 } as any);
       await expect(
         service.debit('team-1', TransactionType.PUBLISH),
@@ -129,45 +126,47 @@ describe('WalletService', () => {
     });
 
     it('atomically decrements and appends a ledger entry', async () => {
-      prisma.wallet.findUnique.mockResolvedValue({ id: 'w1', balance: 100 } as any);
-      const tx = {
-        wallet: { update: jest.fn().mockResolvedValue({ id: 'w1', balance: 90 }) },
-        walletTransaction: {
-          create: jest.fn().mockResolvedValue({ id: 'tx1' }),
-        },
-      };
-      (prisma.$transaction as jest.Mock).mockImplementation((cb: any) => cb(tx));
+      prisma.wallet.updateMany.mockResolvedValue({ count: 1 });
+      prisma.wallet.findUnique.mockResolvedValue({ id: 'w1', balance: 90 } as any);
+      prisma.walletTransaction.create.mockResolvedValue({ id: 'tx1' } as any);
 
-      const res: any = await service.debit('team-1', TransactionType.PUBLISH, {
+      const res: any = await service.debit('team-1', TransactionType.PUBLISH, undefined, {
         refId: 'job-1',
       });
-      expect(tx.wallet.update).toHaveBeenCalledWith({
-        where: { id: 'w1' },
+      expect(prisma.wallet.updateMany).toHaveBeenCalledWith({
+        where: { teamId: 'team-1', balance: { gte: 10 } },
         data: { balance: { decrement: 10 } },
       });
       expect(res.wallet.balance).toBe(90);
+    });
+
+    it('throws ConflictException when wallet does not exist', async () => {
+      prisma.wallet.updateMany.mockResolvedValue({ count: 0 });
+      prisma.wallet.findUnique.mockResolvedValue(null);
+      await expect(
+        service.debit('team-1', TransactionType.PUBLISH),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
   describe('tryDebit (lenient)', () => {
     it('returns false on insufficient balance when lenient', async () => {
+      prisma.wallet.updateMany.mockResolvedValue({ count: 0 });
       prisma.wallet.findUnique.mockResolvedValue({ id: 'w1', balance: 1 } as any);
       const ok = await service.tryDebit('team-1', TransactionType.PUBLISH, { lenient: true });
       expect(ok).toBe(false);
     });
 
     it('returns true on success', async () => {
-      prisma.wallet.findUnique.mockResolvedValue({ id: 'w1', balance: 100 } as any);
-      const tx = {
-        wallet: { update: jest.fn().mockResolvedValue({ id: 'w1', balance: 90 }) },
-        walletTransaction: { create: jest.fn().mockResolvedValue({}) },
-      };
-      (prisma.$transaction as jest.Mock).mockImplementation((cb: any) => cb(tx));
+      prisma.wallet.updateMany.mockResolvedValue({ count: 1 });
+      prisma.wallet.findUnique.mockResolvedValue({ id: 'w1', balance: 90 } as any);
+      prisma.walletTransaction.create.mockResolvedValue({} as any);
       const ok = await service.tryDebit('team-1', TransactionType.PUBLISH);
       expect(ok).toBe(true);
     });
 
     it('propagates non-conflict errors even when lenient', async () => {
+      prisma.wallet.updateMany.mockResolvedValue({ count: 0 });
       prisma.wallet.findUnique.mockResolvedValue(null);
       await expect(
         service.tryDebit('team-1', TransactionType.PUBLISH, { lenient: true }),
@@ -178,7 +177,7 @@ describe('WalletService', () => {
   describe('listTransactions', () => {
     it('writes nothing for a non-existent wallet', async () => {
       prisma.wallet.findUnique.mockResolvedValue(null);
-      const res = await service.listTransactions('team-1');
+      const res = await service.listTransactions('team-1', undefined);
       expect(res.items).toEqual([]);
       expect(res.total).toBe(0);
     });
@@ -187,7 +186,7 @@ describe('WalletService', () => {
       prisma.wallet.findUnique.mockResolvedValue({ id: 'w1' } as any);
       prisma.walletTransaction.findMany.mockResolvedValue([{ id: 'tx1' }] as any);
       prisma.walletTransaction.count.mockResolvedValue(1);
-      const res = await service.listTransactions('team-1', { skip: 0, take: 20 });
+      const res = await service.listTransactions('team-1', undefined, { skip: 0, take: 20 });
       expect(res.items).toHaveLength(1);
       expect(res.total).toBe(1);
     });

@@ -1,4 +1,9 @@
 node_modules
+# Per-package installs are symlinks; the builder copies these freshly from
+# the root `.pnpm` store (COPY --from=deps). They must not be clobbered by
+# `COPY . .`, which would otherwise bring in local OS-absolute symlinks.
+packages/*/node_modules
+apps/*/node_modules
 npm-debug.log*
 .git
 .github

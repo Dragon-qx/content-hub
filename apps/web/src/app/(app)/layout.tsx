@@ -6,8 +6,10 @@ import Topbar from '@/components/Topbar';
 import AuthGuard from '@/components/AuthGuard';
 import MobileNav from '@/components/MobileNav';
 import { useAuth } from '@/lib/auth';
+import { useT } from '@/lib/i18n';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
+  const { t } = useT();
   const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 

@@ -6,13 +6,17 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { MfaService } from './mfa.service';
+import { RefreshTokenModule } from './refresh-token/refresh-token.module';
 import { AuditModule } from '../audit/audit.module';
 import { CryptoModule } from '../../common/crypto/crypto.module';
+import { TeamModule } from '../team/team.module';
 
 @Module({
   imports: [
     AuditModule,
     CryptoModule,
+    TeamModule,
+    RefreshTokenModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

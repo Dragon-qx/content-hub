@@ -19,7 +19,7 @@ const PREFIX = '/api/v1';
  */
 describe('ContentHub core journey (e2e)', () => {
   let app: INestApplication;
-  let prismaMock: ReturnType<typeof createPrismaMock>;
+  let prismaMock: any;
   let authToken = '';
 
   // ── In-memory store backing the Prisma mock ────────────────────────────
@@ -60,7 +60,12 @@ describe('ContentHub core journey (e2e)', () => {
       },
       member: {
         create: jest.fn((args: any) => Promise.resolve({ id: id('mem'), ...args.data })),
-        findUnique: jest.fn(() => Promise.resolve(null)),
+        findUnique: jest.fn((args: any) => {
+          if (args?.where?.teamId_userId) {
+            return Promise.resolve({ id: id('mem'), teamId: args.where.teamId_userId.teamId, userId: args.where.teamId_userId.userId, role: 'ADMIN' });
+          }
+          return Promise.resolve(null);
+        }),
         findMany: jest.fn(() => Promise.resolve([])),
         delete: jest.fn((args: any) => Promise.resolve({ id: args.where.id })),
         count: jest.fn(() => Promise.resolve(0)),
@@ -72,6 +77,10 @@ describe('ContentHub core journey (e2e)', () => {
           return Promise.resolve(row);
         }),
         findUnique: jest.fn((args: any) => {
+          const row = store.contents.find((c) => c.id === args.where.id);
+          return Promise.resolve(row ? { ...row } : null);
+        }),
+        findFirst: jest.fn((args: any) => {
           const row = store.contents.find((c) => c.id === args.where.id);
           return Promise.resolve(row ? { ...row } : null);
         }),
@@ -145,6 +154,9 @@ describe('ContentHub core journey (e2e)', () => {
         findUnique: jest.fn((args: any) =>
           Promise.resolve(store.posts.find((p) => p.id === args.where.id) ?? null),
         ),
+        findFirst: jest.fn((args: any) =>
+          Promise.resolve(store.posts.find((p) => p.contentId === args.where.contentId) ?? null),
+        ),
         findMany: jest.fn(() => Promise.resolve([...store.posts])),
         count: jest.fn(() => Promise.resolve(store.posts.length)),
       },
@@ -182,7 +194,24 @@ describe('ContentHub core journey (e2e)', () => {
         findMany: jest.fn(() => Promise.resolve([])),
         count: jest.fn(() => Promise.resolve(0)),
       },
-      $transaction: jest.fn((ops: any[]) => Promise.all(ops)),
+      $transaction: jest.fn((ops: any) => {
+        if (typeof ops === 'function') {
+          // eslint-disable-next-line @typescript-eslint/no-use-before-define
+          return ops(prismaMock);
+        }
+        return Promise.all(ops);
+      }),
+      refreshToken: {
+        create: jest.fn((args: any) => Promise.resolve({ id: id('rt'), ...args.data })),
+        findUnique: jest.fn(() => Promise.resolve(null)),
+        findFirst: jest.fn(() => Promise.resolve(null)),
+        findMany: jest.fn(() => Promise.resolve([])),
+        update: jest.fn((args: any) => Promise.resolve({ id: args.where.id })),
+        updateMany: jest.fn(() => Promise.resolve({ count: 1 })),
+        delete: jest.fn((args: any) => Promise.resolve({ id: args.where.id })),
+        deleteMany: jest.fn(() => Promise.resolve({ count: 0 })),
+        count: jest.fn(() => Promise.resolve(0)),
+      },
     };
   }
 
@@ -203,6 +232,7 @@ describe('ContentHub core journey (e2e)', () => {
         ok: true,
         status: 200,
         json: () => Promise.resolve(body),
+        text: () => Promise.resolve(JSON.stringify(body)),
         arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
       } as Response);
     });

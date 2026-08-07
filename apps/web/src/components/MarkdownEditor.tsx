@@ -11,6 +11,7 @@ import MarkdownIt from 'markdown-it';
 import DOMPurify from 'dompurify';
 import { api } from '@/lib/api';
 import { MediaAsset } from '@/lib/types';
+import { useT } from '@/lib/i18n';
 
 /**
  * Lightweight, dependency-light Markdown editor.
@@ -52,6 +53,7 @@ export default function MarkdownEditor({
   contentId,
   onInsertMedia,
 }: MarkdownEditorProps) {
+  const { t } = useT();
   const [preview, setPreview] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -159,7 +161,7 @@ export default function MarkdownEditor({
               onClick={onInsertMedia}
               className="rounded px-2 text-xs font-medium text-slate-600 hover:bg-slate-200 min-h-[44px]"
             >
-              Media library
+              {t('media.title')}
             </button>
           )}
           {/* Write / Preview tabs */}
@@ -169,14 +171,14 @@ export default function MarkdownEditor({
               onClick={() => setPreview(false)}
               className={`min-h-[44px] px-2.5 text-xs font-medium ${!preview ? 'bg-primary text-white' : 'text-slate-600 hover:bg-slate-200'}`}
             >
-              Write
+              {t('common.edit')}
             </button>
             <button
               type="button"
               onClick={() => setPreview(true)}
               className={`min-h-[44px] px-2.5 text-xs font-medium ${preview ? 'bg-primary text-white' : 'text-slate-600 hover:bg-slate-200'}`}
             >
-              Preview
+              {t('reports.preview')}
             </button>
           </div>
         </div>
@@ -212,14 +214,14 @@ export default function MarkdownEditor({
         {dragging && !preview && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-b-lg bg-indigo-50/80">
             <span className="rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-primary shadow-sm">
-              Drop image to upload
+              {t('media.upload')}
             </span>
           </div>
         )}
 
         {uploading && (
           <div className="pointer-events-none absolute bottom-2 right-2 rounded bg-slate-700 px-2 py-1 text-xs text-white">
-            Uploading…
+            {t('common.uploading')}
           </div>
         )}
       </div>

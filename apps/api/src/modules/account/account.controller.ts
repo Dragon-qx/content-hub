@@ -36,6 +36,7 @@ import {
   AccountService,
   BatchImportSummary,
 } from './account.service';
+import { PlatformSdkService } from '../platform-sdk/platform-sdk.service';
 import { AccountTransferService } from './account-transfer.service';
 import { BindAccountDto, ListAccountsQuery } from './dto/account.dto';
 import { ImportAccountsDto } from './dto/import-accounts.dto';
@@ -54,6 +55,7 @@ export class AccountController {
     private readonly accountService: AccountService,
     private readonly transfers: AccountTransferService,
     private readonly audit: AuditService,
+    private readonly platformSdk: PlatformSdkService,
   ) {}
 
   @ApiOperation({ summary: 'List accounts', description: 'Lists accounts for a team, or for the caller when no team is supplied.' })
@@ -73,6 +75,36 @@ export class AccountController {
   @Get(':id')
   get(@Param('id') id: string) {
     return this.accountService.get(id);
+  }
+
+  @ApiOperation({ summary: 'Validate account credentials', description: 'Deep-validates a stored account: checks status, credentials, adapter, and API connectivity. Returns fix suggestions on failure.' })
+  @ApiParam({ name: 'id', description: 'Account id' })
+  @ApiOkResponse({ description: 'Validation result with checks and suggestions.' })
+  @Post(':id/validate')
+  validateAccount(@Param('id') id: string) {
+    return this.platformSdk.validateAccount(id);
+  }
+
+  @ApiOperation({ summary: 'Validate credentials before save', description: 'Dry-runs credential validation (adapter build + API check) without persisting. Use this from the bind/edit form to test credentials before committing.' })
+  @ApiOkResponse({ description: 'Validation result with checks and suggestions.' })
+  @Post('validate')
+  validateBeforeSave(@Body() dto: BindAccountDto) {
+    const credentials: Record<string, unknown> = {};
+    if (dto.appid) credentials.appid = dto.appid;
+    if (dto.secret) credentials.secret = dto.secret;
+    if (dto.appKey) credentials.appKey = dto.appKey;
+    if (dto.appSecret) credentials.appSecret = dto.appSecret;
+    if (dto.clientKey) credentials.clientKey = dto.clientKey;
+    if (dto.clientSecret) credentials.clientSecret = dto.clientSecret;
+    if (dto.bearerToken) credentials.bearerToken = dto.bearerToken;
+    if (dto.apiKey) credentials.apiKey = dto.apiKey;
+    if (dto.apiSecret) credentials.apiSecret = dto.apiSecret;
+    if (dto.clientId) credentials.clientId = dto.clientId;
+    if (dto.clientSecretYouTube) credentials.clientSecretYouTube = dto.clientSecretYouTube;
+    if (dto.channelId) credentials.channelId = dto.channelId;
+    if (dto.accessKey) credentials.accessKey = dto.accessKey;
+    if (dto.rawId) credentials.rawId = dto.rawId;
+    return this.platformSdk.validateRaw(dto.platform, credentials);
   }
 
   @ApiOperation({ summary: 'Bind a platform account', description: 'Stores credentials for a social platform account under a team.' })

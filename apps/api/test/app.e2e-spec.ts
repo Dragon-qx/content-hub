@@ -40,6 +40,7 @@ function installFetchMock() {
       ok: true,
       status: 200,
       json: () => Promise.resolve(body),
+      text: () => Promise.resolve(JSON.stringify(body)),
       arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
     } as Response);
   });
@@ -70,7 +71,13 @@ describe('ContentHub API (e2e)', () => {
       },
       member: {
         create: jest.fn().mockResolvedValue({ id: 'mem-1', role: 'ADMIN' }),
-        findUnique: jest.fn().mockResolvedValue(null),
+        findUnique: jest.fn().mockImplementation((args: any) => {
+          // TeamAccessService checks membership via compound key
+          if (args?.where?.teamId_userId) {
+            return Promise.resolve({ id: 'mem-1', teamId: args.where.teamId_userId.teamId, userId: args.where.teamId_userId.userId, role: 'ADMIN' });
+          }
+          return Promise.resolve(null);
+        }),
         findMany: jest.fn().mockResolvedValue([]),
         delete: jest.fn().mockResolvedValue({ id: 'mem-1' }),
         count: jest.fn().mockResolvedValue(0),
@@ -78,6 +85,10 @@ describe('ContentHub API (e2e)', () => {
       content: {
         create: jest.fn().mockResolvedValue({ id: 'content-1', title: 'Test', body: 'Body', version: 1 }),
         findUnique: jest.fn().mockImplementation((args: any) => {
+          const id = args?.where?.id ?? 'content-1';
+          return Promise.resolve({ id, title: 'Test', body: 'Body', teamId: 'team-1', version: 1, tags: [] });
+        }),
+        findFirst: jest.fn().mockImplementation((args: any) => {
           const id = args?.where?.id ?? 'content-1';
           return Promise.resolve({ id, title: 'Test', body: 'Body', teamId: 'team-1', version: 1, tags: [] });
         }),
@@ -118,6 +129,7 @@ describe('ContentHub API (e2e)', () => {
       platformPost: {
         create: jest.fn().mockResolvedValue({ id: 'post-1' }),
         findUnique: jest.fn().mockResolvedValue({ id: 'post-1' }),
+        findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(0),
       },
@@ -150,7 +162,25 @@ describe('ContentHub API (e2e)', () => {
         findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(0),
       },
-      $transaction: jest.fn().mockImplementation((ops: any[]) => Promise.all(ops)),
+      $transaction: jest.fn().mockImplementation((ops: any) => {
+        if (typeof ops === 'function') {
+          // Callback form: pass a mock tx that delegates to the main mock
+          return ops(prismaMock);
+        }
+        // Array form
+        return Promise.all(ops);
+      }),
+      refreshToken: {
+        create: jest.fn().mockResolvedValue({ id: 'rt-1' }),
+        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+        update: jest.fn().mockResolvedValue({ id: 'rt-1' }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        delete: jest.fn().mockResolvedValue({ id: 'rt-1' }),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        count: jest.fn().mockResolvedValue(0),
+      },
     };
 
     const moduleRef = await Test.createTestingModule({

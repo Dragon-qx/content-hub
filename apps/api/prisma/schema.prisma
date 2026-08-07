@@ -17,7 +17,7 @@ model User {
   avatarUrl     String?
   role          UserRole  @default(OWNER)
   teamId        String?
-  team          Team?     @relation(fields: [teamId], references: [id])
+  team          Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   lastLoginAt   DateTime?
@@ -25,6 +25,33 @@ model User {
   mfaEnabled    Boolean   @default(false)
   mfaSecret     String?
   auditLogs     AuditLog[]
+  refreshTokens RefreshToken[]
+}
+
+/// Server-side refresh token storage with hashing for security.
+/// Implements refresh token rotation: each refresh token can be used once,
+/// and reuse detection revokes all tokens for the user.
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// SHA-256 hash of the actual token (never store plaintext)
+  tokenHash String   @unique
+  /// Family id links rotated tokens together for reuse detection
+  familyId  String
+  /// Whether this token has been rotated (used) already
+  rotated   Boolean  @default(false)
+  /// Whether this token has been explicitly revoked
+  revoked   Boolean  @default(false)
+  /// Device/user-agent info for display in "active sessions"
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
 }
 
 model Team {
@@ -40,6 +67,7 @@ model Team {
   templates         ContentTemplate[]
   wallet            Wallet?
   healthThreshold   HealthThreshold?
+  contents          Content[]
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 }
@@ -104,6 +132,7 @@ model SocialAccount {
 model Content {
   id            String         @id @default(cuid())
   teamId        String
+  team          Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
   title         String
   body          String?        // Markdown
   contentType   ContentType
@@ -119,7 +148,11 @@ model Content {
   tags          ContentTag[]
   workflow      Workflow[]
   versions      ContentVersion[]
+  publishJobs   PublishJob[]
   version       Int            @default(1)
+
+  @@index([teamId, status, createdAt])
+  @@index([teamId, scheduledAt])
 }
 
 model ContentVersion {
@@ -134,6 +167,7 @@ model ContentVersion {
   changeNote  String?
   createdAt   DateTime @default(now())
 
+  @@unique([contentId, version])
   @@index([contentId])
 }
 
@@ -162,7 +196,7 @@ model ContentTemplate {
 model MediaAsset {
   id          String   @id @default(cuid())
   contentId   String?
-  content     Content?  @relation(fields: [contentId], references: [id])
+  content     Content?  @relation(fields: [contentId], references: [id], onDelete: SetNull)
   type        MediaType
   url         String
   thumbnailUrl String?
@@ -174,12 +208,14 @@ model MediaAsset {
   uploadedBy  String?
   receipt     PublishReceipt?
   createdAt   DateTime  @default(now())
+
+  @@index([contentId, createdAt])
 }
 
 model PlatformPost {
   id              String        @id @default(cuid())
   contentId       String
-  content         Content       @relation(fields: [contentId], references: [id])
+  content         Content       @relation(fields: [contentId], references: [id], onDelete: Cascade)
   platform        Platform
   externalId      String?       // 平台侧内容 ID
   externalUrl     String?
@@ -194,12 +230,14 @@ model PlatformPost {
   receipt         PublishReceipt?
   createdAt       DateTime      @default(now())
 
+  @@index([contentId, platform])
   @@index([jobId])
 }
 
 model PublishJob {
   id            String        @id @default(cuid())
   contentId     String
+  content       Content       @relation(fields: [contentId], references: [id], onDelete: Cascade)
   platform      Platform      @default(WECHAT_OFFICIAL)
   // The social account used to publish (resolved from content.teamId at schedule time).
   accountId     String?
@@ -212,10 +250,12 @@ model PublishJob {
   completedAt   DateTime?
   error         String?
   retryCount    Int           @default(0)
+  leaseExpiresAt DateTime?     // worker lease for crash recovery
   createdAt     DateTime      @default(now())
 
   @@index([status, scheduledAt])
   @@index([accountId])
+  @@index([contentId])
 }
 
 model AnalyticsSnapshot {
@@ -481,13 +521,16 @@ model Notification {
 model AuditLog {
   id          String   @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id])
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   action      String
   entityType  String
   entityId    String?
   metadata    Json?
   ipAddress   String?
   createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([entityType, entityId, createdAt])
 }
 
 model ContentTag {

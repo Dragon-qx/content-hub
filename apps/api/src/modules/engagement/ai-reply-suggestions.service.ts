@@ -220,8 +220,8 @@ export class AiReplySuggestionsService {
 
       case 'professional':
         return isChinese
-          ? `尊敬的客户，感谢你的反馈。针对你提及的问题，我们已经安排专人跟进，预计 24 小时内会通过私信联系你。如需进一步协助，可拨打客服热线 400-xxxx。`
-          : `Dear customer, thank you for reaching out. We've assigned a specialist who will follow up with you via DM within 24 hours. For urgent matters, please call our support line at 400-XXXX.`;
+          ? `尊敬的客户，感谢你的反馈。针对你提及的问题，我们已经安排专人跟进，预计 24 小时内会通过私信联系你。如需进一步协助，请通过私信联系我们。`
+          : `Dear customer, thank you for reaching out. We've assigned a specialist who will follow up with you via DM within 24 hours. For urgent matters, please reach out via private message.`;
 
       default:
         return isChinese ? '谢谢你的留言，我们已收到你的反馈。' : 'Thanks for your note — we hear you!';

@@ -211,6 +211,13 @@ export class AccountService {
       throw new BadRequestException('Unsupported platform');
     }
 
+    // Validate the team exists before we hit Prisma's FK constraint — otherwise
+    // the raw database error leaks to the client as a 500 with no useful detail.
+    const team = await this.prisma.team.findUnique({ where: { id: teamId } });
+    if (!team) {
+      throw new NotFoundException('Team not found — please refresh and select a valid team');
+    }
+
     const existing = await this.prisma.socialAccount.findUnique({
       where: {
         platform_accountId: { platform: dto.platform, accountId: dto.accountId },
@@ -307,8 +314,27 @@ export class AccountService {
     const data: Prisma.SocialAccountUpdateInput = {};
     if (dto.accountName !== undefined) data.accountName = dto.accountName;
     if (dto.accountHandle !== undefined) data.accountHandle = dto.accountHandle;
-    if (dto.credentials && Object.keys(dto.credentials).length > 0) {
-      const merged = { ...this.decryptCredentials(existing.credentials), ...dto.credentials };
+
+    // Collect individual credential fields that were changed
+    const credFields: Record<string, unknown> = {};
+    if (dto.appid !== undefined) credFields.appid = dto.appid;
+    if (dto.secret !== undefined) credFields.secret = dto.secret;
+    if (dto.appKey !== undefined) credFields.appKey = dto.appKey;
+    if (dto.appSecret !== undefined) credFields.appSecret = dto.appSecret;
+    if (dto.rawId !== undefined) credFields.rawId = dto.rawId;
+    if (dto.clientKey !== undefined) credFields.clientKey = dto.clientKey;
+    if (dto.clientSecret !== undefined) credFields.clientSecret = dto.clientSecret;
+    if (dto.bearerToken !== undefined) credFields.bearerToken = dto.bearerToken;
+    if (dto.apiKey !== undefined) credFields.apiKey = dto.apiKey;
+    if (dto.apiSecret !== undefined) credFields.apiSecret = dto.apiSecret;
+    if (dto.clientId !== undefined) credFields.clientId = dto.clientId;
+    if (dto.clientSecretYouTube !== undefined) credFields.clientSecret = dto.clientSecretYouTube;
+    if (dto.channelId !== undefined) credFields.channelId = dto.channelId;
+    if (dto.accessKey !== undefined) credFields.accessKey = dto.accessKey;
+
+    if (Object.keys(credFields).length > 0 || (dto.credentials && Object.keys(dto.credentials).length > 0)) {
+      const existingCreds = this.decryptCredentials(existing.credentials);
+      const merged = { ...existingCreds, ...credFields, ...dto.credentials };
       data.credentials = this.crypto.encrypt(merged) as unknown as Prisma.InputJsonValue;
     }
 

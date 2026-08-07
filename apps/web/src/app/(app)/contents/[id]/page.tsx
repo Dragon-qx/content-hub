@@ -2,16 +2,20 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { Button, Card, Input, Select, Textarea, Badge, StatusBadge } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
 import MarkdownEditor, { renderMarkdown } from '@/components/MarkdownEditor';
-import WysiwygEditor from '@/components/WysiwygEditor';
-import MediaLibrary from '@/components/MediaLibrary';
-import AdaptationPreview from '@/components/AdaptationPreview';
-import TemplatePicker from '@/components/TemplatePicker';
-import ContentAssistant from '@/components/ContentAssistant';
+
+// Heavy components loaded on demand (only when editing)
+const WysiwygEditor = dynamic(() => import('@/components/WysiwygEditor'), { ssr: false });
+const MediaLibrary = dynamic(() => import('@/components/MediaLibrary'), { ssr: false });
+const AdaptationPreview = dynamic(() => import('@/components/AdaptationPreview'), { ssr: false });
+const TemplatePicker = dynamic(() => import('@/components/TemplatePicker'), { ssr: false });
+const ContentAssistant = dynamic(() => import('@/components/ContentAssistant'), { ssr: false });
+const PublishDialog = dynamic(() => import('@/components/PublishDialog'), { ssr: false });
 import {
   Content,
   ContentVersion,
@@ -24,6 +28,7 @@ import {
   MediaAsset,
   TemplateDraftSeed,
 } from '@/lib/types';
+import { useT } from '@/lib/i18n';
 
 /** Rendered, XSS-sanitized markdown preview. */
 function Preview({ body }: { body: string | undefined }) {
@@ -58,6 +63,7 @@ function countMarkdownVideos(body: string): number {
 }
 
 function ContentDetail({ id }: { id: string }) {
+  const { t } = useT();
   const router = useRouter();
   const [content, setContent] = useState<Content | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,6 +96,9 @@ function ContentDetail({ id }: { id: string }) {
 
   // Version rollback
   const [rollingBackVersion, setRollingBackVersion] = useState<number | null>(null);
+
+  // Publish dialog
+  const [showPublishDialog, setShowPublishDialog] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -183,11 +192,14 @@ function ContentDetail({ id }: { id: string }) {
         case 'archive':
           await api.post(`/contents/${id}/archive`, {});
           break;
-        case 'retry':
-          // FAILED → SCHEDULED is a valid transition; re-open for publishing.
-          await api.put(`/contents/${id}`, { status: 'SCHEDULED' as ContentStatus });
-          break;
-      }
+         case 'retry':
+           // FAILED → SCHEDULED is a valid transition; re-open for publishing.
+           await api.put(`/contents/${id}`, { status: 'SCHEDULED' as ContentStatus });
+           break;
+         case 'publish':
+           setShowPublishDialog(true);
+           break;
+       }
       setPendingAction(null);
       setActionNote('');
       await load();
@@ -228,11 +240,11 @@ function ContentDetail({ id }: { id: string }) {
     setEditing(true);
   }, []);
 
-  if (loading) return <div className="text-slate-400">Loading…</div>;
+  if (loading) return <div className="text-slate-400">{t('common.loading')}</div>;
   if (error && !content) return <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>;
   if (!content) return null;
 
-  const actions = STATUS_ACTIONS[content.status] ?? [];
+  const actions: StatusAction[] = STATUS_ACTIONS[content.status as ContentStatus] ?? [];
   const versions: ContentVersion[] = [...(content.versions ?? [])].sort(
     (a, b) => b.version - a.version,
   );
@@ -253,11 +265,11 @@ function ContentDetail({ id }: { id: string }) {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {!editing ? (
-              <Button onClick={() => setEditing(true)}>Edit</Button>
+              <Button onClick={() => setEditing(true)}>{t('common.edit')}</Button>
             ) : (
               <>
-                <Button variant="secondary" onClick={() => { setEditing(false); setTitle(content.title); setBody(content.body ?? ''); setContentType(content.contentType); }}>Cancel</Button>
-                <Button onClick={saveEdits} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+                <Button variant="secondary" onClick={() => { setEditing(false); setTitle(content.title); setBody(content.body ?? ''); setContentType(content.contentType); }}>{t('common.cancel')}</Button>
+                <Button onClick={saveEdits} disabled={saving}>{saving ? t('common.saving') : t('common.save')}</Button>
               </>
             )}
           </div>
@@ -269,7 +281,7 @@ function ContentDetail({ id }: { id: string }) {
       {/* Workflow actions */}
       {actions.length > 0 && !editing && (
         <Card className="flex flex-wrap items-center gap-3">
-          <span className="text-sm font-medium text-slate-600">Workflow:</span>
+          <span className="text-sm font-medium text-slate-600">{t('nav.workflow')}:</span>
           {actions.map((a) => (
             <Button
               key={a.action}
@@ -296,13 +308,13 @@ function ContentDetail({ id }: { id: string }) {
             placeholder={pendingAction.action === 'approve' ? 'Optional comment…' : 'Explain why this is rejected…'}
           />
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setPendingAction(null)}>Cancel</Button>
+            <Button variant="secondary" onClick={() => setPendingAction(null)}>{t('common.cancel')}</Button>
             <Button
               variant={pendingAction.variant}
               disabled={acting}
               onClick={() => execute(pendingAction, actionNote)}
             >
-              {acting ? 'Working…' : pendingAction.label}
+              {acting ? t('common.submitting') : pendingAction.label}
             </Button>
           </div>
         </Card>
@@ -350,7 +362,7 @@ function ContentDetail({ id }: { id: string }) {
                 onClick={() => setEditorMode((m) => (m === 'markdown' ? 'wysiwyg' : 'markdown'))}
                 className="rounded border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
               >
-                Switch to {editorMode === 'markdown' ? 'Rich text' : 'Markdown'}
+                Switch to {editorMode === 'markdown' ? t('content.wysiwyg') : t('content.markdown')}
               </button>
             </div>
             {editorMode === 'markdown' ? (
@@ -402,6 +414,15 @@ function ContentDetail({ id }: { id: string }) {
         <MediaLibrary contentId={id} onSelect={insertMedia} onClose={() => setShowMedia(false)} />
       )}
 
+      {/* Publish dialog */}
+      {showPublishDialog && (
+        <PublishDialog
+          contentId={id}
+          onClose={() => setShowPublishDialog(false)}
+          onSuccess={() => { setShowPublishDialog(false); load(); }}
+        />
+      )}
+
       {/* Versions */}
       <Card>
         <div className="mb-4 flex items-center justify-between">
@@ -424,7 +445,7 @@ function ContentDetail({ id }: { id: string }) {
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setShowVersionForm(false)}>Cancel</Button>
               <Button onClick={saveVersion} disabled={savingVersion}>
-                {savingVersion ? 'Saving…' : 'Save version'}
+                {savingVersion ? t('common.saving') : 'Save version'}
               </Button>
             </div>
           </div>

@@ -1,8 +1,9 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "outDir": "./dist",
-    "tsBuildInfoFile": "./dist/tsconfig.tsbuildinfo"
+    "noEmitOnError": true,
+    "incremental": false,
+    "tsBuildInfoFile": null
   },
   "exclude": ["node_modules", "dist", "test", "**/*.spec.ts", "**/*.e2e-spec.ts"]
 }

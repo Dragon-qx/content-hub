@@ -1,0 +1,8 @@
+# Shell scripts run inside Linux containers (or on the host in CI) and must use
+# LF line endings. Without this, Git for Windows (autocrlf=true) converts them to
+# CRLF on checkout, breaking `#!/bin/sh` scripts with "\r: not found".
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Batch files are native to Windows and should keep CRLF.
+*.bat text eol=crlf

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { Notification, NOTIFICATION_TONE, Paginated } from '@/lib/types';
 
 /** Maps a notification type to a small visual tone. */
@@ -16,6 +17,7 @@ function toneClasses(tone: 'neutral' | 'success' | 'warning' | 'danger') {
 }
 
 export default function NotificationBell() {
+  const { t } = useT();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
@@ -79,7 +81,7 @@ export default function NotificationBell() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        aria-label="Notifications"
+        aria-label={t('notifications.title')}
         className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100"
       >
         <BellIcon />
@@ -93,19 +95,19 @@ export default function NotificationBell() {
       {open && (
         <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-            <span className="text-sm font-semibold text-slate-900">Notifications</span>
+            <span className="text-sm font-semibold text-slate-900">{t('notifications.title')}</span>
             {unread > 0 && (
               <button
                 onClick={markAll}
                 disabled={loading}
                 className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
               >
-                Mark all read
+                {t('notifications.markAllRead')}
               </button>
             )}
           </div>
           {items.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-slate-400">No notifications.</div>
+            <div className="px-4 py-8 text-center text-sm text-slate-400">{t('notifications.noNotifications')}</div>
           ) : (
             <ul className="max-h-96 divide-y divide-slate-100 overflow-y-auto">
               {items.map((n) => (

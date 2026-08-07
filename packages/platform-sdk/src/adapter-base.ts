@@ -10,6 +10,47 @@ import {
   PublishResult,
 } from './types';
 import { callbackUrlFor } from './oauth-callback';
+import * as dns from 'node:dns';
+import { isIPv4, isIPv6 } from 'node:net';
+
+/** Normalize an IPv6 address by stripping brackets and lowering case. */
+function normalizeIP(address: string): string {
+  return address.startsWith('[') && address.endsWith(']') ? address.slice(1, -1).toLowerCase() : address.toLowerCase();
+}
+
+/**
+ * True if a resolved IPv4/IPv6 address is private, loopback, link-local, or
+ * otherwise not a public internet address. Pure string/parse check — no deps.
+ */
+export function isPrivateIP(address: string): boolean {
+  const ip = normalizeIP(address);
+  if (isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    if (Number.isNaN(a)) return false;
+    // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 127.0.0.0/8, 0.0.0.0/8
+    return (
+      a === 10 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254) ||
+      a === 127 ||
+      a === 0
+    );
+  }
+  if (isIPv6(ip)) {
+    // ::1 loopback
+    if (ip === '::1' || ip === '0:0:0:0:0:0:0:1') return true;
+    // fc00::/7 unique-local
+    if (ip.startsWith('fc') || ip.startsWith('fd')) return true;
+    // fe80::/10 link-local
+    if (ip.startsWith('fe8') || ip.startsWith('fe9') || ip.startsWith('fea') || ip.startsWith('feb')) return true;
+    // ::ffff: Mapped IPv4 — recurse on the v4 part
+    const mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapped) return isPrivateIP(mapped[1]);
+    return false;
+  }
+  return false;
+}
 
 /**
  * Shared helpers and sensible defaults for every ConcreteAdapter.
@@ -72,8 +113,78 @@ export abstract class BaseAdapter implements PlatformAdapter {
     return this.injectedRefreshToken;
   }
 
+  /** Default timeout for all external platform requests (15s). */
+  protected static readonly REQUEST_TIMEOUT_MS = 15_000;
+
+  /** Max response body size for JSON responses (5 MiB). */
+  protected static readonly MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
+
+  /**
+   * Validate a URL before fetching — blocks SSRF to internal networks.
+   * Only allows https:// with a public destination. Resolves the hostname and
+   * rejects private/loopback IPs to defeat DNS-rebinding bypasses of the
+   * hostname-string checks.
+   */
+  protected async validateUrl(url: string): Promise<void> {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new Error(`Invalid URL: ${url}`);
+    }
+    // Only allow https. http exposes credentials and is unnecessary for the
+    // platform APIs and media origins we call.
+    if (parsed.protocol !== 'https:') {
+      throw new Error(`Unsupported protocol ${parsed.protocol} — only https allowed`);
+    }
+    const hostname = parsed.hostname.toLowerCase();
+    // Block loopback
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname.startsWith('127.')) {
+      throw new Error(`Blocked internal address: ${hostname}`);
+    }
+    // Block RFC1918 / private ranges
+    if (
+      hostname.startsWith('10.') ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('0.') ||
+      hostname.startsWith('169.254.') ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(hostname)
+    ) {
+      throw new Error(`Blocked private network address: ${hostname}`);
+    }
+    // Block cloud metadata
+    if (hostname === '169.254.169.254' || hostname === 'metadata.google.internal') {
+      throw new Error(`Blocked metadata address: ${hostname}`);
+    }
+
+    // DNS-rebinding protection: resolve the hostname and verify that NONE of the
+    // resolved addresses land in a private/loopback range. The checks above are
+    // on the hostname string alone and are trivially bypassed if an attacker
+    // controls DNS responses.
+    const addresses = await dns.promises.lookup(hostname, { all: true });
+    for (const { address } of addresses) {
+      if (isPrivateIP(address)) {
+        throw new Error(`Blocked internal address resolved for ${hostname}: ${address}`);
+      }
+    }
+  }
+
+  /**
+   * Resolve a hostname to its IP addresses. Exposed for adapters that need the
+   * resolved address (e.g. to pin against DNS-rebinding). Returns [] on failure.
+   */
+  protected async resolveHost(hostname: string): Promise<string[]> {
+    try {
+      const addresses = await dns.promises.lookup(hostname.toLowerCase(), { all: true });
+      return addresses.map((a) => a.address);
+    } catch {
+      return [];
+    }
+  }
+
   /** Perform an authenticated fetch against the platform API. */
   protected async call<T>(url: string, init: RequestInit = {}): Promise<T> {
+    await this.validateUrl(url);
     const headers: Record<string, string> = {};
     const src = init.headers;
     if (src instanceof Headers) {
@@ -88,11 +199,21 @@ export abstract class BaseAdapter implements PlatformAdapter {
     if (!headers['Content-Type'] && !headers['content-type']) {
       headers['Content-Type'] = 'application/json';
     }
-    const res = await fetch(url, { ...init, headers });
-    if (!res.ok) {
-      throw new Error(`${this.platform} request failed: HTTP ${res.status}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), BaseAdapter.REQUEST_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, { ...init, headers, signal: controller.signal });
+      if (!res.ok) {
+        throw new Error(`${this.platform} request failed: HTTP ${res.status}`);
+      }
+      const text = await res.text();
+      if (text.length > BaseAdapter.MAX_RESPONSE_BYTES) {
+        throw new Error(`${this.platform} response too large: ${text.length} bytes`);
+      }
+      return JSON.parse(text) as T;
+    } finally {
+      clearTimeout(timeout);
     }
-    return (await res.json()) as T;
   }
 
   /**
@@ -100,24 +221,47 @@ export abstract class BaseAdapter implements PlatformAdapter {
    * Does NOT set Content-Type header (browser/fetch will set the boundary).
    */
   protected async callMultipart<T>(url: string, formData: FormData, extraHeaders?: Record<string, string>): Promise<T> {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: extraHeaders ?? {},
-      body: formData,
-    });
-    if (!res.ok) {
-      throw new Error(`${this.platform} multipart upload failed: HTTP ${res.status}`);
+    await this.validateUrl(url);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), BaseAdapter.REQUEST_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: extraHeaders ?? {},
+        body: formData,
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        throw new Error(`${this.platform} multipart upload failed: HTTP ${res.status}`);
+      }
+      const text = await res.text();
+      if (text.length > BaseAdapter.MAX_RESPONSE_BYTES) {
+        throw new Error(`${this.platform} response too large: ${text.length} bytes`);
+      }
+      return JSON.parse(text) as T;
+    } finally {
+      clearTimeout(timeout);
     }
-    return (await res.json()) as T;
   }
 
-  /** Fetch media bytes from a URL (HTTP/HTTPS) or local path. */
+  /** Fetch media bytes from a URL — with SSRF protection and size limits. */
   protected async fetchMediaBytes(mediaUrl: string): Promise<ArrayBuffer> {
-    const res = await fetch(mediaUrl);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch media from ${mediaUrl}: HTTP ${res.status}`);
+    await this.validateUrl(mediaUrl);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), BaseAdapter.REQUEST_TIMEOUT_MS);
+    try {
+      const res = await fetch(mediaUrl, { signal: controller.signal });
+      if (!res.ok) {
+        throw new Error(`Failed to fetch media from ${mediaUrl}: HTTP ${res.status}`);
+      }
+      const buf = await res.arrayBuffer();
+      if (buf.byteLength > 100 * 1024 * 1024) {
+        throw new Error(`Media too large: ${buf.byteLength} bytes (max 100 MiB)`);
+      }
+      return buf;
+    } finally {
+      clearTimeout(timeout);
     }
-    return res.arrayBuffer();
   }
 
   // ── Auth ────────────────────────────────────────────────────────────
@@ -160,5 +304,18 @@ export abstract class BaseAdapter implements PlatformAdapter {
     _content: string,
   ): Promise<void> {
     throw new Error(`${this.platform} does not support replying to private messages`);
+  }
+
+  /**
+   * Validate that the stored credentials are valid against the platform API.
+   * Returns true if valid, throws with a descriptive error if not.
+   * Default implementation tries getAccessToken(); adapters can override.
+   */
+  async validateCredentials(): Promise<boolean> {
+    if (typeof (this as unknown as { getAccessToken?: () => Promise<string> }).getAccessToken === 'function') {
+      await (this as unknown as { getAccessToken: () => Promise<string> }).getAccessToken();
+      return true;
+    }
+    throw new Error(`${this.platform} does not support credential validation`);
   }
 }

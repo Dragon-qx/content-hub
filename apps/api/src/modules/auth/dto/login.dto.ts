@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class LoginDto {
   @ApiProperty({ description: 'User email address', example: 'alice@example.com' })
@@ -17,4 +17,14 @@ export class RefreshTokenDto {
   @IsString()
   @MinLength(1)
   refreshToken: string;
+
+  @ApiPropertyOptional({ description: 'Client user agent' })
+  @IsOptional()
+  @IsString()
+  userAgent?: string;
+
+  @ApiPropertyOptional({ description: 'Client IP address' })
+  @IsOptional()
+  @IsString()
+  ipAddress?: string;
 }

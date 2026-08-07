@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth';
+import { I18nProvider } from '@/lib/i18n';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 
 export const metadata: Metadata = {
@@ -28,13 +29,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="zh-CN">
       <head>
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
       </head>
       <body>
-        <ServiceWorkerRegistration />
-        <AuthProvider>{children}</AuthProvider>
+        <I18nProvider>
+          <ServiceWorkerRegistration />
+          <AuthProvider>{children}</AuthProvider>
+        </I18nProvider>
       </body>
     </html>
   );

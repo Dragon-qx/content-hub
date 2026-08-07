@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { Button, Card, Select } from '@/lib/ui';
 import PageHeader from '@/components/PageHeader';
+import { useT } from '@/lib/i18n';
 
 /** Mirror of the backend ReportField (PRD §3.5). */
 interface ReportField {
@@ -63,6 +64,7 @@ interface FilterConfig {
 }
 
 export default function ReportsPage() {
+  const { t } = useT();
   const [fieldGroups, setFieldGroups] = useState<CategoryGroup[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filters, setFilters] = useState<FilterConfig[]>([]);
@@ -269,18 +271,18 @@ export default function ReportsPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Custom Reports"
-        subtitle="Drag fields to build your report"
+        title={t('reports.title')}
+        subtitle={t('reports.subtitle')}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={exportCsv} disabled={!result?.rows.length}>
-              Export CSV
+              {t('reports.exportCsv')}
             </Button>
             <Button variant="secondary" onClick={() => setLoadOpen((v) => !v)}>
-              {loadOpen ? 'Cancel' : 'Load'}
+              {loadOpen ? t('common.cancel') : t('reports.load')}
             </Button>
             <Button variant="primary" onClick={generate} disabled={loading}>
-              {loading ? 'Generating…' : 'Generate'}
+              {loading ? t('reports.generating') : t('reports.generate')}
             </Button>
           </div>
         }
@@ -295,7 +297,7 @@ export default function ReportsPage() {
       {/* Load / Save panel */}
       {loadOpen && (
         <Card>
-          <h3 className="mb-3 text-base font-semibold">Saved reports</h3>
+          <h3 className="mb-3 text-base font-semibold">{t('reports.savedReports')}</h3>
           {savedReports.length === 0 ? (
             <p className="text-sm text-slate-400">No saved reports yet.</p>
           ) : (
@@ -313,10 +315,10 @@ export default function ReportsPage() {
                   </div>
                   <div className="flex gap-2">
                     <Button variant="ghost" onClick={() => load(r.id)}>
-                      Load
+                      {t('reports.load')}
                     </Button>
                     <Button variant="ghost" onClick={() => remove(r.id)}>
-                      Delete
+                      {t('common.delete')}
                     </Button>
                   </div>
                 </li>
@@ -325,25 +327,25 @@ export default function ReportsPage() {
           )}
           <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-end">
             <div className="flex-1">
-              <span className="mb-1 block text-xs font-medium text-slate-600">Name</span>
+              <span className="mb-1 block text-xs font-medium text-slate-600">{t('reports.name')}</span>
               <input
                 value={reportName}
                 onChange={(e) => setReportName(e.target.value)}
-                placeholder="Report name"
+                placeholder={t('reports.name')}
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-indigo-100"
               />
             </div>
             <div className="flex-1">
-              <span className="mb-1 block text-xs font-medium text-slate-600">Description</span>
+              <span className="mb-1 block text-xs font-medium text-slate-600">{t('reports.description')}</span>
               <input
                 value={reportDesc}
                 onChange={(e) => setReportDesc(e.target.value)}
-                placeholder="Optional"
+                placeholder={t('common.optional')}
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-indigo-100"
               />
             </div>
             <Button variant="primary" onClick={save} disabled={saving}>
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? t('common.saving') : t('common.save')}
             </Button>
           </div>
         </Card>
@@ -353,8 +355,8 @@ export default function ReportsPage() {
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         {/* Left: field picker */}
         <Card className="md:col-span-1">
-          <h3 className="mb-3 text-base font-semibold">Fields</h3>
-          <p className="mb-3 text-xs text-slate-400">Drag onto the canvas, or click to add.</p>
+          <h3 className="mb-3 text-base font-semibold">{t('reports.fields')}</h3>
+          <p className="mb-3 text-xs text-slate-400">{t('reports.canvasHint')}</p>
           <div className="flex flex-col gap-4">
             {fieldGroups.map((group) => (
               <div key={group.category}>
@@ -383,7 +385,7 @@ export default function ReportsPage() {
 
         {/* Middle: canvas */}
         <Card className="md:col-span-1">
-          <h3 className="mb-3 text-base font-semibold">Canvas</h3>
+          <h3 className="mb-3 text-base font-semibold">{t('reports.canvas')}</h3>
 
           {/* Drop zone / selected fields */}
           <div
@@ -393,7 +395,7 @@ export default function ReportsPage() {
           >
             {selectedIds.length === 0 ? (
               <p className="text-center text-xs text-slate-400">
-                Drop fields here or click to add
+                {t('reports.canvasHint')}
               </p>
             ) : (
               <ol className="flex flex-col gap-1.5">
@@ -444,9 +446,9 @@ export default function ReportsPage() {
           {/* Group-by + sort */}
           <div className="mb-3 grid grid-cols-2 gap-2">
             <div>
-              <span className="mb-1 block text-xs font-medium text-slate-600">Group by</span>
+              <span className="mb-1 block text-xs font-medium text-slate-600">{t('reports.groupBy')}</span>
               <Select value={groupBy} onChange={(e) => setGroupBy(e.target.value)} className="text-sm">
-                <option value="">(none)</option>
+                <option value="">{t('reports.none')}</option>
                 {selectedFieldLabels.map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.label}
@@ -455,9 +457,9 @@ export default function ReportsPage() {
               </Select>
             </div>
             <div>
-              <span className="mb-1 block text-xs font-medium text-slate-600">Sort by</span>
+              <span className="mb-1 block text-xs font-medium text-slate-600">{t('reports.sortBy')}</span>
               <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="text-sm">
-                <option value="">(default)</option>
+                <option value="">{t('reports.default')}</option>
                 {selectedFieldLabels.map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.label}
@@ -467,26 +469,26 @@ export default function ReportsPage() {
             </div>
           </div>
           <div className="mb-3">
-            <span className="mb-1 block text-xs font-medium text-slate-600">Sort direction</span>
+            <span className="mb-1 block text-xs font-medium text-slate-600">{t('reports.sortDirection')}</span>
             <Select
               value={sortDir}
               onChange={(e) => setSortDir(e.target.value as 'asc' | 'desc')}
               className="text-sm"
             >
-              <option value="desc">Descending</option>
-              <option value="asc">Ascending</option>
+              <option value="desc">{t('reports.descending')}</option>
+              <option value="asc">{t('reports.ascending')}</option>
             </Select>
           </div>
 
           {/* Filters */}
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-600">Filters</span>
+            <span className="text-xs font-medium text-slate-600">{t('reports.filters')}</span>
             <Button variant="ghost" onClick={addFilter} disabled={selectedIds.length === 0}>
-              + Add
+              {t('reports.addFilter')}
             </Button>
           </div>
           {filters.length === 0 ? (
-            <p className="text-xs text-slate-400">No filters</p>
+            <p className="text-xs text-slate-400">{t('reports.noFilters')}</p>
           ) : (
             <div className="flex flex-col gap-2">
               {filters.map((f, i) => (
@@ -536,7 +538,7 @@ export default function ReportsPage() {
         {/* Right: preview */}
         <Card className="md:col-span-1">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-base font-semibold">Preview</h3>
+            <h3 className="text-base font-semibold">{t('reports.preview')}</h3>
             {result && (
               <span className="text-xs text-slate-400">
                 {result.totalCount} row(s) · {new Date(result.generatedAt).toLocaleTimeString()}

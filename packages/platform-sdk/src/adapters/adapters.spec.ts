@@ -14,9 +14,24 @@ const jsonResponse = (body: unknown): Response =>
   ({
     ok: true,
     status: 200,
+    text: async () => JSON.stringify(body),
     json: async () => body,
     arrayBuffer: async () => new ArrayBuffer(0),
   }) as Response;
+
+// The base adapter resolves hostnames to block DNS-rebinding to private IPs.
+// Tests use fake hostnames that don't resolve, so stub lookup to return a public
+// IP. The private-IP rejection itself is covered by unit tests on isPrivateIP.
+jest.mock('node:dns', () => {
+  const actual = jest.requireActual('node:dns');
+  return {
+    ...actual,
+    promises: {
+      ...actual.promises,
+      lookup: jest.fn(async () => [{ address: '142.250.80.46', family: 4 }]),
+    },
+  };
+});
 
 afterEach(() => {
   // Restore any fetch spy so a stale mocked value can't leak into the next test.

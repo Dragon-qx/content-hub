@@ -9,21 +9,26 @@
     "start": "next start -p 3001",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf .next"
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "generate:client": "openapi-typescript ../api/dist/openapi.json -o src/lib/generated/api-types.ts --alphabetize --export-type",
+    "clean": "rm -rf .next test-results"
   },
   "dependencies": {
-    "@tiptap/extension-image": "^3.28.0",
-    "eslint-config-next": "^14.2.0",
+    "@content-hub/shared-types": "workspace:*",
     "@next/eslint-plugin-next": "^14.2.0",
+    "@tiptap/extension-image": "^3.28.0",
+    "@tiptap/extension-link": "^3.28.0",
     "@tiptap/react": "^3.28.0",
     "@tiptap/starter-kit": "^3.28.0",
     "dompurify": "^3.4.12",
+    "eslint-config-next": "^14.2.0",
+    "http-proxy": "^1.18.1",
     "markdown-it": "^14.3.0",
     "next": "^14.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "turndown": "^7.2.4",
-    "@tiptap/extension-link": "^3.28.0"
+    "turndown": "^7.2.4"
   },
   "devDependencies": {
     "@types/dompurify": "^3.2.0",
@@ -32,7 +37,11 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@types/turndown": "^5.0.6",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "@playwright/test": "^1.40.0",
     "autoprefixer": "^10.4.19",
+    "openapi-typescript": "^7.0.0",
     "postcss": "^8.4.39",
     "sharp": "^0.35.3",
     "tailwindcss": "^3.4.6",

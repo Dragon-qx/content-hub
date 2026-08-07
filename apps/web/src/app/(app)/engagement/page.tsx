@@ -16,6 +16,7 @@ import {
   CommentTemplate,
   SentimentKeyword,
 } from '@/lib/types';
+import { useT } from '@/lib/i18n';
 
 interface Filters {
   platform: Platform | '';
@@ -28,15 +29,16 @@ const INITIAL: Filters = { platform: '', sentiment: '', unreplied: false };
 const TAKE = 20;
 
 function Stats({ stats }: { stats: EngagementStats | null }) {
+  const { t } = useT();
   if (!stats) return null;
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
       {[
-        { label: 'Total', value: stats.total },
-        { label: 'Unreplied', value: stats.unreplied },
-        { label: 'Positive', value: stats.positive },
-        { label: 'Neutral', value: stats.neutral },
-        { label: 'Negative', value: stats.negative },
+        { label: t('engagement.total'), value: stats.total },
+        { label: t('engagement.unreplied'), value: stats.unreplied },
+        { label: t('engagement.positive'), value: stats.positive },
+        { label: t('engagement.neutral'), value: stats.neutral },
+        { label: t('engagement.negative'), value: stats.negative },
       ].map((s) => (
         <Card key={s.label}>
           <div className="text-sm text-slate-500">{s.label}</div>
@@ -48,6 +50,7 @@ function Stats({ stats }: { stats: EngagementStats | null }) {
 }
 
 export default function EngagementPage() {
+  const { t } = useT();
   const [stats, setStats] = useState<EngagementStats | null>(null);
   const [items, setItems] = useState<EngagementComment[]>([]);
   const [total, setTotal] = useState(0);
@@ -256,7 +259,7 @@ export default function EngagementPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Engagement" subtitle="Unified inbox for comments across platforms" />
+      <PageHeader title={t('engagement.title')} subtitle={t('engagement.subtitle')} />
 
       <Stats stats={stats} />
 
@@ -271,7 +274,7 @@ export default function EngagementPage() {
               : 'text-slate-600 hover:bg-slate-50'
           }`}
         >
-          Comments
+          {t('engagement.comments')}
         </button>
         <button
           type="button"
@@ -282,7 +285,7 @@ export default function EngagementPage() {
               : 'text-slate-600 hover:bg-slate-50'
           }`}
         >
-          Messages
+          {t('engagement.messages')}
         </button>
       </div>
 
@@ -295,7 +298,7 @@ export default function EngagementPage() {
             onChange={(e) => setFilters((f) => ({ ...f, platform: e.target.value as Platform }))}
             className="w-full sm:max-w-[180px]"
           >
-            <option value="">All platforms</option>
+            <option value="">{t('engagement.allPlatforms')}</option>
             {PLATFORMS.map((p) => (
               <option key={p.value} value={p.value}>{p.label}</option>
             ))}
@@ -307,7 +310,7 @@ export default function EngagementPage() {
             }
             className="w-full sm:max-w-[160px]"
           >
-            <option value="">All sentiment</option>
+            <option value="">{t('engagement.allSentiment')}</option>
             {(['POSITIVE', 'NEUTRAL', 'NEGATIVE'] as Sentiment[]).map((s) => (
               <option key={s} value={s}>{SENTIMENT_LABELS[s]}</option>
             ))}
@@ -318,7 +321,7 @@ export default function EngagementPage() {
               checked={filters.unreplied}
               onChange={(e) => setFilters((f) => ({ ...f, unreplied: e.target.checked }))}
             />
-            Unreplied only
+            {t('engagement.unrepliedOnly')}
           </label>
           {syncInfo && (
             <span className="text-xs text-emerald-600">{syncInfo}</span>
@@ -328,10 +331,10 @@ export default function EngagementPage() {
             variant="secondary"
             onClick={() => { loadStats(); loadComments(skip); }}
           >
-            Refresh
+            {t('engagement.refresh')}
           </Button>
           <Button variant="primary" disabled={syncing} onClick={runSync}>
-            {syncing ? 'Syncing…' : 'Sync now'}
+            {syncing ? t('engagement.syncing') : t('engagement.syncNow')}
           </Button>
         </div>
       </Card>
@@ -344,7 +347,7 @@ export default function EngagementPage() {
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-base font-semibold">
                 <span className="text-slate-700">
-                  {tab === 'comments' ? 'Inbox' : 'Messages'}
+                  {t('engagement.inbox')}
                 </span>
                 <span className="ml-2 text-xs text-slate-400">
                   {tab === 'comments' ? `${total} comments` : `${msgTotal} messages`}
@@ -355,7 +358,7 @@ export default function EngagementPage() {
             {tab === 'comments' ? (
               <>
                 {loading ? (
-                  <div className="text-sm text-slate-400">Loading…</div>
+                  <div className="text-sm text-slate-400">{t('common.loading')}</div>
                 ) : items.length === 0 ? (
                   <div className="flex flex-1 items-center justify-center text-sm text-slate-400">
                     No comments yet. Connect an account and publish to start gathering comments.
@@ -389,7 +392,7 @@ export default function EngagementPage() {
                                 setDraft('');
                               }}
                             >
-                              Reply
+                              {t('engagement.reply')}
                             </Button>
                           )}
                         </div>
@@ -400,12 +403,12 @@ export default function EngagementPage() {
                             <Textarea
                               value={draft}
                               onChange={(e) => setDraft(e.target.value)}
-                              placeholder="Write a reply…"
+                              placeholder={t('engagement.writeReply')}
                               className="min-h-[80px]"
                             />
                             {templates.length > 0 && (
                               <div className="mt-2 flex flex-wrap gap-1">
-                                <span className="text-xs text-slate-500">Templates:</span>
+                                <span className="text-xs text-slate-500">{t('engagement.templates')}</span>
                                 {templates.map((t) => (
                                   <button
                                     key={t.id}
@@ -420,13 +423,13 @@ export default function EngagementPage() {
                             )}
                             <div className="mt-2 flex justify-end gap-2">
                               <Button variant="secondary" onClick={() => setReplying(null)}>
-                                Cancel
+                                {t('common.cancel')}
                               </Button>
                               <Button
                                 onClick={() => sendReply(c)}
                                 disabled={saving === c.id || !draft.trim()}
                               >
-                                {saving === c.id ? 'Sending…' : 'Send reply'}
+                                {saving === c.id ? t('engagement.sending') : t('engagement.sendReply')}
                               </Button>
                             </div>
                           </div>
@@ -440,14 +443,14 @@ export default function EngagementPage() {
                 {total > TAKE && (
                   <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
                     <span>
-                      Page {page} of {pageCount}
+                      {t('common.page', { page, total: pageCount })}
                     </span>
                     <div className="flex gap-2">
                       <Button variant="secondary" disabled={page <= 1} onClick={() => loadComments(skip - TAKE)}>
-                        Prev
+                        {t('common.prev')}
                       </Button>
                       <Button variant="secondary" disabled={page >= pageCount} onClick={() => loadComments(skip + TAKE)}>
-                        Next
+                        {t('common.next')}
                       </Button>
                     </div>
                   </div>
@@ -456,7 +459,7 @@ export default function EngagementPage() {
             ) : (
               <>
                 {msgLoading ? (
-                  <div className="text-sm text-slate-400">Loading…</div>
+                  <div className="text-sm text-slate-400">{t('common.loading')}</div>
                 ) : messages.length === 0 ? (
                   <div className="flex flex-1 items-center justify-center text-sm text-slate-400">
                     No messages yet. Sync to start gathering private messages.
@@ -470,7 +473,7 @@ export default function EngagementPage() {
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge tone="neutral">{m.account?.platform ?? m.platform}</Badge>
                               <Badge tone={m.sentByMe ? 'success' : 'neutral'}>
-                                {m.sentByMe ? 'Sent by you' : 'Received'}
+                                {m.sentByMe ? t('engagement.sentByYou') : t('engagement.received')}
                               </Badge>
                               <span className="text-xs text-slate-400">
                                 {m.sentByMe ? 'to' : 'from'} {m.authorName || 'anonymous'}
@@ -488,18 +491,18 @@ export default function EngagementPage() {
                 {msgTotal > TAKE && (
                   <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
                     <span>
-                      Page {Math.floor(msgSkip / TAKE) + 1} of {Math.max(1, Math.ceil(msgTotal / TAKE))}
+                      {t('common.page', { page: Math.floor(msgSkip / TAKE) + 1, total: Math.max(1, Math.ceil(msgTotal / TAKE)) })}
                     </span>
                     <div className="flex gap-2">
                       <Button variant="secondary" disabled={msgSkip <= 0} onClick={() => loadMessages(msgSkip - TAKE)}>
-                        Prev
+                        {t('common.prev')}
                       </Button>
                       <Button
                         variant="secondary"
                         disabled={msgSkip + TAKE >= msgTotal}
                         onClick={() => loadMessages(msgSkip + TAKE)}
                       >
-                        Next
+                        {t('common.next')}
                       </Button>
                     </div>
                   </div>
@@ -512,9 +515,9 @@ export default function EngagementPage() {
         {/* Quick-reply templates */}
         <Card>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-base font-semibold">Quick reply templates</h2>
+            <h2 className="text-base font-semibold">{t('engagement.quickTemplates')}</h2>
             <Button variant="secondary" onClick={() => setShowTplForm((s) => !s)}>
-              {showTplForm ? 'Close' : 'New template'}
+              {showTplForm ? t('common.close') : t('engagement.newTemplate')}
             </Button>
           </div>
 
@@ -533,7 +536,7 @@ export default function EngagementPage() {
               </Field>
               <div className="flex justify-end">
                 <Button type="submit" disabled={tplSaving || !tplTitle.trim() || !tplBody.trim()}>
-                  {tplSaving ? 'Saving…' : 'Save'}
+                  {tplSaving ? t('common.saving') : t('common.save')}
                 </Button>
               </div>
             </form>

@@ -3,8 +3,10 @@
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { useT } from '@/lib/i18n';
 
 export default function LoginForm() {
+  const { t } = useT();
   const { login, register, mfaLogin } = useAuth();
   const router = useRouter();
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -35,7 +37,7 @@ export default function LoginForm() {
       }
       router.replace('/dashboard');
     } catch (err: any) {
-      setError(err?.message ?? 'Something went wrong');
+      setError(err?.message ?? t('common.error'));
     } finally {
       setBusy(false);
     }
@@ -51,7 +53,7 @@ export default function LoginForm() {
       setMfaPending(null);
       router.replace('/dashboard');
     } catch (err: any) {
-      setError(err?.message ?? 'Invalid code');
+      setError(err?.message ?? t('login.wrongCredentials'));
     } finally {
       setBusy(false);
     }
@@ -69,13 +71,13 @@ export default function LoginForm() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
         <div className="card w-full max-w-md p-6 sm:p-8">
-          <h1 className="mb-1 text-xl font-bold sm:text-2xl">Two-factor authentication</h1>
+          <h1 className="mb-1 text-xl font-bold sm:text-2xl">{t('login.mfaTitle')}</h1>
           <p className="mb-6 text-sm text-slate-500">
-            Enter the 6-digit code from your authenticator app.
+            {t('login.mfaSubtitle')}
           </p>
           <form onSubmit={submitMfa} className="flex flex-col gap-4">
             <label className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-600">Verification code</span>
+              <span className="mb-1 block font-medium text-slate-600">{t('login.verificationCode')}</span>
               <input
                 inputMode="numeric"
                 autoComplete="one-time-code"
@@ -101,14 +103,14 @@ export default function LoginForm() {
               disabled={busy || code.length !== 6}
               className="btn-primary min-h-[44px] w-full rounded-lg py-2 text-sm font-medium"
             >
-              {busy ? 'Verifying…' : 'Verify'}
+              {busy ? t('login.pleaseWait') : t('common.confirm')}
             </button>
             <button
               type="button"
               className="min-h-[44px] w-full text-center text-sm text-slate-500 hover:underline"
               onClick={cancelMfa}
             >
-              Cancel
+              {t('common.cancel')}
             </button>
           </form>
         </div>
@@ -119,14 +121,14 @@ export default function LoginForm() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
       <div className="card w-full max-w-md p-6 sm:p-8">
-        <h1 className="mb-1 text-xl font-bold sm:text-2xl">ContentHub</h1>
+        <h1 className="mb-1 text-xl font-bold sm:text-2xl">{t('login.title')}</h1>
         <p className="mb-6 text-sm text-slate-500">
-          {mode === 'login' ? 'Sign in to your account' : 'Create a new account'}
+          {mode === 'login' ? t('login.subtitle.login') : t('login.subtitle.register')}
         </p>
         <form onSubmit={submit} className="flex flex-col gap-4">
           {mode === 'register' && (
             <label className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-600">Name</span>
+              <span className="mb-1 block font-medium text-slate-600">{t('login.name')}</span>
               <input
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-indigo-100 min-h-[44px]"
                 value={name}
@@ -136,7 +138,7 @@ export default function LoginForm() {
             </label>
           )}
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-600">Email</span>
+            <span className="mb-1 block font-medium text-slate-600">{t('login.email')}</span>
             <input
               type="email"
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-indigo-100 min-h-[44px]"
@@ -146,7 +148,7 @@ export default function LoginForm() {
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-600">Password</span>
+            <span className="mb-1 block font-medium text-slate-600">{t('login.password')}</span>
             <input
               type="password"
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-indigo-100 min-h-[44px]"
@@ -168,7 +170,11 @@ export default function LoginForm() {
             disabled={busy}
             className="btn-primary min-h-[44px] w-full rounded-lg py-2 text-sm font-medium"
           >
-            {busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
+            {busy
+              ? t('login.pleaseWait')
+              : mode === 'login'
+                ? t('login.signIn')
+                : t('login.createAccount')}
           </button>
         </form>
 
@@ -176,9 +182,7 @@ export default function LoginForm() {
           className="min-h-[44px] mt-4 w-full text-center text-sm text-indigo-600 hover:underline"
           onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
         >
-          {mode === 'login'
-            ? "Don't have an account? Register"
-            : 'Already have an account? Sign in'}
+          {mode === 'login' ? t('login.noAccount') : t('login.hasAccount')}
         </button>
       </div>
     </div>

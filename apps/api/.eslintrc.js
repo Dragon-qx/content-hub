@@ -1,7 +1,7 @@
 module.exports = {
   parser: '@typescript-eslint/parser',
   parserOptions: {
-    project: 'tsconfig.json',
+    project: 'tsconfig.eslint.json',
     tsconfigRootDir: __dirname,
     sourceType: 'module',
   },
@@ -14,9 +14,24 @@ module.exports = {
   },
   ignorePatterns: ['.eslintrc.js', 'dist', 'node_modules'],
   rules: {
-    '@typescript-eslint/no-explicit-any': 'off',
-    '@typescript-eslint/explicit-function-return-type': 'off',
-    '@typescript-eslint/explicit-module-boundary-types': 'off',
+    '@typescript-eslint/no-explicit-any': 'warn',
+    '@typescript-eslint/explicit-function-return-type': ['warn', {
+      allowExpressions: true,
+      allowTypedFunctionExpressions: true,
+      allowHigherOrderFunctions: true,
+    }],
+    '@typescript-eslint/explicit-module-boundary-types': ['warn', {
+      allowArgumentsExplicitlyTypedAsAny: true,
+    }],
     '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+    '@typescript-eslint/no-floating-promises': 'warn',
+    '@typescript-eslint/no-misused-promises': 'warn',
+    '@typescript-eslint/prefer-optional-chain': 'warn',
+    '@typescript-eslint/prefer-nullish-coalescing': 'warn',
+    '@typescript-eslint/strict-boolean-expressions': ['warn', {
+      allowString: true,
+      allowNumber: false,
+      allowNullableObject: true,
+    }],
   },
 };
