@@ -7,6 +7,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser, AuthUser } from '../auth/decorators/current-user.decorator';
 import {
   AccountHealth,
   HealthService,
@@ -36,9 +37,10 @@ export class HealthController {
   @ApiOkResponse({ description: 'Account health evaluation.' })
   @Get('accounts/:id')
   getAccountHealth(
+    @CurrentUser() user: AuthUser,
     @Param() { id }: AccountIdParam,
   ): Promise<AccountHealth> {
-    return this.healthService.evaluateAccount(id);
+    return this.healthService.evaluateAccount(user.userId, id);
   }
 
   /** Evaluate every account in a team and roll up status totals. */
@@ -47,9 +49,10 @@ export class HealthController {
   @ApiOkResponse({ description: 'Team health summary.' })
   @Get('teams/:teamId')
   getTeamHealth(
+    @CurrentUser() user: AuthUser,
     @Param() { teamId }: TeamIdParam,
   ): Promise<TeamHealthSummary> {
-    return this.healthService.evaluateTeam(teamId);
+    return this.healthService.evaluateTeam(user.userId, teamId);
   }
 
   /**
@@ -60,8 +63,11 @@ export class HealthController {
   @ApiOperation({ summary: 'Run team health check', description: 'Evaluates the team and broadcasts alerts for degraded accounts.' })
   @ApiParam({ name: 'teamId', description: 'Team id' })
   @Post('teams/:teamId/run')
-  runTeamCheck(@Param() { teamId }: TeamIdParam) {
-    return this.healthService.runTeamCheck(teamId);
+  runTeamCheck(
+    @CurrentUser() user: AuthUser,
+    @Param() { teamId }: TeamIdParam,
+  ) {
+    return this.healthService.runTeamCheck(user.userId, teamId);
   }
 
   /**
@@ -71,8 +77,11 @@ export class HealthController {
   @ApiOperation({ summary: 'List active threshold alerts', description: 'Returns accounts whose health score is below the configured threshold.' })
   @ApiParam({ name: 'teamId', description: 'Team id' })
   @Get('teams/:teamId/alerts')
-  listAlerts(@Param() { teamId }: TeamIdParam): Promise<ThresholdAlertResult> {
-    return this.healthService.checkThresholdAlerts(teamId, false);
+  listAlerts(
+    @CurrentUser() user: AuthUser,
+    @Param() { teamId }: TeamIdParam,
+  ): Promise<ThresholdAlertResult> {
+    return this.healthService.checkThresholdAlerts(user.userId, teamId, false);
   }
 
   /**
@@ -82,8 +91,11 @@ export class HealthController {
   @ApiOperation({ summary: 'Run threshold sweep', description: 'Evaluates the team, broadcasts alerts for accounts below threshold, and returns the sweep result.' })
   @ApiParam({ name: 'teamId', description: 'Team id' })
   @Post('teams/:teamId/threshold-check')
-  runThresholdCheck(@Param() { teamId }: TeamIdParam): Promise<ThresholdAlertResult> {
-    return this.healthService.checkThresholdAlerts(teamId, true);
+  runThresholdCheck(
+    @CurrentUser() user: AuthUser,
+    @Param() { teamId }: TeamIdParam,
+  ): Promise<ThresholdAlertResult> {
+    return this.healthService.checkThresholdAlerts(user.userId, teamId, true);
   }
 
   /**
@@ -95,9 +107,10 @@ export class HealthController {
   @ApiParam({ name: 'teamId', description: 'Team id' })
   @Patch('teams/:teamId/threshold-config')
   updateThresholdConfig(
+    @CurrentUser() user: AuthUser,
     @Param() { teamId }: TeamIdParam,
     @Body() dto: ThresholdConfigDto,
-  ): HealthThresholdConfig {
-    return this.healthService.setTeamThresholdConfig(teamId, dto);
+  ): Promise<HealthThresholdConfig> {
+    return this.healthService.setTeamThresholdConfig(user.userId, teamId, dto);
   }
 }

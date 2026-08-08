@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { NotificationService } from '../notification/notification.service';
+import { TeamAccessService } from '../common/team-access/team-access.service';
 
 /** Overall health of an account — derived from its signals. */
 export type HealthStatus = 'HEALTHY' | 'WARNING' | 'CRITICAL';
@@ -126,6 +127,7 @@ export class HealthService {
     private readonly crypto: CryptoService,
     private readonly notifications: NotificationService,
     private readonly config: ConfigService,
+    private readonly teamAccess: TeamAccessService,
   ) {}
 
   /** Decrypt stored credentials into a plain object (mirrors AccountService). */
@@ -147,22 +149,30 @@ export class HealthService {
    * Evaluate a single account's health. Throws NotFoundException when the
    * account does not exist.
    */
-  async evaluateAccount(accountId: string): Promise<AccountHealth> {
+  async evaluateAccount(
+    userId: string,
+    accountId: string,
+  ): Promise<AccountHealth> {
     const account = await this.prisma.socialAccount.findUnique({
       where: { id: accountId },
     });
     if (!account) {
       throw new NotFoundException('Account not found');
     }
-
+    await this.teamAccess.assertUserInTeam(userId, account.teamId);
     return this.evaluate(account, new Date());
   }
 
   /**
    * Run health evaluation across every account in a team and return a summary
-   * with per-status totals.
+   * with per-status totals. `userId` is `null` for system (worker) contexts,
+   * which skip the team-membership assertion.
    */
-  async evaluateTeam(teamId: string): Promise<TeamHealthSummary> {
+  async evaluateTeam(
+    userId: string | null,
+    teamId: string,
+  ): Promise<TeamHealthSummary> {
+    if (userId) await this.teamAccess.assertUserInTeam(userId, teamId);
     const accounts = await this.prisma.socialAccount.findMany({
       where: { teamId },
       orderBy: { createdAt: 'desc' },
@@ -194,10 +204,11 @@ export class HealthService {
    * 站内消息). Returns the summary plus the count of accounts notified about.
    */
   async runTeamCheck(
+    userId: string,
     teamId: string,
     notify = true,
   ): Promise<{ summary: TeamHealthSummary; notified: number }> {
-    const summary = await this.evaluateTeam(teamId);
+    const summary = await this.evaluateTeam(userId, teamId);
 
     if (!notify) {
       return { summary, notified: 0 };
@@ -301,10 +312,12 @@ export class HealthService {
    * back to the previous layer (env / process-wide). Returns the effective
    * config for confirmation.
    */
-  setTeamThresholdConfig(
+  async setTeamThresholdConfig(
+    userId: string,
     teamId: string,
     dto: { critical?: number; warning?: number },
-  ): HealthThresholdConfig {
+  ): Promise<HealthThresholdConfig> {
+    await this.teamAccess.assertUserInTeam(userId, teamId);
     const prev = this.teamThresholdOverrides.get(teamId) ?? { critical: 0, warning: 0 };
     this.teamThresholdOverrides.set(teamId, {
       critical: dto.critical ?? prev.critical,
@@ -332,10 +345,11 @@ export class HealthService {
    * threshold alerts, without sending any notification.
    */
   async listActiveAlerts(
+    userId: string | null,
     teamId: string,
     config: HealthThresholdConfig = this.getThresholdConfig(teamId),
   ): Promise<ThresholdAlert[]> {
-    const summary = await this.evaluateTeam(teamId);
+    const summary = await this.evaluateTeam(userId, teamId);
     const alerts: ThresholdAlert[] = [];
 
     for (const account of summary.accounts) {
@@ -364,12 +378,13 @@ export class HealthService {
    * crossing the threshold on N accounts receives a single summary message.
    */
   async checkThresholdAlerts(
+    userId: string | null,
     teamId: string,
     notify = true,
     config: HealthThresholdConfig = this.getThresholdConfig(teamId),
   ): Promise<ThresholdAlertResult> {
     const evaluatedAt = new Date().toISOString();
-    const alerts = await this.listActiveAlerts(teamId, config);
+    const alerts = await this.listActiveAlerts(userId, teamId, config);
 
     let notified = 0;
     if (notify && alerts.length > 0) {

@@ -5,6 +5,7 @@ import { HealthService, HealthStatus } from './health.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { NotificationService } from '../notification/notification.service';
+import { TeamAccessService } from '../common/team-access/team-access.service';
 import { ConfigService } from '@nestjs/config';
 
 const mockCrypto = () => ({
@@ -27,6 +28,10 @@ const mockNotifications = () => ({
   broadcastToTeam: jest.fn().mockResolvedValue({ count: 0 }),
 });
 
+const mockTeamAccess = () => ({
+  assertUserInTeam: jest.fn().mockResolvedValue(undefined),
+});
+
 const DAY = 24 * 60 * 60 * 1000;
 
 describe('HealthService', () => {
@@ -34,9 +39,11 @@ describe('HealthService', () => {
   let prisma: ReturnType<typeof mockPrisma>;
   let crypto: ReturnType<typeof mockCrypto>;
   let notifications: ReturnType<typeof mockNotifications>;
+  let teamAccess: ReturnType<typeof mockTeamAccess>;
 
   const baseAccount = {
     id: 'acc-1',
+    teamId: 'team-1',
     platform: Platform.WECHAT_OFFICIAL,
     accountName: 'Official',
     status: AccountStatus.ACTIVE,
@@ -48,12 +55,14 @@ describe('HealthService', () => {
     prisma = mockPrisma();
     crypto = mockCrypto();
     notifications = mockNotifications();
+    teamAccess = mockTeamAccess();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         HealthService,
         { provide: PrismaService, useValue: prisma },
         { provide: CryptoService, useValue: crypto },
         { provide: NotificationService, useValue: notifications },
+        { provide: TeamAccessService, useValue: teamAccess },
         { provide: ConfigService, useValue: { get: jest.fn() } },
       ],
     }).compile();
@@ -66,7 +75,7 @@ describe('HealthService', () => {
       prisma.socialAccount.findUnique.mockResolvedValue(baseAccount);
       prisma.publishJob.count.mockResolvedValue(0);
 
-      const result = await service.evaluateAccount('acc-1');
+      const result = await service.evaluateAccount('user-1', 'acc-1');
 
       expect(result.health).toBe('HEALTHY');
       expect(result.signals).toEqual([]);
@@ -76,7 +85,7 @@ describe('HealthService', () => {
 
     it('throws NotFoundException when the account does not exist', async () => {
       prisma.socialAccount.findUnique.mockResolvedValue(null);
-      await expect(service.evaluateAccount('ghost')).rejects.toBeInstanceOf(
+      await expect(service.evaluateAccount('user-1', 'ghost')).rejects.toBeInstanceOf(
         NotFoundException,
       );
     });
@@ -93,7 +102,7 @@ describe('HealthService', () => {
         credentials: `enc:{"expiresAt":"${expires}"}`,
       });
 
-      const result = await service.evaluateAccount('acc-1');
+      const result = await service.evaluateAccount('user-1', 'acc-1');
 
       expect(result.health).toBe('WARNING');
       expect(result.signals).toEqual(
@@ -112,7 +121,7 @@ describe('HealthService', () => {
         lastSyncedAt: new Date(Date.now() - 10 * DAY),
       });
 
-      const result = await service.evaluateAccount('acc-1');
+      const result = await service.evaluateAccount('user-1', 'acc-1');
 
       expect(result.health).toBe('CRITICAL');
       expect(result.signals).toEqual(
@@ -129,7 +138,7 @@ describe('HealthService', () => {
         credentials: 'enc:{}',
       });
 
-      const result = await service.evaluateAccount('acc-1');
+      const result = await service.evaluateAccount('user-1', 'acc-1');
 
       expect(result.health).toBe('WARNING');
       expect(result.signals).toEqual(
@@ -146,7 +155,7 @@ describe('HealthService', () => {
         credentials: 'enc:{}',
       });
 
-      const result = await service.evaluateAccount('acc-1');
+      const result = await service.evaluateAccount('user-1', 'acc-1');
 
       expect(result.signals).toEqual(
         expect.arrayContaining([
@@ -161,7 +170,7 @@ describe('HealthService', () => {
         credentials: 'enc:{"rateLimitRemaining":18,"rateLimitTotal":100}',
       });
 
-      const result = await service.evaluateAccount('acc-1');
+      const result = await service.evaluateAccount('user-1', 'acc-1');
 
       expect(result.signals).toEqual(
         expect.arrayContaining([
@@ -174,7 +183,7 @@ describe('HealthService', () => {
       prisma.socialAccount.findUnique.mockResolvedValue(baseAccount);
 
       prisma.publishJob.count.mockResolvedValue(1);
-      const warn = await service.evaluateAccount('acc-1');
+      const warn = await service.evaluateAccount('user-1', 'acc-1');
       expect(warn.signals).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ signal: 'RECENT_PUBLISH_FAILURES', severity: 'warning' }),
@@ -182,7 +191,7 @@ describe('HealthService', () => {
       );
 
       prisma.publishJob.count.mockResolvedValue(3);
-      const crit = await service.evaluateAccount('acc-1');
+      const crit = await service.evaluateAccount('user-1', 'acc-1');
       expect(crit.health).toBe('CRITICAL');
       expect(crit.signals).toEqual(
         expect.arrayContaining([
@@ -197,7 +206,7 @@ describe('HealthService', () => {
         status: AccountStatus.EXPIRED,
       });
 
-      const result = await service.evaluateAccount('acc-1');
+      const result = await service.evaluateAccount('user-1', 'acc-1');
 
       expect(result.health).toBe('CRITICAL');
       expect(result.signals).toEqual(
@@ -216,7 +225,7 @@ describe('HealthService', () => {
         credentials: `enc:{"expiresAt":"${expired}"}`,
       });
 
-      const result = await service.evaluateAccount('acc-1');
+      const result = await service.evaluateAccount('user-1', 'acc-1');
 
       expect(result.health).toBe('CRITICAL');
     });
@@ -236,7 +245,7 @@ describe('HealthService', () => {
         },
       ]);
 
-      const result = await service.evaluateTeam('team-1');
+      const result = await service.evaluateTeam('user-1', 'team-1');
 
       expect(result.teamId).toBe('team-1');
       expect(result.totals.total).toBe(3);
@@ -255,7 +264,7 @@ describe('HealthService', () => {
         { ...baseAccount, id: 'a2', status: AccountStatus.SUSPENDED, lastSyncedAt: new Date(now - DAY), credentials: 'enc:{}' },
       ]);
 
-      const { summary, notified } = await service.runTeamCheck('team-1');
+      const { summary, notified } = await service.runTeamCheck('user-1', 'team-1');
 
       expect(notified).toBe(1);
       expect(notifications.broadcastToTeam).toHaveBeenCalledTimes(1);
@@ -279,7 +288,7 @@ describe('HealthService', () => {
         { ...baseAccount, id: 'a1', lastSyncedAt: new Date(now - DAY), credentials: 'enc:{}' },
       ]);
 
-      const { notified } = await service.runTeamCheck('team-1');
+      const { notified } = await service.runTeamCheck('user-1', 'team-1');
 
       expect(notified).toBe(0);
       expect(notifications.broadcastToTeam).not.toHaveBeenCalled();
@@ -291,7 +300,7 @@ describe('HealthService', () => {
         { ...baseAccount, id: 'a1', status: AccountStatus.SUSPENDED, lastSyncedAt: new Date(now - DAY), credentials: 'enc:{}' },
       ]);
 
-      const { notified } = await service.runTeamCheck('team-1', false);
+      const { notified } = await service.runTeamCheck('user-1', 'team-1', false);
 
       expect(notified).toBe(0);
       expect(notifications.broadcastToTeam).not.toHaveBeenCalled();
@@ -303,12 +312,57 @@ describe('HealthService', () => {
         { ...baseAccount, id: 'a1', lastSyncedAt: null, credentials: 'enc:{}' },
       ]);
 
-      await service.runTeamCheck('team-1');
+      await service.runTeamCheck('user-1', 'team-1');
 
       expect(notifications.broadcastToTeam).toHaveBeenCalledWith(
         'team-1',
         expect.objectContaining({ type: 'warning' }),
       );
+    });
+  });
+
+  describe('team access enforcement', () => {
+    it('asserts team membership when evaluating an account', async () => {
+      prisma.socialAccount.findUnique.mockResolvedValue(baseAccount);
+      prisma.publishJob.count.mockResolvedValue(0);
+
+      await service.evaluateAccount('user-1', 'acc-1');
+
+      expect(teamAccess.assertUserInTeam).toHaveBeenCalledWith('user-1', 'team-1');
+    });
+
+    it('asserts team membership when evaluating a team', async () => {
+      prisma.socialAccount.findMany.mockResolvedValue([]);
+
+      await service.evaluateTeam('user-1', 'team-1');
+
+      expect(teamAccess.assertUserInTeam).toHaveBeenCalledWith('user-1', 'team-1');
+    });
+
+    it('rejects a user who is not a member of the team', async () => {
+      prisma.socialAccount.findMany.mockResolvedValue([]);
+      teamAccess.assertUserInTeam.mockRejectedValue(
+        new NotFoundException('Resource not found or access denied'),
+      );
+
+      await expect(service.evaluateTeam('user-1', 'team-1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('skips the membership assertion for system contexts (null userId)', async () => {
+      prisma.socialAccount.findMany.mockResolvedValue([]);
+
+      await service.evaluateTeam(null, 'team-1');
+
+      expect(teamAccess.assertUserInTeam).not.toHaveBeenCalled();
+    });
+
+    it('asserts team membership on threshold config override', async () => {
+      await service.setTeamThresholdConfig('user-1', 'team-1', { critical: 30 });
+
+      expect(teamAccess.assertUserInTeam).toHaveBeenCalledWith('user-1', 'team-1');
+      expect(service.getThresholdConfig('team-1').critical).toBe(30);
     });
   });
 });

@@ -146,7 +146,8 @@ export class QueueService {
     let alerts = 0;
     for (const team of teams) {
       try {
-        const result = await this.health.checkThresholdAlerts(team.id, true);
+        // System context: no user, so pass null to skip membership assertion.
+        const result = await this.health.checkThresholdAlerts(null, team.id, true);
         if (result.alerts.length > 0) {
           alerts += result.alerts.length;
           if (result.notified > 0) teamsNotified++;
