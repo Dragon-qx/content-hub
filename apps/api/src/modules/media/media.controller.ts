@@ -33,7 +33,12 @@ import { TranscodeVideoDto, TRANSCODE_RESOLUTIONS, TRANSCODE_FORMATS } from './d
 const TRANSCODE_RESOLUTIONS_MUTABLE = [...TRANSCODE_RESOLUTIONS];
 const TRANSCODE_FORMATS_MUTABLE = [...TRANSCODE_FORMATS];
 import { ExtractCoverDto } from './dto/extract-cover.dto';
-import { mkdirSync, existsSync } from 'fs';
+import { ImageProcessorService } from './image-processor.service';
+import { ImageOperationDto, ImageProcessDto } from './dto/image-process.dto';
+import { validate } from 'class-validator';
+import { plainToInstance } from 'class-transformer';
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'fs';
+import { randomUUID } from 'crypto';
 
 @ApiTags('Media')
 @ApiBearerAuth()
@@ -43,6 +48,7 @@ export class MediaController {
   constructor(
     private readonly media: MediaService,
     private readonly videoProcessing: VideoProcessingService,
+    private readonly imageProcessor: ImageProcessorService,
   ) {}
 
   @ApiOperation({ summary: 'Upload a media asset', description: 'Uploads a single file (optionally tied to a content item) as multipart/form-data.' })
@@ -170,6 +176,66 @@ export class MediaController {
     const inputPath = this.persistUpload(file, 'video');
     const coverPath = await this.videoProcessing.extractCover(inputPath, body.timeSeconds);
     return { status: 'completed', coverPath };
+  }
+
+  @ApiOperation({
+    summary: 'Process an image (crop / resize / watermark / filter / format)',
+    description: 'Uploads an image and applies the operation given as a JSON string in `ops`. Returns the processed file URL.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary', description: 'The image file' },
+        ops: {
+          type: 'string',
+          description: 'Operation JSON, e.g. {"resize":{"width":800},"format":"webp"}',
+          default: '{}',
+        },
+      },
+    },
+  })
+  @ApiCreatedResponse({ description: 'Processed image URL returned.' })
+  @Post('process')
+  @UseInterceptors(FileInterceptor('file'))
+  async processImage(
+    @UploadedFile() file: UploadedMultipartFile | undefined,
+    @Body() body: ImageProcessDto,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    let ops: Record<string, unknown>;
+    try {
+      ops = JSON.parse(body.ops || '{}') as Record<string, unknown>;
+    } catch {
+      throw new BadRequestException('ops must be a valid JSON string');
+    }
+    const dto = plainToInstance(ImageOperationDto, ops);
+    const errors = await validate(dto, { whitelist: true, forbidNonWhitelisted: false });
+    if (errors.length > 0) {
+      throw new BadRequestException(
+        errors.map((e) => Object.values(e.constraints ?? {}).join('; ')).join('; '),
+      );
+    }
+
+    // The custom multer storage writes to disk; read the bytes back for sharp.
+    const inputPath = file.path;
+    if (!inputPath || !existsSync(inputPath)) {
+      throw new BadRequestException('File was not saved to disk');
+    }
+    const inputBuffer = readFileSync(inputPath);
+
+    const output = await this.imageProcessor.process(inputBuffer, dto as Parameters<ImageProcessorService['process']>[1]);
+    const fmt = dto.format ?? 'jpeg';
+    const ext = fmt === 'png' ? '.png' : fmt === 'webp' ? '.webp' : '.jpg';
+    const outDir = join(process.cwd(), 'uploads', 'media');
+    mkdirSync(outDir, { recursive: true });
+    const filename = `${Date.now()}-${randomUUID()}${ext}`;
+    writeFileSync(join(outDir, filename), output);
+
+    return { status: 'completed', url: `/uploads/media/${filename}`, format: fmt };
   }
 
   @ApiOperation({ summary: 'Get video metadata' })

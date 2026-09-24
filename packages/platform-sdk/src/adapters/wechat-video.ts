@@ -17,8 +17,16 @@ export interface WechatVideoConfig {
 
 /**
  * 微信视频号 (WeChat Channels) adapter.
- * Uses the official 视频号开放平台 OAuth2 + content APIs.
- * See: https://developers.weixin.qq.com/doc/channels/API/basics/getaccesstoken.html
+ *
+ * Status (verified 2026-08-29 against 微信开放社区 official answer): 微信官方
+ * **尚未开放视频内容发布的开放 API** —— 开放平台只提供商品/橱窗/直播数据等电商能力。
+ * Consequently this adapter keeps the OAuth surface (for when an official content
+ * API lands) but makes every content operation throw a clear "not supported"
+ * error instead of firing requests at the wrong endpoint family (the previous
+ * implementation called the WeChat Store `channels/ec/*` endpoints, which a
+ * website-login token cannot authorize).
+ *
+ * See: https://developers.weixin.qq.com/community/develop/doc/00088cbe6942e0e72853b01af66c00
  */
 export class WechatVideoAdapter extends BaseAdapter {
   platform = Platform.WECHAT_VIDEO;
@@ -64,67 +72,25 @@ export class WechatVideoAdapter extends BaseAdapter {
     throw new Error('WeChat Video adapter is not authenticated');
   }
 
-  /**
-   * Upload a video to WeChat Channels and return the media_id.
-   * Real API: POST /channels/ec/basics/video/upload with multipart form.
-   */
-  async uploadVideo(mediaUrl: string): Promise<string> {
-    const token = await this.getToken();
-    const bytes = await this.fetchMediaBytes(mediaUrl);
-    const form = new FormData();
-    form.append('media', new Blob([bytes], { type: 'video/mp4' }), 'video.mp4');
-    const data = await this.callMultipart<{ media_id: string }>(
-      `https://api.weixin.qq.com/channels/ec/basics/video/upload?access_token=${encodeURIComponent(token)}`,
-      form,
+  async publish(_post: PublishRequest): Promise<PublishResult> {
+    // 微信官方暂未开放视频内容发布的开放 API —— 明确失败而不是调用错误端点。
+    throw new Error(
+      'WeChat Channels (视频号) does not yet expose an open API for publishing video content. ' +
+        'Publish manually via 视频号助手 or wait for the official API to open.',
     );
-    return data.media_id;
   }
 
-  async publish(post: PublishRequest): Promise<PublishResult> {
-    const token = await this.getToken();
-    // Upload video first if mediaUrls provided
-    let mediaId = '';
-    if (post.mediaUrls?.length) {
-      mediaId = await this.uploadVideo(post.mediaUrls[0]);
-    }
-    const data = await this.call<{ publish_id: string }>(
-      `https://api.weixin.qq.com/channels/ec/publish/submit?access_token=${encodeURIComponent(token)}`,
-      { method: 'POST', body: JSON.stringify({ title: post.content, media_id: mediaId }) },
+  async fetchMetrics(_accountId: string, _dateRange: DateRange): Promise<MetricsResult> {
+    // No official content-metrics API for 视频号 exists yet.
+    throw new Error(
+      'WeChat Channels (视频号) does not yet expose an open API for content metrics.',
     );
-    return {
-      externalId: data.publish_id,
-      externalUrl: `https://channels.weixin.qq.com/#/publish/${data.publish_id}`,
-      publishedAt: new Date(),
-    };
   }
 
-  async fetchMetrics(accountId: string, dateRange: DateRange): Promise<MetricsResult> {
-    const token = await this.getToken();
-    const data = await this.call<Record<string, number>>(
-      `https://api.weixin.qq.com/channels/ec/basics/getaccessinfo?access_token=${encodeURIComponent(token)}`,
+  async fetchComments(_accountId: string, _postId: string): Promise<Comment[]> {
+    // No official comment API for 视频号 content exists yet.
+    throw new Error(
+      'WeChat Channels (视频号) does not yet expose an open API for comments.',
     );
-    return {
-      impressions: data.play_cnt ?? 0,
-      engagements: data.like_cnt ?? 0,
-      likes: data.like_cnt ?? 0,
-      comments: data.comment_cnt ?? 0,
-      shares: data.share_cnt ?? 0,
-      views: data.play_cnt ?? 0,
-      followerCount: data.fans_cnt ?? 0,
-    };
-  }
-
-  async fetchComments(accountId: string, postId: string): Promise<Comment[]> {
-    const token = await this.getToken();
-    const data = await this.call<{ comments: Array<{ comment_id: string; nickname: string; content: string; create_time: number }> }>(
-      `https://api.weixin.qq.com/channels/ec/comment/list?access_token=${encodeURIComponent(token)}&item_id=${encodeURIComponent(postId)}`,
-    );
-    return (data.comments ?? []).map((c) => ({
-      id: c.comment_id,
-      authorId: c.nickname,
-      authorName: c.nickname,
-      content: c.content,
-      createdAt: new Date(c.create_time * 1000),
-    }));
   }
 }

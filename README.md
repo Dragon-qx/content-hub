@@ -161,7 +161,7 @@ metrics fetch, and (where the platform exposes one) comment reads/replies:
 | Platform        | Adapter                 | Auth flow        | Publish | Metrics | Comments |
 | --------------- | ----------------------- | ---------------- | ------- | ------- | -------- |
 | WeChat Official | `WechatOfficialAdapter` | client credential| drafts  | fans    | —        |
-| WeChat Video    | `WechatVideoAdapter`    | OAuth2           | submit  | yes     | yes      |
+| WeChat Video    | `WechatVideoAdapter`    | OAuth2           | —       | —       | —        |
 | Douyin          | `DouyinAdapter`         | OAuth2           | yes     | yes     | —        |
 | XiaoHongShu     | `XiaoHongShuAdapter`    | OAuth2 + HMAC    | yes     | yes     | —        |
 | Bilibili        | `BilibiliAdapter`       | OAuth2           | yes     | yes     | yes      |
@@ -169,6 +169,11 @@ metrics fetch, and (where the platform exposes one) comment reads/replies:
 Register new platforms by adding a `BaseAdapter` subclass under
 `packages/platform-sdk/src/adapters` and a case in
 `PlatformAdapterFactory.create()`.
+
+> **WeChat Video (视频号)**: 微信官方暂未开放视频内容发布的开放 API（2025-05
+> 微信开放社区答复），`WechatVideoAdapter` 的发布/指标/评论均明确报错而非调用错误的
+> 端点族。其余平台能力状态见 `TODO.md` §2。
+
 
 ## License
 

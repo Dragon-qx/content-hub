@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MediaController } from './media.controller';
 import { MediaService } from './media.service';
 import { VideoProcessingService } from './video-processing.service';
+import { ImageProcessorService } from './image-processor.service';
 import { MulterModule } from '@nestjs/platform-express';
 import { extname, join } from 'path';
 import { mkdirSync } from 'fs';
@@ -69,8 +70,8 @@ mkdirSync(UPLOADS_DIR, { recursive: true });
     } as any),
   ],
   controllers: [MediaController],
-  providers: [MediaService, VideoProcessingService],
-  exports: [MediaService, VideoProcessingService],
+  providers: [MediaService, VideoProcessingService, ImageProcessorService],
+  exports: [MediaService, VideoProcessingService, ImageProcessorService],
 })
 export class MediaModule {}
 

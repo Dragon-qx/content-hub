@@ -566,7 +566,9 @@ export class AccountService {
       expiresAt?: Date | string;
     };
     try {
-      credentials = await adapter.handleCallback(code);
+      // Pass the state through so adapters that keep per-state PKCE verifiers
+      // (e.g. Twitter) can complete the code exchange.
+      credentials = await adapter.handleCallback(code, state);
     } catch (err) {
       this.logger.warn(`OAuth code exchange failed for ${platform}: ${err.message}`);
       throw new BadRequestException(

@@ -106,31 +106,103 @@ export class YouTubeAdapter extends BaseAdapter {
   }
 
   /**
-   * Register upload metadata. YouTube requires a multipart resumable upload for
-   * the video binary first; this call creates the video resource (the scaffold
-   * the binary is attached to) so the external id + url exist immediately.
+   * Publish a video via the YouTube resumable-upload protocol:
+   *   1. POST metadata to the resumable endpoint → the session URL comes back
+   *      in the `Location` header (body is EMPTY — parsing it used to throw).
+   *   2. PUT the video bytes to that session URL → 201 with the created
+   *      `{ id, ... }` resource.
+   * The video binary is fetched from `post.mediaUrls[0]`.
    */
   async publish(post: PublishRequest): Promise<PublishResult> {
     const token = await this.getToken();
-    const data = await this.call<{ id: string }>(
-      'https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status&uploadType=resumable',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'X-Upload-Content-Type': 'video/*',
-        },
-        body: JSON.stringify({
-          snippet: { title: post.extra?.title ?? 'Untitled', description: post.content },
-          status: { privacyStatus: 'private' },
-        }),
-      },
-    );
+    const mediaUrl = post.mediaUrls?.[0];
+    if (!mediaUrl) {
+      throw new Error(
+        'YouTube publish requires a video media URL (post.mediaUrls[0])',
+      );
+    }
+    const videoBytes = await this.fetchMediaBytes(mediaUrl);
+
+    const uploadUrl = await this.initResumableUpload(token, {
+      snippet: { title: post.extra?.title ?? 'Untitled', description: post.content },
+      status: { privacyStatus: 'private' },
+    }, videoBytes.byteLength);
+
+    const data = await this.uploadVideoBytes(uploadUrl, token, videoBytes);
     return {
       externalId: data.id,
       externalUrl: `https://youtu.be/${data.id}`,
       publishedAt: new Date(),
     };
+  }
+
+  /** Step 1 — open a resumable session; returns the upload URL from Location. */
+  private async initResumableUpload(
+    token: string,
+    metadata: unknown,
+    byteLength: number,
+  ): Promise<string> {
+    const res = await this.rawFetch(
+      'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json; charset=UTF-8',
+          'X-Upload-Content-Type': 'video/*',
+          'X-Upload-Content-Length': String(byteLength),
+        },
+        body: JSON.stringify(metadata),
+      },
+    );
+    if (!res.ok) {
+      throw new Error(`YouTube upload init failed: HTTP ${res.status}`);
+    }
+    const location = res.headers.get('location');
+    if (!location) {
+      throw new Error('YouTube upload init returned no Location header');
+    }
+    return location;
+  }
+
+  /** Step 2 — PUT the video bytes to the session URL and parse the video id. */
+  private async uploadVideoBytes(
+    uploadUrl: string,
+    token: string,
+    bytes: ArrayBuffer,
+  ): Promise<{ id: string }> {
+    const res = await this.rawFetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'video/*',
+        'Content-Length': String(bytes.byteLength),
+      },
+      body: bytes,
+    });
+    if (!res.ok) {
+      // 308 means the session exists but the transfer is incomplete — treat any
+      // non-success as a failed upload rather than parsing a partial body.
+      throw new Error(`YouTube video upload failed: HTTP ${res.status}`);
+    }
+    const text = await res.text();
+    return JSON.parse(text) as { id: string };
+  }
+
+  /** Raw fetch with SSRF validation + timeout, for flows that need response
+   *  headers (the resumable upload Location) which `call()` does not expose. */
+  private async rawFetch(url: string, init: RequestInit): Promise<Response> {
+    await this.validateUrl(url);
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      BaseAdapter.REQUEST_TIMEOUT_MS,
+    );
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   async fetchMetrics(accountId: string, dateRange: DateRange): Promise<MetricsResult> {

@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto';
 import { BaseAdapter } from '../adapter-base';
 import {
   Credentials,
@@ -16,7 +17,7 @@ export interface TwitterConfig {
 }
 
 /**
- * X (Twitter) adapter — OAuth2 Authorization Code flow + X API v2.
+ * X (Twitter) adapter — OAuth2 Authorization Code + PKCE + X API v2.
  * See: https://developer.twitter.com/en/docs/twitter-api
  *
  * Capabilities: auth, publish, and account-level metrics. X's v2 free tier does
@@ -25,6 +26,42 @@ export interface TwitterConfig {
  * BaseAdapter defaults throw a clear "not supported" error the engagement
  * layer branches on.
  */
+
+/**
+ * Per-state PKCE verifiers. `getAuthUrl` mints a random verifier and stores it
+ * keyed by the OAuth `state`; `handleCallback` retrieves it to complete the
+ * code exchange. Entries are pruned after PKCE_TTL_MS so abandoned flows don't
+ * leak memory. The verifier never leaves the server — only its S256 challenge
+ * is sent to the authorize endpoint.
+ */
+const verifierByState = new Map<string, { verifier: string; createdAt: number }>();
+const PKCE_TTL_MS = 10 * 60 * 1000; // matches the sealed state token TTL
+
+/** base64url(SHA-256(verifier)) — the PKCE S256 challenge. */
+function s256Challenge(verifier: string): string {
+  return createHash('sha256').update(verifier).digest('base64url');
+}
+
+function storeVerifier(state: string, verifier: string): void {
+  // Opportunistic prune of expired entries before inserting.
+  const now = Date.now();
+  for (const [key, entry] of verifierByState) {
+    if (now - entry.createdAt > PKCE_TTL_MS) verifierByState.delete(key);
+  }
+  verifierByState.set(state, { verifier, createdAt: now });
+}
+
+function takeVerifier(state: string): string {
+  const entry = state ? verifierByState.get(state) : undefined;
+  if (!entry) {
+    throw new Error(
+      'No PKCE verifier found for this OAuth state — start a fresh authorize flow',
+    );
+  }
+  verifierByState.delete(state);
+  return entry.verifier;
+}
+
 export class TwitterAdapter extends BaseAdapter {
   platform = Platform.TWITTER;
   private accessToken: string | null = null;
@@ -39,10 +76,9 @@ export class TwitterAdapter extends BaseAdapter {
 
   getAuthUrl(state: string): string {
     const redirect = encodeURIComponent(this.callbackFor());
-    // PKCE code_challenge is generated in a real client; `challenge` here is a
-    // placeholder standing in for S256(code_verifier). The redirect flow mints
-    // the challenge/verifier pair and swaps the code for a token server-side.
-    const challenge = 'challenge';
+    const verifier = randomBytes(64).toString('base64url');
+    storeVerifier(state, verifier);
+    const challenge = s256Challenge(verifier);
     return `https://twitter.com/i/oauth2/authorize?response_type=code&client_id=${encodeURIComponent(
       this.config.clientKey,
     )}&redirect_uri=${redirect}&scope=tweet.read%20tweet.write%20users.read%20offline.access&state=${encodeURIComponent(
@@ -50,7 +86,8 @@ export class TwitterAdapter extends BaseAdapter {
     )}&code_challenge=${challenge}&code_challenge_method=S256`;
   }
 
-  async handleCallback(code: string): Promise<Credentials> {
+  async handleCallback(code: string, state?: string): Promise<Credentials> {
+    const verifier = takeVerifier(state ?? '');
     const data = await this.call<{ access_token: string; refresh_token?: string; expires_in: number }>(
       'https://api.twitter.com/2/oauth2/token',
       {
@@ -63,7 +100,7 @@ export class TwitterAdapter extends BaseAdapter {
           code,
           grant_type: 'authorization_code',
           redirect_uri: this.callbackFor(),
-          code_verifier: 'verifier',
+          code_verifier: verifier,
         }).toString(),
       },
     );

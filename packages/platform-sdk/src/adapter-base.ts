@@ -266,7 +266,7 @@ export abstract class BaseAdapter implements PlatformAdapter {
 
   // ── Auth ────────────────────────────────────────────────────────────
   abstract getAuthUrl(state: string): string;
-  abstract handleCallback(code: string): Promise<Credentials>;
+  abstract handleCallback(code: string, state?: string): Promise<Credentials>;
 
   async refreshToken(): Promise<Credentials> {
     throw new Error(`${this.platform} does not support token refresh`);

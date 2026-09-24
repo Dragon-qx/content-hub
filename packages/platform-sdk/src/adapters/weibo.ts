@@ -36,51 +36,44 @@ export class WeiboAdapter extends BaseAdapter {
   }
 
   async handleCallback(code: string): Promise<Credentials> {
-    const data = await this.call<{ access_token: string; refresh_token: string; expires_in: number; uid: string }>(
+    // Weibo's OAuth token endpoint requires application/x-www-form-urlencoded
+    // (a JSON body is rejected).
+    const data = await this.call<{ access_token: string; expires_in?: number; uid: string }>(
       'https://api.weibo.com/oauth2/access_token',
       {
         method: 'POST',
-        body: JSON.stringify({
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
           client_id: this.config.appKey,
           client_secret: this.config.appSecret,
           code,
           grant_type: 'authorization_code',
           redirect_uri: this.callbackFor(),
-        }),
+        }).toString(),
       },
     );
     this.accessToken = data.access_token;
-    this.refreshTokenValue = data.refresh_token;
-    this.tokenExpire = Date.now() + data.expires_in * 1000;
+    // Weibo issues long-lived access tokens and has no refresh_token grant; an
+    // absent/zero expires_in means "does not expire" for normal authorizations.
+    this.tokenExpire = data.expires_in
+      ? Date.now() + data.expires_in * 1000
+      : Number.MAX_SAFE_INTEGER;
+    this.refreshTokenValue = null;
     this.uid = data.uid;
     return {
       accessToken: data.access_token,
-      refreshToken: data.refresh_token,
+      refreshToken: undefined,
       expiresAt: new Date(this.tokenExpire),
     };
   }
 
   async refreshToken(): Promise<Credentials> {
-    if (!this.refreshTokenValue) throw new Error('No refresh token for Weibo');
-    const data = await this.call<{ access_token: string; refresh_token: string; expires_in: number }>(
-      'https://api.weibo.com/oauth2/access_token',
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          client_id: this.config.appKey,
-          refresh_token: this.refreshTokenValue,
-          grant_type: 'refresh_token',
-        }),
-      },
+    // Weibo's OAuth2 has no refresh_token grant — access tokens are long-lived
+    // and only re-authorization yields a new one. Throw a clear error instead
+    // of firing a request the platform does not support.
+    throw new Error(
+      'Weibo does not support the refresh_token grant; re-authorize the account',
     );
-    this.accessToken = data.access_token;
-    this.refreshTokenValue = data.refresh_token;
-    this.tokenExpire = Date.now() + data.expires_in * 1000;
-    return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      expiresAt: new Date(this.tokenExpire),
-    };
   }
 
   private async getToken(): Promise<string> {

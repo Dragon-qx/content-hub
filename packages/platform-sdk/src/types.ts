@@ -5,7 +5,9 @@ export interface PlatformAdapter {
 
   // 认证
   getAuthUrl(state: string): string;
-  handleCallback(code: string): Promise<Credentials>;
+  /** Exchange an authorization code for tokens. `state` is optional but
+   *  required by adapters that keep per-state PKCE verifiers (e.g. Twitter). */
+  handleCallback(code: string, state?: string): Promise<Credentials>;
   refreshToken(refreshToken: string): Promise<Credentials>;
 
   // 内容发布
